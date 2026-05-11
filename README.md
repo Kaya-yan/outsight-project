@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# OutEye 外眼 2.0 · OutSight
 
-## Getting Started
+话语研究协作平台 — 英语主流媒体话语研究的轻量化协作基础设施。
 
-First, run the development server:
+## 技术栈
+
+| 层 | 技术 |
+|------|------|
+| 框架 | Next.js 14 (App Router) + TypeScript |
+| 样式 | Tailwind CSS + shadcn/ui |
+| 状态管理 | Zustand |
+| 后端 | Supabase (Auth + PostgreSQL + Storage) |
+| AI | DeepSeek-V3/4.0 |
+
+## 快速启动
 
 ```bash
+# 1. 安装依赖
+npm install
+
+# 2. 配置环境变量
+cp .env.example .env.local
+# 编辑 .env.local，填入 Supabase URL 和 Key
+
+# 3. 执行数据库迁移
+# 将 supabase/migrations/0000_initial_schema.sql 在 Supabase SQL Editor 中运行
+
+# 4. 启动开发服务器
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 项目结构
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+src/
+├── app/                    # Next.js App Router
+│   ├── (auth)/             # 未认证路由组（登录页）
+│   ├── (app)/              # 认证后路由组（控制台/语料/编码/统计/设置）
+│   ├── auth/callback/      # Supabase Auth 回调
+│   └── api/                # API Routes
+├── components/
+│   ├── auth/               # 登录表单、每日一句、学术声明
+│   ├── layout/             # 侧边栏、状态栏、面包屑、用户菜单
+│   ├── shared/             # 通用组件（空状态等）
+│   └── ui/                 # shadcn/ui 基础组件
+├── lib/
+│   ├── supabase/           # Supabase 客户端（Browser/Server/Admin）
+│   ├── data-access/        # Repository 模式数据访问层
+│   ├── quotes.ts           # 60 条每日一句
+│   └── constants.ts        # 应用常量
+├── stores/                 # Zustand 全局状态（auth、ui）
+├── hooks/                  # 自定义 Hooks
+└── types/                  # TypeScript 类型定义
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 文档
 
-## Learn More
+完整技术文档见 [docs/](./docs/README.md)。
 
-To learn more about Next.js, take a look at the following resources:
+## 许可
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+本平台仅供学术科研使用。

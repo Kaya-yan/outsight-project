@@ -1,27 +1,126 @@
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+    /* OutSight Brand Colors */
+    --color-primary: #4A90A4;
+    --color-secondary: #2D3436;
+    --color-accent: #5DAD93;
+    --color-background: #FAFBFC;
+    --color-card: #F0F2F5;
+    --color-warning: #E67E22;
+    --color-border: #E2E5E9;
+    --color-muted: #7F8A93;
 
-body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+    /* shadcn/ui mapped to OutSight tokens */
+    --background: #FAFBFC;
+    --foreground: #2D3436;
+    --card: #F0F2F5;
+    --card-foreground: #2D3436;
+    --popover: #FFFFFF;
+    --popover-foreground: #2D3436;
+    --primary: #4A90A4;
+    --primary-foreground: #FFFFFF;
+    --secondary: #2D3436;
+    --secondary-foreground: #FFFFFF;
+    --muted: #7F8A93;
+    --muted-foreground: #4A5568;
+    --accent: #5DAD93;
+    --accent-foreground: #FFFFFF;
+    --destructive: #E67E22;
+    --border: #E2E5E9;
+    --input: #E2E5E9;
+    --ring: #4A90A4;
+
+    /* Charts */
+    --chart-1: #4A90A4;
+    --chart-2: #5DAD93;
+    --chart-3: #2D3436;
+    --chart-4: #7F8A93;
+    --chart-5: #E67E22;
+
+    /* Sidebar */
+    --sidebar: #2D3436;
+    --sidebar-foreground: #FAFBFC;
+    --sidebar-primary: #4A90A4;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #5DAD93;
+    --sidebar-accent-foreground: #FFFFFF;
+    --sidebar-border: #3D4446;
+    --sidebar-ring: #4A90A4;
+
+    /* Radius */
+    --radius: 0.25rem;
+
+    /* Shadows */
+    --shadow-card: 0 1px 3px 0 rgba(45, 52, 54, 0.06);
+    --shadow-sidebar: 1px 0 4px 0 rgba(45, 52, 54, 0.04);
+
+    /* Layout dimensions */
+    --sidebar-width: 64px;
+    --statusbar-height: 48px;
+
+    /* Fonts */
+    --font-sans: "Inter", -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", monospace;
+  }
+
+  /* Dark mode overrides — minimal, primary experience is light */
+  .dark {
+    --background: #1A1D1E;
+    --foreground: #E8ECEF;
+    --card: #252A2C;
+    --card-foreground: #E8ECEF;
+    --popover: #252A2C;
+    --popover-foreground: #E8ECEF;
+    --primary: #4A90A4;
+    --primary-foreground: #FFFFFF;
+    --secondary: #3D4446;
+    --secondary-foreground: #E8ECEF;
+    --muted: #5A6570;
+    --muted-foreground: #9BA5AE;
+    --accent: #5DAD93;
+    --accent-foreground: #FFFFFF;
+    --destructive: #E67E22;
+    --border: #3D4446;
+    --input: #3D4446;
+    --ring: #4A90A4;
+    --sidebar: #1A1D1E;
+    --sidebar-foreground: #E8ECEF;
+    --sidebar-primary: #4A90A4;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #5DAD93;
+    --sidebar-accent-foreground: #FFFFFF;
+    --sidebar-border: #3D4446;
+    --sidebar-ring: #4A90A4;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  html {
+    font-family: var(--font-sans);
+  }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Card style: 1px border + subtle shadow + 4px radius */
+  .card-outight {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-card);
   }
 }
