@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { FrameworkManager } from "@/components/coding/framework-manager";
 import { ToolCard } from "@/components/tools/tool-card";
 import { TextCleaner } from "@/components/tools/text-cleaner";
