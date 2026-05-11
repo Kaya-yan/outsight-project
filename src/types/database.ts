@@ -420,6 +420,38 @@ export interface Database {
           is_active?: boolean;
         };
       };
+      crawl_jobs: {
+        Row: {
+          id: string;
+          status: "pending" | "running" | "completed" | "failed";
+          progress: number;
+          total_fetched: number;
+          total_new: number;
+          error_message: string | null;
+          query_params: Record<string, unknown>;
+          created_at: string;
+          finished_at: string | null;
+          triggered_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          status?: "pending" | "running" | "completed" | "failed";
+          progress?: number;
+          total_fetched?: number;
+          total_new?: number;
+          error_message?: string | null;
+          query_params?: Record<string, unknown>;
+          triggered_by?: string | null;
+        };
+        Update: {
+          status?: "pending" | "running" | "completed" | "failed";
+          progress?: number;
+          total_fetched?: number;
+          total_new?: number;
+          error_message?: string | null;
+          finished_at?: string | null;
+        };
+      };
       dual_coding_rounds: {
         Row: {
           id: string;
@@ -477,6 +509,7 @@ export type ActivityLog = Tables["activity_logs"]["Row"];
 export type AiJob = Tables["ai_queue"]["Row"];
 export type AiPrompt = Tables["ai_prompts"]["Row"];
 export type DualCodingRound = Tables["dual_coding_rounds"]["Row"];
+export type CrawlJob = Tables["crawl_jobs"]["Row"];
 
 export type DualCodingRoundStatus =
   | "in_progress"
