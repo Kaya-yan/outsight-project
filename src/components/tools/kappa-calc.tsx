@@ -13,7 +13,7 @@ function interpretKappa(k: number): string {
   return "优秀一致";
 }
 
-// Simplified standalone Cohen's Kappa
+// Simplified standalone Cohen&apos;s Kappa
 function calcKappa(
   pairs: Array<{ nodeA: string; nodeB: string }>,
 ): { kappa: number; agreement: number; total: number; interpretation: string } {
@@ -104,7 +104,7 @@ export function KappaCalc() {
             <p className="font-mono font-medium text-[#2D3436]">{result.agreement}%</p>
           </div>
           <div className="bg-[#FAFBFC] rounded p-2 text-center">
-            <p className="text-[#7F8A93]">Cohen's Kappa</p>
+            <p className="text-[#7F8A93]">Cohen&apos;s Kappa</p>
             <p className="font-mono font-medium text-[#4A90A4]">{result.kappa}</p>
           </div>
           <div className="bg-[#FAFBFC] rounded p-2 text-center">

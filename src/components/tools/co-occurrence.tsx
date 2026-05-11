@@ -43,11 +43,10 @@ export function CoOccurrence() {
     const sorted = [...pairCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
-      .map(([key, count]) => key.split("|") as [string, string, number]) as [string, string, number][];
-
-    for (const entry of sorted) {
-      entry[2] = pairCounts.get(`${entry[0]}|${entry[1]}`) ?? pairCounts.get(`${entry[1]}|${entry[0]}`) ?? 0;
-    }
+      .map(([key, c]) => {
+        const parts = key.split("|") as [string, string];
+        return [parts[0], parts[1], c] as [string, string, number];
+      });
 
     setPairs(sorted);
   }

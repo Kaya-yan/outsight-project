@@ -1,6 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
 
 interface MediaHeatmapProps {

@@ -18,7 +18,7 @@ const roleLabelMap: Record<string, string> = {
 };
 
 export default function ProfilePage() {
-  const { profile, user } = useAuthStore();
+  const { profile } = useAuthStore();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");

@@ -11,12 +11,10 @@ export async function GET() {
   const [
     annotationsRes,
     articlesRes,
-    frameworksRes,
     roundsRes,
   ] = await Promise.all([
     supabase.from("annotations").select("node_id, coder_id, confidence"),
     supabase.from("articles").select("media, period, status").eq("is_archived", false),
-    supabase.from("coding_frameworks").select("id, name, name_zh").eq("is_active", true),
     listRounds(supabase),
   ]);
 

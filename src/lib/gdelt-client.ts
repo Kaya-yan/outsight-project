@@ -51,7 +51,7 @@ async function queryGdelt(
 
   try {
     const url = `${GDELT_BASE}?${params}`;
-    console.log("[GDELT] Query:", url.slice(0, 200));
+    // GDELT query dispatched
 
     const res = await fetch(url, {
       headers: { "User-Agent": "OutSight/1.0 (Academic Research Tool)" },
@@ -59,7 +59,7 @@ async function queryGdelt(
     });
 
     if (!res.ok) {
-      console.log("[GDELT] HTTP", res.status);
+      // GDELT HTTP error
       return [];
     }
 
@@ -69,7 +69,7 @@ async function queryGdelt(
     const json = JSON.parse(text);
     if (!json.articles || !Array.isArray(json.articles)) return [];
 
-    console.log(`[GDELT] Got ${json.articles.length} results`);
+    // GDELT results received
 
     return json.articles
       .filter(
@@ -90,7 +90,7 @@ async function queryGdelt(
         };
       });
   } catch (err) {
-    console.log("[GDELT] Error:", err instanceof Error ? err.message : String(err));
+    // GDELT fetch error
     return [];
   }
 }
@@ -165,7 +165,7 @@ export async function fetchGdeltArticles(): Promise<{
     }
   }
 
-  console.log(`[GDELT] Total unique: ${unique.length} from ${allArticles.length} raw`);
+  // GDELT dedup complete
 
   return { source: "gdelt", articles: unique, debug: debugCounts };
 }

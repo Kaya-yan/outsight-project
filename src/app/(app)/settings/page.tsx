@@ -31,7 +31,7 @@ const tools = [
   { id: "period-splitter", icon: Calendar, title: "时段切分", desc: "按年/季度/半年自动分段" },
   { id: "co-occurrence", icon: GitBranch, title: "共现提取", desc: "提取 TOP 20 高频词对" },
   { id: "sentiment-calc", icon: ThumbsUp, title: "情感速算", desc: "基于内置词库统计正/负面词频" },
-  { id: "kappa-calc", icon: Calculator, title: "信度算盘", desc: "输入两人编码 → 一致率 + Cohen's Kappa" },
+  { id: "kappa-calc", icon: Calculator, title: "信度算盘", desc: "输入两人编码 → 一致率 + Cohen&apos;s Kappa" },
   { id: "citation-gen", icon: BookOpen, title: "引文生成器", desc: "DOI 自动获取 → GB/T 7714 / APA / MLA" },
   { id: "prompt-kit", icon: Wand2, title: "Prompt 锦囊", desc: "学术润色 · 中译英 · 摘要提炼 · 关键词" },
   { id: "proquest", icon: Search, title: "ProQuest 指南针", desc: "生成 ProQuest 学术检索式" },

@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useDualCodingStore } from "@/stores/dual-coding-store";
-import { Users, Plus, ChevronRight } from "lucide-react";
+import { Users, ChevronRight } from "lucide-react";
 
 const STATUS_BADGES: Record<string, string> = {
   in_progress: "bg-[#4A90A4]/10 text-[#4A90A4]",

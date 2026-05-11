@@ -9,8 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArbitrationView } from "@/components/coding/arbitration-view";
-import { selectCanManageAssignments } from "@/stores/auth-store";
-import { useAuthStore } from "@/stores/auth-store";
+import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
 import { ArrowLeft, CheckCircle2, XCircle, Calculator } from "lucide-react";
 
 export default function ComparePage() {
@@ -57,10 +56,6 @@ export default function ComparePage() {
     setIsSubmitting(false);
     if (ok) loadRoundDetail(roundId);
   }
-
-  const matchCount = annotationsA.filter((a) =>
-    annotationsB.some((b) => b.node_id === a.node_id),
-  ).length;
 
   if (isLoading) {
     return (
@@ -131,7 +126,7 @@ export default function ComparePage() {
             { label: "整体一致率", value: `${(agreement.agreementRate * 100).toFixed(1)}%`, color: agreement.agreementRate >= 0.8 ? "text-[#5DAD93]" : "text-[#E67E22]" },
             { label: "一级节点", value: `${(agreement.level1Rate * 100).toFixed(1)}%`, color: "text-[#4A90A4]" },
             { label: "二级节点", value: `${(agreement.level2Rate * 100).toFixed(1)}%`, color: "text-[#4A90A4]" },
-            { label: "Cohen's Kappa", value: agreement.kappa.toFixed(3), color: "text-[#4A90A4]" },
+            { label: "Cohen&apos;s Kappa", value: agreement.kappa.toFixed(3), color: "text-[#4A90A4]" },
           ].map((s) => (
             <Card key={s.label} className="border-[#E2E5E9]">
               <CardContent className="p-3 text-center">
@@ -218,7 +213,6 @@ export default function ComparePage() {
       {canManage && selectedRound?.status === "disputed" && agreement && (
         <ArbitrationView
           roundId={roundId}
-          article={null}
           annotationsA={annotationsA}
           annotationsB={annotationsB}
           nodes={nodes}

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import type { CodingFramework, CodingNode } from "@/types/database";
-import { Plus, Pencil, Trash2, ChevronRight, ChevronDown, X } from "lucide-react";
+import { Plus, Pencil, Trash2, X } from "lucide-react";
 
 export function FrameworkManager() {
   const [frameworks, setFrameworks] = useState<CodingFramework[]>([]);

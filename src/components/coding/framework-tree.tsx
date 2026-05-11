@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { CodingFramework, CodingNode } from "@/types/database";
+import type { CodingNode } from "@/types/database";
 import { ChevronRight, ChevronDown, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";

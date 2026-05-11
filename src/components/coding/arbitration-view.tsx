@@ -4,13 +4,12 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { Annotation, CodingNode, Article } from "@/types/database";
+import type { Annotation, CodingNode } from "@/types/database";
 import type { AgreementResult } from "@/lib/stats/agreement";
 import { CheckCircle2, XCircle, Gavel } from "lucide-react";
 
 interface ArbitrationViewProps {
   roundId: string;
-  article: Article | null;
   annotationsA: Annotation[];
   annotationsB: Annotation[];
   nodes: CodingNode[];
@@ -82,7 +81,7 @@ export function ArbitrationView({
                 </p>
               </div>
               <div>
-                <span className="text-[#7F8A93]">Cohen's Kappa</span>
+                <span className="text-[#7F8A93]">Cohen&apos;s Kappa</span>
                 <p className="font-mono font-medium text-[#2D3436]">
                   {agreement.kappa.toFixed(3)}
                 </p>

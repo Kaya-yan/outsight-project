@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { FrameworkPie } from "@/components/analytics/framework-pie";
 import { MediaHeatmap } from "@/components/analytics/media-heatmap";
 import { KappaChart } from "@/components/analytics/kappa-chart";
-import { MEDIA_OUTLETS } from "@/lib/constants";
 import {
   BookOpen, Globe, Calendar, CheckCircle2,
   Calculator, Copy, Download, Brain,
@@ -88,7 +87,7 @@ export default function DefensePage() {
       `【编码框架】采用动态编码框架「${data.frameworkName}」，` +
       `由两名编码员独立标注。` +
       (data.avgKappa !== null
-        ? `经信度检验，Cohen's Kappa 均值为 ${data.avgKappa}，编码质量良好。`
+        ? `经信度检验，Cohen&apos;s Kappa 均值为 ${data.avgKappa}，编码质量良好。`
         : "") +
       `\n\n【分析工具】编码与统计分析基于自主开发的 OutSight 外眼 2.0 话语研究协作平台，` +
       `AI 预读辅助采用 DeepSeek 大语言模型（默认收起，标注员独立判断）。\n\n` +
@@ -202,7 +201,7 @@ export default function DefensePage() {
       {(data?.kappaValues?.length ?? 0) > 0 && (
         <Card className="border-[#E2E5E9] shadow-card">
           <CardContent className="p-5">
-            <h3 className="text-sm font-semibold text-[#2D3436] mb-3">信度分布 · Cohen's Kappa</h3>
+            <h3 className="text-sm font-semibold text-[#2D3436] mb-3">信度分布 · Cohen&apos;s Kappa</h3>
             <KappaChart values={data?.kappaValues ?? []} />
           </CardContent>
         </Card>

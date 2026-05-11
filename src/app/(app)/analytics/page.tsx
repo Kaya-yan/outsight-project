@@ -118,7 +118,7 @@ export default function AnalyticsPage() {
       {/* Kappa Distribution */}
       <Card className="border-[#E2E5E9] shadow-card">
         <CardContent className="p-5">
-          <h3 className="text-sm font-medium text-[#2D3436] mb-3">信度分布 · Cohen's Kappa</h3>
+          <h3 className="text-sm font-medium text-[#2D3436] mb-3">信度分布 · Cohen&apos;s Kappa</h3>
           <KappaChart values={data?.kappaValues ?? []} />
         </CardContent>
       </Card>

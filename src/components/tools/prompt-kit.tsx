@@ -26,19 +26,6 @@ export function PromptKit() {
 
     setIsLoading(true);
     try {
-      const res = await fetch("/api/ai/pre-read", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ articleId: "__prompt_kit__", content: input, systemPrompt, custom: true }),
-      });
-      // The pre-read API doesn't support custom prompts — let's call DeepSeek directly
-      // Actually, reuse the callDeepSeek pattern inline
-    } catch {
-      // Silent
-    }
-
-    // Direct fetch to DeepSeek
-    try {
       const res = await fetch("/api/tools/prompt", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

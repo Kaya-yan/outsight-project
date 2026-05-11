@@ -1,11 +1,10 @@
 import { create } from "zustand";
-import type { DualCodingRound, Annotation, Article } from "@/types/database";
+import type { DualCodingRound, Annotation } from "@/types/database";
 import type { AgreementResult } from "@/lib/stats/agreement";
 
 interface DualCodingStoreState {
   rounds: DualCodingRound[];
   selectedRound: DualCodingRound | null;
-  article: Article | null;
   annotationsA: Annotation[];
   annotationsB: Annotation[];
   agreement: AgreementResult | null;
@@ -20,7 +19,6 @@ interface DualCodingStoreState {
 export const useDualCodingStore = create<DualCodingStoreState>((set, get) => ({
   rounds: [],
   selectedRound: null,
-  article: null,
   annotationsA: [],
   annotationsB: [],
   agreement: null,
