@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,10 +40,12 @@ const tools = [
 ];
 
 export default function SettingsPage() {
+  const router = useRouter();
   const canManage = useAuthStore(selectCanManageAssignments);
   const isAdmin = useAuthStore((s) => s.profile?.role === "admin");
   const [activeTool, setActiveTool] = useState<string | null>(null);
   const [showFreeze, setShowFreeze] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
   const [freezeResult, setFreezeResult] = useState<string | null>(null);
   const [isFreezing, setIsFreezing] = useState(false);
 
@@ -52,8 +55,9 @@ export default function SettingsPage() {
       const res = await fetch("/api/project/freeze", { method: "POST" });
       const json = await res.json();
       if (res.ok) {
-        setFreezeResult(json.message);
         setShowFreeze(false);
+        setConfirmText("");
+        router.push("/defense");
       } else {
         setFreezeResult(json.error ?? "封存失败");
       }
@@ -63,6 +67,8 @@ export default function SettingsPage() {
       setIsFreezing(false);
     }
   }
+
+  const confirmValid = confirmText === "确认封存";
 
   return (
     <div className="space-y-6 max-w-5xl">
@@ -112,22 +118,63 @@ export default function SettingsPage() {
       {/* Freeze Confirmation Modal */}
       {showFreeze && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/20" onClick={() => setShowFreeze(false)} />
-          <Card className="relative z-10 w-full max-w-sm border-[#E67E22]/30 shadow-lg">
-            <CardContent className="p-5">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="h-5 w-5 text-[#E67E22]" />
-                <h3 className="text-sm font-semibold text-[#2D3436]">确认项目封存</h3>
+          <div className="absolute inset-0 bg-black/20" onClick={() => { setShowFreeze(false); setConfirmText(""); }} />
+          <Card className="relative z-10 w-full max-w-md border-[#E67E22]/20 shadow-lg">
+            <CardContent className="p-6">
+              {/* Title */}
+              <div className="flex items-center gap-2 mb-4">
+                <AlertTriangle className="h-5 w-5 text-[#E67E22] shrink-0" />
+                <h3 className="text-sm font-semibold text-[#2D3436]">⚠️ 项目封存确认</h3>
               </div>
-              <p className="text-xs text-[#7F8A93] mb-4">
-                此操作将把所有非已封存语料的状态锁定为「已封存」。<br />
-                <strong className="text-[#E67E22]">此操作不可撤销。</strong>
-              </p>
+
+              {/* Warning content */}
+              <div className="space-y-2 mb-5 text-xs text-[#7F8A93] bg-[#E67E22]/5 rounded-md p-3">
+                <p className="flex items-start gap-2">
+                  <span className="text-[#E67E22] shrink-0">•</span>
+                  <span>此操作将锁定所有语料、编码、标注为只读状态。</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-[#E67E22] shrink-0">•</span>
+                  <span>封存后不可撤销，不可重新编辑。</span>
+                </p>
+                <p className="flex items-start gap-2">
+                  <span className="text-[#E67E22] shrink-0">•</span>
+                  <span>此操作通常用于项目结项或答辩前数据固化。</span>
+                </p>
+              </div>
+
+              {/* Text confirmation input */}
+              <div className="space-y-1.5 mb-5">
+                <label className="text-xs text-[#7F8A93]">
+                  请输入 <span className="font-mono font-semibold text-[#2D3436]">确认封存</span> 以继续
+                </label>
+                <Input
+                  value={confirmText}
+                  onChange={(e) => setConfirmText(e.target.value)}
+                  placeholder="确认封存"
+                  className="h-9 text-sm border-[#E2E5E9] focus-visible:ring-[#E67E22] font-mono"
+                  autoComplete="off"
+                />
+              </div>
+
+              {/* Action buttons */}
               <div className="flex justify-end gap-2">
-                <Button onClick={() => setShowFreeze(false)} variant="outline" className="h-8 text-xs">
+                <Button
+                  onClick={() => { setShowFreeze(false); setConfirmText(""); }}
+                  variant="outline"
+                  className="h-9 text-xs"
+                >
                   取消
                 </Button>
-                <Button onClick={handleFreeze} disabled={isFreezing} className="h-8 text-xs bg-[#E67E22] hover:bg-[#D46E1A] text-white">
+                <Button
+                  onClick={handleFreeze}
+                  disabled={!confirmValid || isFreezing}
+                  className={`h-9 text-xs text-white transition-colors ${
+                    confirmValid
+                      ? "bg-[#E67E22] hover:bg-[#D46E1A]"
+                      : "bg-[#D1D5DB] cursor-not-allowed"
+                  }`}
+                >
                   {isFreezing ? "封存中..." : "确认封存"}
                 </Button>
               </div>
