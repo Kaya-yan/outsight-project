@@ -23,12 +23,19 @@ interface SourceResult {
   inserted: number;
 }
 
+interface ExtractionStats {
+  attempted: number;
+  succeeded: number;
+  failed: number;
+}
+
 interface SyncResult {
   fetched: number;
   new: number;
   duplicates: number;
   sources?: SourceResult[];
   gdeltDebug?: Record<string, number>;
+  extraction?: ExtractionStats;
   message: string;
 }
 
@@ -151,9 +158,19 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
                 ))}
               </div>
             )}
+            {lastResult.extraction && lastResult.extraction.attempted > 0 && (
+              <div className="text-xs text-[#4A90A4]">
+                正文提取：{lastResult.extraction.succeeded}/{lastResult.extraction.attempted} 成功
+                {lastResult.extraction.failed > 0 && (
+                  <span className="text-[#E67E22] ml-1">
+                    ({lastResult.extraction.failed} 失败)
+                  </span>
+                )}
+              </div>
+            )}
             {lastResult.fetched === 0 && (
               <p className="text-xs text-[#E67E22] mt-1">
-                自动采集对付费媒体覆盖有限，建议通过校园网数据库检索后使用「批量上传」导入语料
+                自动采集对付费媒体覆盖有限，建议通过校园网数据库（ProQuest/EBSCO）检索后使用「批量上传」导入语料
               </p>
             )}
           </div>

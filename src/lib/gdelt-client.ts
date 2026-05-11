@@ -1,4 +1,5 @@
 import type { RssArticle } from "./rss-parser";
+import { TIER_1_COMBOS, TIER_2_COMBOS, type KeywordCombo } from "./gdelt-keywords";
 
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
@@ -10,19 +11,6 @@ const MEDIA_OUTLETS = [
   { name: "Guardian", domains: "theguardian.com" },
   { name: "Economist", domains: "economist.com" },
   { name: "BBC", domains: "bbc.com OR bbc.co.uk" },
-];
-
-// Broader keyword combinations for searching China-related discourse
-const KEYWORD_COMBOS = [
-  '"China"',
-  '"Chinese"',
-  '"China" economic',
-  '"China" development',
-  '"China" foreign policy',
-  '"China" modernization',
-  '"China" "Belt and Road"',
-  '"China" "common prosperity"',
-  '"Xi Jinping"',
 ];
 
 // Year ranges
@@ -51,25 +39,19 @@ async function queryGdelt(
 
   try {
     const url = `${GDELT_BASE}?${params}`;
-    // GDELT query dispatched
 
     const res = await fetch(url, {
       headers: { "User-Agent": "OutSight/1.0 (Academic Research Tool)" },
       signal: AbortSignal.timeout(25000),
     });
 
-    if (!res.ok) {
-      // GDELT HTTP error
-      return [];
-    }
+    if (!res.ok) return [];
 
     const text = await res.text();
     if (!text || text.length < 10) return [];
 
     const json = JSON.parse(text);
     if (!json.articles || !Array.isArray(json.articles)) return [];
-
-    // GDELT results received
 
     return json.articles
       .filter(
@@ -89,10 +71,35 @@ async function queryGdelt(
           description: null,
         };
       });
-  } catch (err) {
-    // GDELT fetch error
+  } catch {
     return [];
   }
+}
+
+/**
+ * Query GDELT for a single combo × outlet × all periods.
+ * Returns articles with source and keyword_combo set.
+ */
+async function queryComboForOutlet(
+  combo: KeywordCombo,
+  outlet: { name: string; domains: string },
+  periods: typeof YEAR_RANGES,
+): Promise<RssArticle[]> {
+  const query = `(${combo.query}) domain:${outlet.domains} sourcelang:eng`;
+  const results: RssArticle[] = [];
+
+  for (const range of periods) {
+    const articles = await queryGdelt(query, range.timespan, 250);
+    for (const a of articles) {
+      a.source = outlet.name;
+      a.keyword_combo = combo.label;
+    }
+    results.push(...articles);
+    // Rate limit: 200ms between queries
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
+  return results;
 }
 
 export async function fetchGdeltArticles(): Promise<{
@@ -103,58 +110,45 @@ export async function fetchGdeltArticles(): Promise<{
   const allArticles: RssArticle[] = [];
   const debugCounts: Record<string, number> = {};
 
-  // For each media outlet, try the first keyword combo
-  // to avoid excessive API calls (6 outlets × 6 time periods × 1 keyword = 36 queries max)
-  for (const outlet of MEDIA_OUTLETS) {
-    const query = `(${KEYWORD_COMBOS[0]}) domain:${outlet.domains} sourcelang:eng`;
-    const key = outlet.name;
+  // ============================================================
+  // Round 1: Tier 1 combos × all outlets × all periods
+  // ============================================================
 
-    for (const range of YEAR_RANGES) {
-      const articles = await queryGdelt(query, range.timespan, 250);
-      const countKey = `${key}_${range.label}`;
-      debugCounts[countKey] = articles.length;
+  // Track per-outlet yield across all Tier 1 combos
+  const perOutlet = new Map<string, number>();
 
-      for (const a of articles) {
-        a.source = outlet.name;
-      }
+  for (const combo of TIER_1_COMBOS) {
+    for (const outlet of MEDIA_OUTLETS) {
+      const articles = await queryComboForOutlet(combo, outlet, YEAR_RANGES);
+      const key = `${outlet.name}_${combo.label}`;
+      debugCounts[key] = articles.length;
+
       allArticles.push(...articles);
-
-      // Small delay to avoid overwhelming the API
-      await new Promise((r) => setTimeout(r, 200));
+      perOutlet.set(outlet.name, (perOutlet.get(outlet.name) ?? 0) + articles.length);
     }
   }
 
-  // If first keyword combo yields poor results, try additional combos
-  // for the outlets that got < 10 results total
-  const byOutlet = new Map<string, number>();
-  for (const a of allArticles) {
-    byOutlet.set(a.source, (byOutlet.get(a.source) ?? 0) + 1);
-  }
+  // ============================================================
+  // Round 2: Tier 2 combos for weak outlets (recent 2 periods only)
+  // ============================================================
 
+  const recentPeriods = YEAR_RANGES.slice(-2); // 2024H1, 2024H2
   const weakOutlets = MEDIA_OUTLETS.filter(
-    (o) => (byOutlet.get(o.name) ?? 0) < 10,
+    (o) => (perOutlet.get(o.name) ?? 0) < 10,
   );
 
   if (weakOutlets.length > 0) {
-    for (const outlet of weakOutlets) {
-      // Try keyword combo index 1 (different keyword)
-      const query = `(${KEYWORD_COMBOS[1]}) domain:${outlet.domains} sourcelang:eng`;
-
-      for (const range of YEAR_RANGES) {
-        const articles = await queryGdelt(query, range.timespan, 250);
-        const countKey = `${outlet.name}_${range.label}_k2`;
-        debugCounts[countKey] = articles.length;
-
-        for (const a of articles) {
-          a.source = outlet.name;
-        }
+    for (const combo of TIER_2_COMBOS) {
+      for (const outlet of weakOutlets) {
+        const articles = await queryComboForOutlet(combo, outlet, recentPeriods);
+        const key = `${outlet.name}_${combo.label}_t2`;
+        debugCounts[key] = articles.length;
         allArticles.push(...articles);
-        await new Promise((r) => setTimeout(r, 200));
       }
     }
   }
 
-  // Dedup within GDELT results
+  // Dedup within GDELT results by normalized URL
   const seen = new Set<string>();
   const unique: RssArticle[] = [];
   for (const a of allArticles) {
@@ -164,8 +158,6 @@ export async function fetchGdeltArticles(): Promise<{
       unique.push(a);
     }
   }
-
-  // GDELT dedup complete
 
   return { source: "gdelt", articles: unique, debug: debugCounts };
 }

@@ -2,11 +2,13 @@
 """
 OutSight 语料同步脚本 (sync_cli.py)
 =====================================
-本地兜底方案：通过 RSS 和 NewsAPI 拉取新闻语料，直接写入 Supabase 数据库。
+本地兜底方案：通过 RSS 和 NewsAPI 拉取新闻语料，使用 trafilatura 提取正文，
+Playwright 作为 JS 渲染页面的回退方案，直接写入 Supabase 数据库。
 适用于网络环境不稳定、无法访问 Vercel 托管的 Web 同步功能时使用。
 
 依赖安装：
-  pip install supabase-py requests
+  pip install supabase-py requests trafilatura playwright
+  playwright install chromium  (仅 Playwright 回退需要)
 
 环境变量（必需）：
   SUPABASE_URL=https://xxxxx.supabase.co
@@ -16,7 +18,8 @@ OutSight 语料同步脚本 (sync_cli.py)
   NEWSAPI_KEY=xxxxx  (仅 NewsAPI 需要，RSS 不需要)
 
 用法：
-  python sync_cli.py              # 执行同步
+  python sync_cli.py              # 执行同步（含正文提取）
+  python sync_cli.py --no-extract # 跳过正文提取
   python sync_cli.py --dry-run    # 预览但不写入数据库
   python sync_cli.py --source rss # 仅 RSS
   python sync_cli.py --source newsapi  # 仅 NewsAPI
@@ -27,6 +30,7 @@ import sys
 import uuid
 import time
 import argparse
+import re
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from urllib.parse import urlparse
@@ -158,6 +162,132 @@ def fetch_newsapi_articles(api_key: str) -> list[dict]:
 
 
 # ============================================================
+# 正文提取
+# ============================================================
+
+def extract_content_trafilatura(url: str, timeout: int = 15) -> dict | None:
+    """使用 trafilatura 提取正文（主提取器）."""
+    try:
+        import trafilatura
+    except ImportError:
+        print("  [WARN] trafilatura 未安装，跳过正文提取")
+        return None
+
+    try:
+        downloaded = trafilatura.fetch_url(
+            url,
+            decode=False,
+            timeout=timeout,
+        )
+        if downloaded is None:
+            return {"error": "trafilatura fetch returned None"}
+
+        text = trafilatura.extract(
+            downloaded,
+            include_comments=False,
+            include_tables=False,
+            no_fallback=False,
+        )
+
+        if not text or len(text.strip()) < 50:
+            return {"error": "trafilatura extracted insufficient text"}
+
+        metadata = trafilatura.extract_metadata(downloaded)
+
+        return {
+            "content": text.strip(),
+            "full_text": text.strip(),
+            "author": metadata.author if metadata and metadata.author else None,
+            "publish_date": (
+                metadata.date.isoformat()[:10]
+                if metadata and metadata.date
+                else None
+            ),
+            "word_count": len(re.findall(r"\w+", text)),
+        }
+    except Exception as e:
+        return {"error": f"trafilatura: {e}"}
+
+
+def extract_content_playwright(url: str, timeout: int = 20000) -> dict | None:
+    """使用 Playwright 提取 JS 渲染页面的正文（回退方案）."""
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PwTimeout
+    except ImportError:
+        print("  [INFO] playwright 未安装，跳过 Playwright 回退")
+        return None
+
+    try:
+        with sync_playwright() as pw:
+            browser = pw.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (compatible; OutSight/0.1; Academic Research Tool)"
+            )
+            page = context.new_page()
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+            except PwTimeout:
+                browser.close()
+                return {"error": "playwright navigation timeout"}
+
+            html = page.content()
+            browser.close()
+
+            # Use trafilatura on the rendered HTML if available
+            try:
+                import trafilatura
+                text = trafilatura.extract(
+                    html,
+                    include_comments=False,
+                    include_tables=False,
+                    no_fallback=False,
+                )
+                if text and len(text.strip()) >= 50:
+                    return {
+                        "content": text.strip(),
+                        "full_text": text.strip(),
+                        "author": None,
+                        "publish_date": None,
+                        "word_count": len(re.findall(r"\w+", text)),
+                    }
+            except ImportError:
+                pass
+
+            # fallback: plain text from body
+            body_text = page.inner_text("body")
+            if body_text and len(body_text.strip()) >= 50:
+                clean = re.sub(r"\n{3,}", "\n\n", body_text).strip()
+                return {
+                    "content": clean,
+                    "full_text": clean,
+                    "author": None,
+                    "publish_date": None,
+                    "word_count": len(re.findall(r"\w+", clean)),
+                }
+
+            return {"error": "playwright: insufficient text"}
+    except Exception as e:
+        return {"error": f"playwright: {e}"}
+
+
+def extract_content(url: str, use_playwright_fallback: bool = True) -> dict | None:
+    """提取正文：先 trafilatura，失败后回退 Playwright."""
+    result = extract_content_trafilatura(url)
+    if result and "error" not in result:
+        return result
+
+    if use_playwright_fallback:
+        print(f"  trafilatura 失败({result.get('error', 'unknown') if result else 'no result'})，尝试 Playwright...")
+        pw_result = extract_content_playwright(url)
+        if pw_result and "error" not in pw_result:
+            return pw_result
+        # If both failed, return the trafilatura error
+        return result
+
+    return result
+
+
+# ============================================================
 # 去重
 # ============================================================
 
@@ -199,6 +329,7 @@ def run_sync(
     client: Client,
     dry_run: bool = False,
     source_filter: str | None = None,
+    do_extract: bool = True,
 ) -> None:
     """执行同步."""
     articles = []
@@ -233,23 +364,52 @@ def run_sync(
         print("  无新文章，跳过写入")
         return
 
-    # 写入数据库
+    # 写入数据库 + 正文提取
     inserted = 0
+    extracted = 0
     for a in new_articles:
+        content = None
+        full_text = None
+        author = None
+        word_count = None
+        status = "待发现"
+
+        if do_extract:
+            print(f"  提取正文: [{a['source']}] {a['title'][:60]}...")
+            extraction = extract_content(a["url"])
+            if extraction and "error" not in extraction:
+                content = extraction.get("full_text") or extraction.get("content")
+                full_text = extraction.get("full_text") or extraction.get("content")
+                author = extraction.get("author")
+                word_count = extraction.get("word_count")
+                status = "已下载全文"
+                extracted += 1
+                print(f"    成功 ({word_count or 0} 词)")
+            else:
+                err = extraction.get("error", "unknown") if extraction else "no result"
+                print(f"    失败: {err}")
+
         resp = client.table("articles").insert({
             "title": a["title"],
             "url": a["url"],
             "media": a["source"],
             "publish_date": a.get("publish_date"),
-            "status": "待发现",
+            "status": status,
             "abstract": a.get("description"),
+            "content": content,
+            "full_text": full_text,
+            "author": author,
+            "word_count": word_count,
         }).execute()
+
         if not resp.data:
             print(f"  [ERROR] 插入失败: {a['title'][:60]}")
         else:
             inserted += 1
 
-    print(f"  成功插入 {inserted} 篇语文语料")
+    print(f"  成功插入 {inserted} 篇语料")
+    if do_extract:
+        print(f"  其中正文提取成功 {extracted} 篇，失败 {inserted - extracted} 篇")
 
 
 # ============================================================
@@ -260,6 +420,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="OutSight 语料同步脚本")
     parser.add_argument("--dry-run", action="store_true", help="预览而不写入数据库")
     parser.add_argument("--source", choices=["rss", "newsapi"], help="指定拉取来源")
+    parser.add_argument("--no-extract", action="store_true", help="跳过正文提取")
     args = parser.parse_args()
 
     supabase_url = os.getenv("SUPABASE_URL")
@@ -275,10 +436,17 @@ def main() -> None:
     print(f"  时间: {datetime.now().isoformat()}")
     if args.dry_run:
         print(f"  模式: Dry Run (预览)")
+    if args.no_extract:
+        print(f"  正文提取: 已禁用")
     print()
 
     client = create_client(supabase_url, supabase_key)
-    run_sync(client, dry_run=args.dry_run, source_filter=args.source)
+    run_sync(
+        client,
+        dry_run=args.dry_run,
+        source_filter=args.source,
+        do_extract=not args.no_extract,
+    )
     print("\n  同步完成")
 
 

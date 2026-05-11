@@ -4,6 +4,7 @@ export interface RssArticle {
   publish_date: string | null;
   source: string;
   description: string | null;
+  keyword_combo?: string;
 }
 
 interface RssFeed {
