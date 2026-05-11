@@ -329,7 +329,7 @@ def run_sync(
     client: Client,
     dry_run: bool = False,
     source_filter: str | None = None,
-    do_extract: bool = True,
+    do_extract: bool = False,
 ) -> None:
     """执行同步."""
     articles = []
@@ -364,42 +364,39 @@ def run_sync(
         print("  无新文章，跳过写入")
         return
 
-    # 写入数据库 + 正文提取
+    # 写入数据库（仅元数据，正文提取暂时禁用）
     inserted = 0
-    extracted = 0
+    # extracted = 0  # TEMP: content extraction disabled
     for a in new_articles:
-        content = None
-        full_text = None
-        author = None
-        word_count = None
-        status = "待发现"
-
-        if do_extract:
-            print(f"  提取正文: [{a['source']}] {a['title'][:60]}...")
-            extraction = extract_content(a["url"])
-            if extraction and "error" not in extraction:
-                content = extraction.get("full_text") or extraction.get("content")
-                full_text = extraction.get("full_text") or extraction.get("content")
-                author = extraction.get("author")
-                word_count = extraction.get("word_count")
-                status = "已下载全文"
-                extracted += 1
-                print(f"    成功 ({word_count or 0} 词)")
-            else:
-                err = extraction.get("error", "unknown") if extraction else "no result"
-                print(f"    失败: {err}")
+        # TEMP: Content extraction disabled for stability.
+        # To re-enable, set do_extract=True and uncomment the block below.
+        #
+        # if do_extract:
+        #     print(f"  提取正文: [{a['source']}] {a['title'][:60]}...")
+        #     extraction = extract_content(a["url"])
+        #     if extraction and "error" not in extraction:
+        #         content = extraction.get("full_text") or extraction.get("content")
+        #         full_text = extraction.get("full_text") or extraction.get("content")
+        #         author = extraction.get("author")
+        #         word_count = extraction.get("word_count")
+        #         status = "已下载全文"
+        #         extracted += 1
+        #         print(f"    成功 ({word_count or 0} 词)")
+        #     else:
+        #         err = extraction.get("error", "unknown") if extraction else "no result"
+        #         print(f"    失败: {err}")
 
         resp = client.table("articles").insert({
             "title": a["title"],
             "url": a["url"],
             "media": a["source"],
             "publish_date": a.get("publish_date"),
-            "status": status,
+            "status": "待发现",
             "abstract": a.get("description"),
-            "content": content,
-            "full_text": full_text,
-            "author": author,
-            "word_count": word_count,
+            "content": "",
+            "full_text": None,
+            "author": None,
+            "word_count": None,
         }).execute()
 
         if not resp.data:
@@ -408,8 +405,8 @@ def run_sync(
             inserted += 1
 
     print(f"  成功插入 {inserted} 篇语料")
-    if do_extract:
-        print(f"  其中正文提取成功 {extracted} 篇，失败 {inserted - extracted} 篇")
+    # if do_extract:
+    #     print(f"  其中正文提取成功 {extracted} 篇，失败 {inserted - extracted} 篇")
 
 
 # ============================================================
@@ -436,8 +433,7 @@ def main() -> None:
     print(f"  时间: {datetime.now().isoformat()}")
     if args.dry_run:
         print(f"  模式: Dry Run (预览)")
-    if args.no_extract:
-        print(f"  正文提取: 已禁用")
+    print(f"  正文提取: 已禁用（稳定性优先，仅采集元数据）")
     print()
 
     client = create_client(supabase_url, supabase_key)
@@ -445,7 +441,7 @@ def main() -> None:
         client,
         dry_run=args.dry_run,
         source_filter=args.source,
-        do_extract=not args.no_extract,
+        do_extract=False,
     )
     print("\n  同步完成")
 

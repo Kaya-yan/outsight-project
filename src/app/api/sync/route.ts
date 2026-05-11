@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createArticle, updateArticle } from "@/lib/data-access/articles";
+import { createArticle } from "@/lib/data-access/articles";
 import {
   createCollectionLog,
   updateCollectionLog,
@@ -9,7 +9,8 @@ import { fetchRssArticles } from "@/lib/rss-parser";
 import { fetchNewsApiArticles } from "@/lib/newsapi-client";
 import { fetchGdeltArticles } from "@/lib/gdelt-client";
 import { findExistingUrls, normalizeUrl } from "@/lib/dedup";
-import { extractWithConcurrency, summarizeExtraction } from "@/lib/extraction-pool";
+// Phase 2 (content extraction) temporarily disabled for stability testing
+// import { extractWithConcurrency, summarizeExtraction } from "@/lib/extraction-pool";
 
 interface SourceResult {
   name: string;
@@ -17,10 +18,19 @@ interface SourceResult {
   inserted: number;
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
+
+  // Parse period from request body
+  let period: string | undefined;
+  try {
+    const body = await request.json().catch(() => ({}));
+    period = body.period;
+  } catch {
+    // No body — use default
+  }
 
   const batchId = crypto.randomUUID();
 
@@ -36,7 +46,8 @@ export async function POST() {
   }
 
   // ============================================================
-  // Phase 1 — Discovery
+  // Phase 1 — Metadata Discovery (ONLY)
+  // Phase 2 (content extraction) is TEMPORARILY DISABLED
   // ============================================================
 
   let rssArticles: Awaited<ReturnType<typeof fetchRssArticles>> = [];
@@ -50,7 +61,7 @@ export async function POST() {
     const [rss, news, gdelt] = await Promise.all([
       fetchRssArticles(),
       fetchNewsApiArticles(),
-      fetchGdeltArticles(),
+      fetchGdeltArticles(period),
     ]);
     rssArticles = rss;
     newsApiArticles = news;
@@ -80,6 +91,7 @@ export async function POST() {
 
     return NextResponse.json({
       success: true,
+      period: period ?? null,
       fetched: 0,
       new: 0,
       duplicates: 0,
@@ -89,8 +101,7 @@ export async function POST() {
         { name: "GDELT", fetched: gdeltResult.articles.length, inserted: 0 },
       ],
       gdeltDebug: (gdeltResult as { debug?: Record<string, number> }).debug,
-      extraction: { attempted: 0, succeeded: 0, failed: 0 },
-      message: "未发现新语料。提示：GDELT 免费 API 可能无法覆盖付费媒体全量历史数据，建议通过校园网数据库（ProQuest/EBSCO）检索后使用「批量上传」导入 CSV。",
+      message: "未发现新语料",
     });
   }
 
@@ -102,9 +113,8 @@ export async function POST() {
     (a) => !existingUrls.has(normalizeUrl(a.url)),
   );
 
-  // Batch insert new articles into DB
+  // Batch insert — metadata only, content field left empty
   let insertedCount = 0;
-  const insertedIds: { id: string; url: string }[] = [];
   const batchSize = 25;
   for (let i = 0; i < newArticles.length; i += batchSize) {
     const batch = newArticles.slice(i, i + batchSize).map((a) => ({
@@ -115,6 +125,7 @@ export async function POST() {
       publish_date: a.publish_date ?? undefined,
       status: "待发现" as const,
       abstract: a.description ?? undefined,
+      content: "", // TEMP: content extraction disabled — save empty string
       keyword_combo: a.keyword_combo ? [a.keyword_combo] : undefined,
       created_by: user.id,
     }));
@@ -126,64 +137,48 @@ export async function POST() {
     for (const r of results) {
       if (r.status === "fulfilled" && !r.value.error && r.value.data) {
         insertedCount++;
-        insertedIds.push({ id: r.value.data.id, url: r.value.data.url });
       }
     }
   }
 
   const duplicates = totalFetched - newArticles.length;
 
-  // Update log after Phase 1
+  // ============================================================
+  // Phase 2 — Content Extraction (TEMPORARILY DISABLED)
+  // Was causing instability: combined fetch+extract overloaded APIs
+  // and Vercel runtime. To re-enable, uncomment below and the import.
+  // ============================================================
+
+  // let extraction = { attempted: 0, succeeded: 0, failed: 0 };
+  //
+  // if (insertedIds.length > 0) {
+  //   try {
+  //     const urls = insertedIds.map((item) => item.url);
+  //     extraction.attempted = urls.length;
+  //     const results = await extractWithConcurrency(urls, 5);
+  //     const summary = summarizeExtraction(results);
+  //     extraction = summary;
+  //     for (const item of insertedIds) {
+  //       const result = results.get(item.url);
+  //       if (!result || !result.fullText || result.fullText.length < 50) continue;
+  //       try {
+  //         await updateArticle(supabase, item.id, {
+  //           content: result.content ?? result.fullText,
+  //           full_text: result.fullText,
+  //           author: result.author ?? undefined,
+  //           word_count: result.wordCount ?? undefined,
+  //           status: "已下载全文",
+  //         } as Partial<import("@/types/database").Article>);
+  //       } catch { /* individual update failure non-fatal */ }
+  //     }
+  //   } catch { /* Phase 2 failure does not invalidate Phase 1 results */ }
+  // }
+
+  // Finalize collection log
   await updateCollectionLog(supabase, log.id, {
     articles_fetched: totalFetched,
     articles_new: insertedCount,
-    status: "running",
-  });
-
-  // ============================================================
-  // Phase 2 — Content Extraction
-  // ============================================================
-
-  let extraction = { attempted: 0, succeeded: 0, failed: 0 };
-
-  if (insertedIds.length > 0) {
-    try {
-      const urls = insertedIds.map((item) => item.url);
-      extraction.attempted = urls.length;
-
-      const results = await extractWithConcurrency(urls, 5);
-      const summary = summarizeExtraction(results);
-      extraction = summary;
-
-      // Update each article with extracted content
-      for (const item of insertedIds) {
-        const result = results.get(item.url);
-        if (!result || !result.fullText || result.fullText.length < 50) continue;
-
-        try {
-          await updateArticle(supabase, item.id, {
-            content: result.content ?? result.fullText,
-            full_text: result.fullText,
-            author: result.author ?? undefined,
-            word_count: result.wordCount ?? undefined,
-            status: "已下载全文",
-          } as Partial<import("@/types/database").Article>);
-        } catch {
-          // Individual article update failure is non-fatal
-        }
-      }
-    } catch {
-      // Phase 2 failure does not invalidate Phase 1 results
-    }
-  }
-
-  // Finalize collection log
-  const finalStatus = extraction.attempted > 0 && extraction.failed > 0
-    ? "partial"
-    : "completed";
-
-  await updateCollectionLog(supabase, log.id, {
-    status: finalStatus,
+    status: "completed",
   });
 
   // Per-source breakdown
@@ -205,22 +200,14 @@ export async function POST() {
     },
   ];
 
-  const msgParts = [`拉取 ${totalFetched} 篇，新增 ${insertedCount} 篇，重复 ${duplicates} 篇`];
-  if (extraction.succeeded > 0) {
-    msgParts.push(`成功提取正文 ${extraction.succeeded} 篇`);
-  }
-  if (extraction.failed > 0) {
-    msgParts.push(`${extraction.failed} 篇正文提取失败`);
-  }
-
   return NextResponse.json({
     success: true,
+    period: period ?? null,
     fetched: totalFetched,
     new: insertedCount,
     duplicates,
     sources,
     gdeltDebug: (gdeltResult as { debug?: Record<string, number> }).debug,
-    extraction,
-    message: msgParts.join("，"),
+    message: `拉取 ${totalFetched} 篇，新增 ${insertedCount} 篇，重复 ${duplicates} 篇`,
   });
 }

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCw, Clock, AlertCircle, CheckCircle2 } from "lucide-react";
+import { RESEARCH_PERIODS } from "@/lib/constants";
 
 interface SyncStatus {
   lastSync: string | null;
@@ -23,19 +24,13 @@ interface SourceResult {
   inserted: number;
 }
 
-interface ExtractionStats {
-  attempted: number;
-  succeeded: number;
-  failed: number;
-}
-
 interface SyncResult {
   fetched: number;
   new: number;
   duplicates: number;
+  period?: string | null;
   sources?: SourceResult[];
   gdeltDebug?: Record<string, number>;
-  extraction?: ExtractionStats;
   message: string;
 }
 
@@ -48,6 +43,7 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastResult, setLastResult] = useState<SyncResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("");
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -66,11 +62,19 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
   }, [fetchStatus]);
 
   const handleSync = useCallback(async () => {
+    if (!selectedPeriod) {
+      setError("请先选择研究时段");
+      return;
+    }
     setIsSyncing(true);
     setError(null);
     setLastResult(null);
     try {
-      const res = await fetch("/api/sync", { method: "POST" });
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ period: selectedPeriod }),
+      });
       const json = await res.json();
       if (res.ok) {
         setLastResult(json);
@@ -84,13 +88,15 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
     } finally {
       setIsSyncing(false);
     }
-  }, [fetchStatus, onSyncComplete]);
+  }, [selectedPeriod, fetchStatus, onSyncComplete]);
 
   const formatTimeAgo = (hours: number): string => {
     if (hours < 1) return "不到 1 小时前";
     if (hours < 24) return `${Math.round(hours)} 小时前`;
     return `${Math.round(hours / 24)} 天前`;
   };
+
+  const periodLabel = RESEARCH_PERIODS.find((p) => p.value === selectedPeriod)?.label;
 
   return (
     <Card className="border-[#E2E5E9] shadow-card">
@@ -101,7 +107,9 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             {isSyncing ? (
               <>
                 <RefreshCw className="h-4 w-4 text-[#4A90A4] animate-spin" />
-                <span className="text-sm text-[#4A90A4]">正在同步...</span>
+                <span className="text-sm text-[#4A90A4]">
+                  正在同步{periodLabel ? ` (${periodLabel})` : ""}...
+                </span>
               </>
             ) : (
               <>
@@ -133,22 +141,40 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             )}
           </div>
 
-          {/* Action button */}
-          <Button
-            onClick={handleSync}
-            disabled={isSyncing}
-            variant="outline"
-            className="h-8 text-xs gap-1.5"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
-            {isSyncing ? "同步中..." : "执行同步"}
-          </Button>
+          {/* Period selector + Action button */}
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedPeriod}
+              onChange={(e) => setSelectedPeriod(e.target.value)}
+              disabled={isSyncing}
+              className="h-8 rounded-md border border-[#E2E5E9] bg-white px-2.5 text-xs text-[#2D3436] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90A4] disabled:opacity-50"
+            >
+              <option value="">选择时段</option>
+              {RESEARCH_PERIODS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <Button
+              onClick={handleSync}
+              disabled={isSyncing || !selectedPeriod}
+              variant="outline"
+              className="h-8 text-xs gap-1.5"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+              {isSyncing ? "同步中..." : "执行同步"}
+            </Button>
+          </div>
         </div>
 
         {/* Sync result feedback */}
         {lastResult && (
           <div className="mt-3 rounded-md bg-[#5DAD93]/5 px-3 py-2 space-y-1">
             <p className="text-sm text-[#5DAD93]">{lastResult.message}</p>
+            {lastResult.period && (
+              <p className="text-xs text-[#7F8A93]">
+                时段：{RESEARCH_PERIODS.find((p) => p.value === lastResult.period)?.label ?? lastResult.period}
+              </p>
+            )}
             {lastResult.sources && lastResult.sources.length > 0 && (
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-[#7F8A93]">
                 {lastResult.sources.map((s) => (
@@ -158,19 +184,9 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
                 ))}
               </div>
             )}
-            {lastResult.extraction && lastResult.extraction.attempted > 0 && (
-              <div className="text-xs text-[#4A90A4]">
-                正文提取：{lastResult.extraction.succeeded}/{lastResult.extraction.attempted} 成功
-                {lastResult.extraction.failed > 0 && (
-                  <span className="text-[#E67E22] ml-1">
-                    ({lastResult.extraction.failed} 失败)
-                  </span>
-                )}
-              </div>
-            )}
             {lastResult.fetched === 0 && (
               <p className="text-xs text-[#E67E22] mt-1">
-                自动采集对付费媒体覆盖有限，建议通过校园网数据库（ProQuest/EBSCO）检索后使用「批量上传」导入语料
+                该时段未发现新语料。请尝试其他时段，或通过校园网数据库（ProQuest/EBSCO）检索后使用「批量上传」导入 CSV
               </p>
             )}
           </div>

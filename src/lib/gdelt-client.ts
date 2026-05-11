@@ -1,5 +1,5 @@
 import type { RssArticle } from "./rss-parser";
-import { TIER_1_COMBOS, TIER_2_COMBOS, type KeywordCombo } from "./gdelt-keywords";
+import { TIER_1_COMBOS, type KeywordCombo } from "./gdelt-keywords";
 
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
@@ -13,15 +13,14 @@ const MEDIA_OUTLETS = [
   { name: "BBC", domains: "bbc.com OR bbc.co.uk" },
 ];
 
-// Year ranges
-const YEAR_RANGES = [
-  { label: "2022H1", timespan: "20220101000000-20220630235959" },
-  { label: "2022H2", timespan: "20220701000000-20221231235959" },
-  { label: "2023H1", timespan: "20230101000000-20230630235959" },
-  { label: "2023H2", timespan: "20230701000000-20231231235959" },
-  { label: "2024H1", timespan: "20240101000000-20240630235959" },
-  { label: "2024H2", timespan: "20240701000000-20241231235959" },
-];
+// Map UI research periods to GDELT timespan strings
+const PERIOD_MAP: Record<string, string> = {
+  "2022.10-2023.03": "20221001000000-20230331235959",
+  "2023.04-2023.09": "20230401000000-20230930235959",
+  "2023.10-2024.03": "20231001000000-20240331235959",
+  "2024.04-2024.09": "20240401000000-20240930235959",
+  "2024.10-2024.12": "20241001000000-20241231235959",
+};
 
 async function queryGdelt(
   query: string,
@@ -77,32 +76,26 @@ async function queryGdelt(
 }
 
 /**
- * Query GDELT for a single combo × outlet × all periods.
+ * Query GDELT for a single combo × outlet × the given timespan.
  * Returns articles with source and keyword_combo set.
  */
 async function queryComboForOutlet(
   combo: KeywordCombo,
   outlet: { name: string; domains: string },
-  periods: typeof YEAR_RANGES,
+  timespan: string,
 ): Promise<RssArticle[]> {
   const query = `(${combo.query}) domain:${outlet.domains} sourcelang:eng`;
-  const results: RssArticle[] = [];
+  const articles = await queryGdelt(query, timespan, 250);
 
-  for (const range of periods) {
-    const articles = await queryGdelt(query, range.timespan, 250);
-    for (const a of articles) {
-      a.source = outlet.name;
-      a.keyword_combo = combo.label;
-    }
-    results.push(...articles);
-    // Rate limit: 200ms between queries
-    await new Promise((r) => setTimeout(r, 200));
+  for (const a of articles) {
+    a.source = outlet.name;
+    a.keyword_combo = combo.label;
   }
 
-  return results;
+  return articles;
 }
 
-export async function fetchGdeltArticles(): Promise<{
+export async function fetchGdeltArticles(period?: string): Promise<{
   source: string;
   articles: RssArticle[];
   debug?: Record<string, number>;
@@ -110,41 +103,23 @@ export async function fetchGdeltArticles(): Promise<{
   const allArticles: RssArticle[] = [];
   const debugCounts: Record<string, number> = {};
 
-  // ============================================================
-  // Round 1: Tier 1 combos × all outlets × all periods
-  // ============================================================
-
-  // Track per-outlet yield across all Tier 1 combos
-  const perOutlet = new Map<string, number>();
-
-  for (const combo of TIER_1_COMBOS) {
-    for (const outlet of MEDIA_OUTLETS) {
-      const articles = await queryComboForOutlet(combo, outlet, YEAR_RANGES);
-      const key = `${outlet.name}_${combo.label}`;
-      debugCounts[key] = articles.length;
-
-      allArticles.push(...articles);
-      perOutlet.set(outlet.name, (perOutlet.get(outlet.name) ?? 0) + articles.length);
-    }
+  // Resolve period to a single GDELT timespan
+  const timespan = period ? PERIOD_MAP[period] : undefined;
+  if (!timespan) {
+    // No valid period — return empty to avoid querying all periods at once
+    return { source: "gdelt", articles: [], debug: { error: "no_period_selected" } };
   }
 
-  // ============================================================
-  // Round 2: Tier 2 combos for weak outlets (recent 2 periods only)
-  // ============================================================
+  // Use only Tier 1 combos — one period × 6 outlets × 10 combos = 60 queries max
+  for (const combo of TIER_1_COMBOS) {
+    for (const outlet of MEDIA_OUTLETS) {
+      const articles = await queryComboForOutlet(combo, outlet, timespan);
+      const key = `${outlet.name}_${combo.label}`;
+      debugCounts[key] = articles.length;
+      allArticles.push(...articles);
 
-  const recentPeriods = YEAR_RANGES.slice(-2); // 2024H1, 2024H2
-  const weakOutlets = MEDIA_OUTLETS.filter(
-    (o) => (perOutlet.get(o.name) ?? 0) < 10,
-  );
-
-  if (weakOutlets.length > 0) {
-    for (const combo of TIER_2_COMBOS) {
-      for (const outlet of weakOutlets) {
-        const articles = await queryComboForOutlet(combo, outlet, recentPeriods);
-        const key = `${outlet.name}_${combo.label}_t2`;
-        debugCounts[key] = articles.length;
-        allArticles.push(...articles);
-      }
+      // Rate limit: 3000ms between queries to avoid throttling
+      await new Promise((r) => setTimeout(r, 3000));
     }
   }
 
