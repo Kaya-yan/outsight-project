@@ -182,15 +182,34 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             {/* Status text */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-[#7F8A93]">
-                {jobStatus.status === "pending" && "任务已启动，等待执行..."}
+                {jobStatus.status === "pending" && "任务已启动，等待执行引擎启动..."}
                 {jobStatus.status === "running" && `正在采集... 已发现 ${jobStatus.total_fetched} 篇`}
-                {jobStatus.status === "completed" && `采集完成 · 共发现 ${jobStatus.total_fetched} 篇，新增 ${jobStatus.total_new} 篇`}
+                {jobStatus.status === "completed" && (() => {
+                  const filtered = jobStatus.total_fetched - jobStatus.total_new;
+                  return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇，过滤 ${filtered} 篇`;
+                })()}
                 {jobStatus.status === "failed" && `任务失败: ${jobStatus.error_message ?? "未知错误"}`}
               </span>
               {isRunning && (
                 <span className="text-[#95A5A6]">每 3 秒刷新</span>
               )}
             </div>
+
+            {/* Filter breakdown on completion */}
+            {jobStatus.status === "completed" && (
+              <div className="text-xs text-[#7F8A93] space-y-0.5 mt-1">
+                <p>过滤明细（重复URL、超时间范围、日期缺失等）：</p>
+                <p>共过滤 {jobStatus.total_fetched - jobStatus.total_new} 篇，查看 Vercel Runtime Logs 获取逐篇过滤原因</p>
+              </div>
+            )}
+
+            {/* Running: show discovery method hints */}
+            {isRunning && (
+              <div className="text-xs text-[#95A5A6] space-y-0.5 mt-1">
+                <p>数据源: RSS + NewsAPI + GDELT + 搜索引擎</p>
+                <p>过滤规则: 时间范围(2022-10~2024-12) + URL去重 + 日期有效性</p>
+              </div>
+            )}
 
             {/* Show job_id for debugging */}
             {isRunning && (

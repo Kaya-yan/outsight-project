@@ -4,7 +4,9 @@ import { createArticle } from "@/lib/data-access/articles";
 import { updateCrawlJob } from "@/lib/data-access/crawl-jobs";
 import { fetchRssArticles } from "@/lib/rss-parser";
 import { fetchNewsApiArticles } from "@/lib/newsapi-client";
-import { checkArticleBeforeInsert } from "@/lib/insert-guard";
+import { batchGuardCheck } from "@/lib/insert-guard";
+import { discoverArticles } from "@/lib/search-engine-client";
+import { expandSearchQueries, type KeywordTier } from "@/lib/keyword-expander";
 import { TIER_1_COMBOS } from "@/lib/gdelt-keywords";
 
 // ============================================================
@@ -163,54 +165,98 @@ export async function POST(request: Request) {
       }
     }
 
-    console.log(`[Crawl] 三源合计拉取 ${allArticles.length} 篇`);
+    // ============================================================
+    // Source 4: Search Engine Discovery (Google / Bing)
+    // ============================================================
+    console.log(`[Crawl] 开始搜索引擎发现...`);
+    let searchResults: Awaited<ReturnType<typeof discoverArticles>> = [];
+    const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy"];
+    const searchMedia = ["BBC"]; // currently hard-coded; extend to all 6 later
+    const searchQueries = expandSearchQueries(searchTiers, searchMedia);
+    console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.join(", ")})`);
+
+    try {
+      searchResults = await discoverArticles({
+        queries: searchQueries,
+        engine: "both",
+        maxPerQuery: 10,
+      });
+      console.log(`[Crawl] 搜索引擎: ${searchResults.length} 篇发现`);
+
+      // Convert SearchResult to crawl article format
+      for (const r of searchResults) {
+        allArticles.push({
+          title: r.title,
+          url: r.url,
+          publish_date: r.publish_date,
+          source: r.source,
+          description: r.snippet,
+          keyword_combo: `${r.keyword} (${r.tier})`,
+        });
+      }
+    } catch (err) {
+      console.log(`[Crawl] 搜索引擎发现失败: ${err instanceof Error ? err.message : err}`);
+    }
+
+    // Per-source counts
+    const sourceStats = {
+      rss: allArticles.filter((a) => rssArticles.some((r) => r.url === a.url)).length,
+      newsapi: allArticles.filter((a) => newsApiArticles.some((n) => n.url === a.url)).length,
+      gdelt: allArticles.length - (searchResults.length),
+      search: searchResults.length,
+    };
+
+    console.log(`[Crawl] 四源合计拉取 ${allArticles.length} 篇 (RSS:${sourceStats.rss} NewsAPI:${sourceStats.newsapi} GDELT:估算 search:${sourceStats.search})`);
 
     // ============================================================
-    // Time filter + Dedup + Insert
+    // Time filter + Dedup + Insert (batch guard with full stats)
     // ============================================================
     console.log(`[Crawl] 开始时间过滤、去重并写入数据库...`);
     let insertedCount = 0;
-    let timeFilteredCount = 0;
-    let dupeCount = 0;
     const batchSize = 25;
+    // Accumulate stats across batches
+    const totalGuardStats = {
+      total: 0, passed: 0,
+      filtered: {} as Record<string, number>,
+      details: [] as Array<{ url: string; title?: string; reason: string; detail: string }>,
+    };
+
     for (let i = 0; i < allArticles.length; i += batchSize) {
-      const batch = allArticles.slice(i, i + batchSize);
+      const batch = allArticles.slice(i, i + batchSize).map((a) => ({
+        title: a.title,
+        publish_date: a.publish_date,
+        url: a.url,
+      }));
 
-      // Pre-filter each article through the insert guard
-      const guardedBatch = await Promise.all(
-        batch.map(async (a) => {
-          const guard = await checkArticleBeforeInsert(supabase, {
-            publish_date: a.publish_date,
-            url: a.url,
-          });
-          return { article: a, guard };
-        }),
-      );
+      const { passed, stats } = await batchGuardCheck(supabase, batch);
 
-      const toInsert = guardedBatch.filter((g) => g.guard.passed);
-
-      // Count filtered-out articles
-      for (const g of guardedBatch) {
-        if (!g.guard.passed && g.guard.reason === "out_of_period") timeFilteredCount++;
-        if (!g.guard.passed && g.guard.reason === "duplicate_url") dupeCount++;
+      // Merge stats
+      totalGuardStats.total += stats.total;
+      totalGuardStats.passed += stats.passed;
+      for (const [reason, count] of Object.entries(stats.filtered)) {
+        totalGuardStats.filtered[reason] = (totalGuardStats.filtered[reason] ?? 0) + count;
       }
+      totalGuardStats.details.push(...stats.details);
+
+      const toInsert = passed.filter((g) => g.guard.passed);
 
       const results = await Promise.allSettled(
-        toInsert.map(({ article, guard }) =>
-          createArticle(supabase, {
-            title: article.title,
+        toInsert.map(({ article, guard }) => {
+          const original = allArticles.find((a) => a.url === article.url);
+          return createArticle(supabase, {
+            title: article.title ?? original?.title ?? "Untitled",
             url: article.url,
-            media: article.source,
-            source: article.source,
+            media: original?.source ?? "BBC",
+            source: original?.source ?? "BBC",
             publish_date: article.publish_date ?? undefined,
             status: "已入库",
-            abstract: article.description ?? undefined,
+            abstract: original?.description ?? undefined,
             content: "",
             full_text_status: "missing",
             url_hash: guard.urlHash,
-            keyword_combo: article.keyword_combo ? [article.keyword_combo] : undefined,
-          }),
-        ),
+            keyword_combo: original?.keyword_combo ? [original.keyword_combo] : undefined,
+          });
+        }),
       );
 
       for (const r of results) {
@@ -222,7 +268,26 @@ export async function POST(request: Request) {
       console.log(`[Crawl] 批处理 ${Math.min(i + batchSize, allArticles.length)}/${allArticles.length}: 已写入 ${insertedCount}`);
     }
 
-    console.log(`[Crawl] 写入完成: 入库 ${insertedCount} 篇, 超范围过滤 ${timeFilteredCount} 篇, 去重 ${dupeCount} 篇`);
+    // Summary log with all filter reasons
+    const f = totalGuardStats.filtered;
+    console.log(`[Crawl] ============ 过滤统计 ============`);
+    console.log(`[Crawl] 总接收: ${totalGuardStats.total} 篇`);
+    console.log(`[Crawl] 通过入库: ${insertedCount} 篇`);
+    console.log(`[Crawl] 重复URL: ${f.duplicate_url ?? 0} 篇`);
+    console.log(`[Crawl] 超范围(早): ${f.out_of_date_range_before ?? 0} 篇`);
+    console.log(`[Crawl] 超范围(晚): ${f.out_of_date_range_after ?? 0} 篇`);
+    console.log(`[Crawl] 日期缺失: ${f.missing_publish_date ?? 0} 篇`);
+    console.log(`[Crawl] 日期无法解析: ${f.unparseable_date ?? 0} 篇`);
+    console.log(`[Crawl] Hash错误: ${f.hash_error ?? 0} 篇`);
+    console.log(`[Crawl] =======================================`);
+
+    // Log first 10 filtered URLs with reasons
+    if (totalGuardStats.details.length > 0) {
+      console.log(`[Crawl] 过滤明细 (前10条):`);
+      for (const d of totalGuardStats.details.slice(0, 10)) {
+        console.log(`[Crawl]   [${d.reason}] ${d.url.slice(0, 80)} — ${d.detail}`);
+      }
+    }
 
     // Mark completed
     await updateCrawlJob(supabase, jobId, {
@@ -235,7 +300,9 @@ export async function POST(request: Request) {
 
     console.log(`[Crawl] ========================================`);
     console.log(`[Crawl] 任务完成: ${jobId}`);
-    console.log(`[Crawl] 拉取 ${allArticles.length} 篇，新增 ${insertedCount} 篇`);
+    console.log(`[Crawl] 拉取 ${allArticles.length} 篇 (RSS/NewsAPI/GDELT/Search)`);
+    console.log(`[Crawl] 新增入库 ${insertedCount} 篇`);
+    console.log(`[Crawl] 过滤详情: 重复${f.duplicate_url ?? 0} | 日期早${f.out_of_date_range_before ?? 0} | 日期晚${f.out_of_date_range_after ?? 0} | 日期缺失${f.missing_publish_date ?? 0} | 无法解析${f.unparseable_date ?? 0} | 哈希错误${f.hash_error ?? 0}`);
     console.log(`[Crawl] ========================================`);
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);

@@ -2,11 +2,48 @@ import type { Client } from "./data-access/base";
 import { normalizeUrl, hashUrl } from "./dedup";
 import { isWithinResearchPeriod } from "./time-filter";
 
+export type FilterReason =
+  | "passed"
+  | "duplicate_url"
+  | "out_of_date_range_before"
+  | "out_of_date_range_after"
+  | "missing_publish_date"
+  | "unparseable_date"
+  | "hash_error";
+
 export interface GuardResult {
   passed: boolean;
-  reason?: "out_of_period" | "duplicate_url" | "hash_error";
+  reason: FilterReason;
   detail?: string;
   urlHash?: string;
+}
+
+export interface GuardStats {
+  total: number;
+  passed: number;
+  filtered: Record<FilterReason, number>;
+  /** Per-article filter details (for verbose logging) */
+  details: Array<{ url: string; title?: string; reason: FilterReason; detail: string }>;
+}
+
+/**
+ * Create an empty GuardStats object with all filter reasons initialized to 0.
+ */
+function emptyStats(): GuardStats {
+  return {
+    total: 0,
+    passed: 0,
+    filtered: {
+      passed: 0,
+      duplicate_url: 0,
+      out_of_date_range_before: 0,
+      out_of_date_range_after: 0,
+      missing_publish_date: 0,
+      unparseable_date: 0,
+      hash_error: 0,
+    },
+    details: [],
+  };
 }
 
 /**
@@ -19,18 +56,46 @@ export interface GuardResult {
 export async function checkArticleBeforeInsert(
   client: Client,
   article: {
+    title?: string;
     publish_date?: string | null;
     url: string;
   },
 ): Promise<GuardResult> {
   // Step 1: Time filter
-  const periodCheck = isWithinResearchPeriod(article.publish_date);
-  if (!periodCheck.valid) {
-    console.log(`[InsertGuard] SKIPPED (time): ${article.url.slice(0, 100)} — ${periodCheck.reason}`);
-    return { passed: false, reason: "out_of_period", detail: periodCheck.reason };
+  if (!article.publish_date) {
+    console.log(`[Guard] MISSING_DATE: ${article.url.slice(0, 100)}`);
+    return {
+      passed: false,
+      reason: "missing_publish_date",
+      detail: "publish_date is null or undefined",
+    };
   }
-  if (periodCheck.reason) {
-    console.log(`[InsertGuard] WARNING: ${article.url.slice(0, 100)} — ${periodCheck.reason}`);
+
+  const periodCheck = isWithinResearchPeriod(article.publish_date);
+
+  if (periodCheck.reason === "null_date_allowed_with_warning") {
+    console.log(`[Guard] MISSING_DATE: ${article.url.slice(0, 100)}`);
+    return {
+      passed: false,
+      reason: "missing_publish_date",
+      detail: "publish_date is null",
+    };
+  }
+
+  if (periodCheck.reason === "unparseable_date_allowed_with_warning") {
+    console.log(`[Guard] UNPARSEABLE_DATE: ${article.url.slice(0, 100)} — "${article.publish_date}"`);
+    return {
+      passed: false,
+      reason: "unparseable_date",
+      detail: `Cannot parse date: "${article.publish_date}"`,
+    };
+  }
+
+  if (!periodCheck.valid) {
+    const isAfter = periodCheck.reason?.includes("after_research_period");
+    const reason: FilterReason = isAfter ? "out_of_date_range_after" : "out_of_date_range_before";
+    console.log(`[Guard] ${reason.toUpperCase()}: ${article.url.slice(0, 100)} — ${periodCheck.reason}`);
+    return { passed: false, reason, detail: periodCheck.reason ?? "out of research period" };
   }
 
   // Step 2: URL hash + dedup check
@@ -39,8 +104,8 @@ export async function checkArticleBeforeInsert(
   try {
     urlHash = hashUrl(normalized);
   } catch (err) {
-    console.error(`[InsertGuard] hashUrl failed for: ${article.url}`, err);
-    return { passed: false, reason: "hash_error" };
+    console.error(`[Guard] HASH_ERROR: hashUrl failed for ${article.url}`, err);
+    return { passed: false, reason: "hash_error", detail: String(err) };
   }
 
   const { data } = await client
@@ -50,9 +115,50 @@ export async function checkArticleBeforeInsert(
     .limit(1);
 
   if (data && data.length > 0) {
-    console.log(`[InsertGuard] SKIPPED (duplicate): ${article.url.slice(0, 100)}`);
-    return { passed: false, reason: "duplicate_url" };
+    console.log(`[Guard] DUPLICATE_URL: ${article.url.slice(0, 100)}`);
+    return { passed: false, reason: "duplicate_url", detail: "URL already exists in database" };
   }
 
-  return { passed: true, urlHash };
+  console.log(`[Guard] PASSED: ${article.url.slice(0, 100)}`);
+  return { passed: true, reason: "passed", urlHash };
+}
+
+// ============================================================
+// Batch guard with statistics
+// ============================================================
+
+export interface BatchGuardResult {
+  passed: Array<{ article: { title?: string; publish_date?: string | null; url: string }; guard: GuardResult }>;
+  stats: GuardStats;
+}
+
+/**
+ * Run insert guard across a batch of articles, collecting detailed statistics.
+ */
+export async function batchGuardCheck(
+  client: Client,
+  articles: Array<{ title?: string; publish_date?: string | null; url: string }>,
+): Promise<BatchGuardResult> {
+  const stats = emptyStats();
+  stats.total = articles.length;
+
+  const results = await Promise.all(
+    articles.map(async (article) => {
+      const guard = await checkArticleBeforeInsert(client, article);
+      stats.filtered[guard.reason]++;
+      if (guard.passed) {
+        stats.passed++;
+      } else {
+        stats.details.push({
+          url: article.url,
+          title: article.title,
+          reason: guard.reason,
+          detail: guard.detail ?? "unknown",
+        });
+      }
+      return { article, guard };
+    }),
+  );
+
+  return { passed: results.filter((r) => r.guard.passed), stats };
 }
