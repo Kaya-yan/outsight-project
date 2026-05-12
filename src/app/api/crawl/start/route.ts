@@ -58,20 +58,6 @@ export async function POST(request: Request) {
     }
 
     console.log("STEP 4: job created success", { job_id: job.id });
-
-    console.log("STEP 5: starting background process");
-    const { origin } = new URL(request.url);
-    fetch(`${origin}/api/crawl/execute`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_id: job.id }),
-    }).catch((err) => {
-      console.error("BACKGROUND_EXECUTE_FETCH_FAILED:", err);
-      if (err instanceof Error) {
-        console.error("BACKGROUND_STACK:", err.stack);
-      }
-    });
-
     console.log(`[Crawl] 任务已创建: ${job.id}`);
 
     return NextResponse.json({

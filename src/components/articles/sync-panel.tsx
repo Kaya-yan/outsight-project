@@ -67,21 +67,39 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
     setJobStatus(null);
 
     try {
-      const res = await fetch("/api/crawl/start", { method: "POST" });
-      const json = await res.json();
+      // Step 1: Create crawl job
+      const startRes = await fetch("/api/crawl/start", { method: "POST" });
+      const startJson = await startRes.json();
 
-      if (res.ok && json.job_id) {
-        setJobStatus({
-          job_id: json.job_id,
-          status: "pending",
-          progress: 0,
-          total_fetched: 0,
-          total_new: 0,
-          error_message: null,
-        });
-        startPolling(json.job_id);
-      } else {
-        setError(json.error ?? "任务创建失败");
+      if (!startRes.ok || !startJson.job_id) {
+        setError(startJson.error ?? "任务创建失败");
+        setIsStarting(false);
+        return;
+      }
+
+      const jobId = startJson.job_id;
+
+      setJobStatus({
+        job_id: jobId,
+        status: "pending",
+        progress: 0,
+        total_fetched: 0,
+        total_new: 0,
+        error_message: null,
+      });
+
+      startPolling(jobId);
+
+      // Step 2: Trigger execution in its own serverless function
+      const execRes = await fetch("/api/crawl/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ job_id: jobId }),
+      });
+
+      if (!execRes.ok) {
+        const execJson = await execRes.json().catch(() => ({}));
+        setError(`执行引擎启动失败: ${(execJson as { error?: string }).error ?? execRes.status}`);
       }
     } catch {
       setError("网络连接失败");
