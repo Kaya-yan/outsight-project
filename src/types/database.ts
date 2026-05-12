@@ -130,6 +130,8 @@ export interface Database {
           author: string | null;
           abstract: string | null;
           full_text: string | null;
+          full_text_status: "missing" | "partial" | "complete" | "manual_uploaded";
+          url_hash: string | null;
           content: string | null;
           word_count: number | null;
           keywords: string[];
@@ -163,6 +165,8 @@ export interface Database {
           author?: string | null;
           abstract?: string | null;
           full_text?: string | null;
+          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+          url_hash?: string | null;
           content?: string | null;
           word_count?: number | null;
           keywords?: string[];
@@ -191,6 +195,8 @@ export interface Database {
           author?: string | null;
           abstract?: string | null;
           full_text?: string | null;
+          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+          url_hash?: string | null;
           content?: string | null;
           word_count?: number | null;
           keywords?: string[];
@@ -510,6 +516,8 @@ export type AiJob = Tables["ai_queue"]["Row"];
 export type AiPrompt = Tables["ai_prompts"]["Row"];
 export type DualCodingRound = Tables["dual_coding_rounds"]["Row"];
 export type CrawlJob = Tables["crawl_jobs"]["Row"];
+
+export type FullTextStatus = "missing" | "partial" | "complete" | "manual_uploaded";
 
 export type DualCodingRoundStatus =
   | "in_progress"

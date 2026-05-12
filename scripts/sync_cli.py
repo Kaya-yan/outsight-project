@@ -29,10 +29,11 @@ import os
 import sys
 import uuid
 import time
+import hashlib
 import argparse
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from urllib.parse import urlparse
 
 try:
@@ -309,6 +310,31 @@ def normalize_url(url: str) -> str:
         return url.strip().lower()
 
 
+def hash_url(normalized_url: str) -> str:
+    """Compute SHA-256 hex digest of normalized URL."""
+    return hashlib.sha256(normalized_url.encode()).hexdigest()
+
+
+RESEARCH_START = date(2022, 10, 1)
+RESEARCH_END = date(2024, 12, 31)
+
+
+def is_within_research_period(publish_date: str | None) -> tuple[bool, str | None]:
+    """Check if publish_date falls within [2022-10-01, 2024-12-31].
+    Returns (valid, reason)."""
+    if not publish_date:
+        return True, "null_date_allowed_with_warning"
+    try:
+        d = date.fromisoformat(publish_date[:10])
+    except (ValueError, TypeError):
+        return True, "unparseable_date_allowed_with_warning"
+    if d < RESEARCH_START:
+        return False, f"before_period: {d} < {RESEARCH_START}"
+    if d > RESEARCH_END:
+        return False, f"after_period: {d} > {RESEARCH_END}"
+    return True, None
+
+
 def find_existing_urls(client: Client, urls: list[str]) -> set[str]:
     """查询数据库中已存在的 URL."""
     existing = set()
@@ -354,47 +380,44 @@ def run_sync(
             print(f"  [{a['source']}] {a['title'][:80]}")
         return
 
-    # 去重
+    # 去重 + 时间过滤 + URL hash
     urls = [a["url"] for a in articles]
     existing = find_existing_urls(client, urls)
     new_articles = [a for a in articles if normalize_url(a["url"]) not in existing]
-    print(f"  新增 {len(new_articles)} 篇，重复 {len(articles) - len(new_articles)} 篇")
+    print(f"  新增 {len(new_articles)} 篇，URL重复 {len(articles) - len(new_articles)} 篇")
 
     if not new_articles:
         print("  无新文章，跳过写入")
         return
 
-    # 写入数据库（仅元数据，正文提取暂时禁用）
+    # 写入数据库（仅元数据）
     inserted = 0
-    # extracted = 0  # TEMP: content extraction disabled
+    time_filtered = 0
     for a in new_articles:
-        # TEMP: Content extraction disabled for stability.
-        # To re-enable, set do_extract=True and uncomment the block below.
-        #
-        # if do_extract:
-        #     print(f"  提取正文: [{a['source']}] {a['title'][:60]}...")
-        #     extraction = extract_content(a["url"])
-        #     if extraction and "error" not in extraction:
-        #         content = extraction.get("full_text") or extraction.get("content")
-        #         full_text = extraction.get("full_text") or extraction.get("content")
-        #         author = extraction.get("author")
-        #         word_count = extraction.get("word_count")
-        #         status = "已下载全文"
-        #         extracted += 1
-        #         print(f"    成功 ({word_count or 0} 词)")
-        #     else:
-        #         err = extraction.get("error", "unknown") if extraction else "no result"
-        #         print(f"    失败: {err}")
+        # Time filter
+        valid, reason = is_within_research_period(a.get("publish_date"))
+        if not valid:
+            print(f"  [SKIP] {a['url'][:80]} — {reason}")
+            time_filtered += 1
+            continue
+        if reason:
+            print(f"  [WARN] {a['url'][:80]} — {reason}")
+
+        # URL hash
+        normalized = normalize_url(a["url"])
+        url_hash = hash_url(normalized)
 
         resp = client.table("articles").insert({
             "title": a["title"],
             "url": a["url"],
             "media": a["source"],
             "publish_date": a.get("publish_date"),
-            "status": "待发现",
+            "status": "已入库",
             "abstract": a.get("description"),
             "content": "",
             "full_text": None,
+            "full_text_status": "missing",
+            "url_hash": url_hash,
             "author": None,
             "word_count": None,
         }).execute()
@@ -404,7 +427,7 @@ def run_sync(
         else:
             inserted += 1
 
-    print(f"  成功插入 {inserted} 篇语料")
+    print(f"  成功插入 {inserted} 篇语料，超范围过滤 {time_filtered} 篇")
     # if do_extract:
     #     print(f"  其中正文提取成功 {extracted} 篇，失败 {inserted - extracted} 篇")
 

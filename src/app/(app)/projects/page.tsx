@@ -94,16 +94,22 @@ export default function ProjectsPage() {
 
   const handleDelete = useCallback(async () => {
     if (!deleteConfirm) return;
+    console.log(`[Frontend] Delete triggered: id=${deleteConfirm.id}, title=${deleteConfirm.title}`);
     try {
       const res = await fetch(`/api/articles/${deleteConfirm.id}`, { method: "DELETE" });
+      console.log(`[Frontend] Delete response: status=${res.status}, ok=${res.ok}`);
+
       if (res.ok) {
+        console.log(`[Frontend] Delete succeeded, refreshing list...`);
         setDeleteConfirm(null);
         fetchArticles();
       } else {
         const json = await res.json();
+        console.error(`[Frontend] Delete failed:`, json);
         alert(json.error ?? "删除失败");
       }
-    } catch {
+    } catch (err) {
+      console.error(`[Frontend] Delete network error:`, err);
       alert("删除失败");
     }
   }, [deleteConfirm, fetchArticles]);

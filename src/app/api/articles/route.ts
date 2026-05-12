@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { listArticles, createArticle } from "@/lib/data-access/articles";
+import { isWithinResearchPeriod } from "@/lib/time-filter";
+import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
 export async function GET(request: Request) {
@@ -42,11 +44,38 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "标题和URL为必填项" }, { status: 400 });
   }
 
+  // Time filter: reject articles outside research period
+  const periodCheck = isWithinResearchPeriod(body.publish_date);
+  if (!periodCheck.valid) {
+    return NextResponse.json(
+      { error: `发布日期不在研究范围内 (2022-10-01 ~ 2024-12-31): ${periodCheck.reason}` },
+      { status: 400 },
+    );
+  }
+
+  // Dedup check: reject duplicate URLs
+  const normalized = normalizeUrl(body.url);
+  const urlHash = hashUrl(normalized);
+  const { data: existing } = await supabase
+    .from("articles")
+    .select("id")
+    .eq("url_hash", urlHash)
+    .limit(1);
+
+  if (existing && existing.length > 0) {
+    return NextResponse.json(
+      { error: "该URL已存在于数据库中" },
+      { status: 409 },
+    );
+  }
+
   // Set defaults
   body.status = body.status ?? "已入库";
   body.created_by = user.id;
   body.media = body.media ?? body.source;
   body.source = body.source ?? body.media;
+  body.url_hash = urlHash;
+  body.full_text_status = body.full_text_status ?? (body.content ? "manual_uploaded" : "missing");
 
   const { data, error } = await createArticle(supabase, body);
 

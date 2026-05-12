@@ -55,18 +55,45 @@ export async function DELETE(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
+  const { id } = params;
+  console.log(`[API/DELETE] Request to delete article: ${id}`);
 
-  // Only admin and lead_researcher can delete
-  const { data: profile } = await getProfileById(supabase, user.id);
-  if (!profile || (profile.role !== "admin" && profile.role !== "lead_researcher")) {
+  const supabase = await createClient();
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    console.error(`[API/DELETE] Auth failed:`, authError ?? "no user");
+    return NextResponse.json({ error: "未登录" }, { status: 401 });
+  }
+  console.log(`[API/DELETE] Auth OK: user=${user.id}`);
+
+  // RBAC check
+  const { data: profile, error: profileError } = await getProfileById(supabase, user.id);
+  if (profileError || !profile) {
+    console.error(`[API/DELETE] Profile lookup failed:`, profileError);
+    return NextResponse.json({ error: "身份验证失败" }, { status: 403 });
+  }
+  console.log(`[API/DELETE] Profile found: role=${profile.role}`);
+
+  if (profile.role !== "admin" && profile.role !== "lead_researcher") {
+    console.log(`[API/DELETE] Permission denied: role=${profile.role} (need admin/lead_researcher)`);
     return NextResponse.json({ error: "无权限删除" }, { status: 403 });
   }
 
-  const { error } = await deleteArticle(supabase, params.id);
-  if (error) return NextResponse.json({ error: "删除失败" }, { status: 500 });
+  console.log(`[API/DELETE] Role check passed. Calling deleteArticle...`);
+  const { error } = await deleteArticle(supabase, id);
 
+  if (error) {
+    console.error(`[API/DELETE] deleteArticle returned error:`, error);
+    const detail = typeof error === "object" && error !== null
+      ? ((error as Record<string, unknown>).message || (error as Record<string, unknown>).details || JSON.stringify(error))
+      : String(error);
+    return NextResponse.json(
+      { error: "删除失败", detail },
+      { status: 500 },
+    );
+  }
+
+  console.log(`[API/DELETE] Article ${id} deleted successfully`);
   return NextResponse.json({ success: true });
 }

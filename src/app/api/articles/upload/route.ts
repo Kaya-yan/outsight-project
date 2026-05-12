@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createArticle } from "@/lib/data-access/articles";
+import { isWithinResearchPeriod } from "@/lib/time-filter";
+import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
 export async function POST(request: Request) {
@@ -41,6 +43,21 @@ export async function POST(request: Request) {
     // Guess word count (English)
     const wordCount = content.split(/\s+/).filter(Boolean).length;
 
+    // Time filter
+    if (publishDate) {
+      const periodCheck = isWithinResearchPeriod(publishDate);
+      if (!periodCheck.valid) {
+        return NextResponse.json(
+          { error: `发布日期不在研究范围内 (2022-10-01 ~ 2024-12-31)` },
+          { status: 400 },
+        );
+      }
+    }
+
+    // URL hash
+    const normalized = normalizeUrl(url || `upload://${crypto.randomUUID()}`);
+    const urlHash = hashUrl(normalized);
+
     const input: CreateArticleInput = {
       title: title ?? fileName.replace(/\.[^.]+$/, ""),
       url: url ?? "",
@@ -51,6 +68,8 @@ export async function POST(request: Request) {
       word_count: wordCount,
       status: "已入库",
       created_by: user.id,
+      full_text_status: "manual_uploaded",
+      url_hash: urlHash,
     };
 
     const { data, error } = await createArticle(supabase, input);

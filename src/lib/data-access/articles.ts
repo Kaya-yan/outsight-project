@@ -60,6 +60,8 @@ export interface CreateArticleInput {
   author?: string;
   abstract?: string;
   full_text?: string;
+  full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+  url_hash?: string;
   content?: string;
   word_count?: number;
   keywords?: string[];
@@ -88,7 +90,22 @@ export async function updateArticle(
 }
 
 export async function deleteArticle(client: Client, id: string): Promise<QueryResult<null>> {
-  const { data, error } = await client.from("articles").delete().eq("id", id);
+  console.log(`[DataAccess] deleteArticle called: id=${id}`);
+  const query = client.from("articles").delete().eq("id", id);
+  const { data, error } = await query;
+
+  if (error) {
+    console.error(`[DataAccess] deleteArticle FAILED: id=${id}`, {
+      code: (error as Record<string, unknown>)?.code,
+      message: (error as Record<string, unknown>)?.message,
+      details: (error as Record<string, unknown>)?.details,
+      hint: (error as Record<string, unknown>)?.hint,
+      full: JSON.stringify(error),
+    });
+  } else {
+    console.log(`[DataAccess] deleteArticle SUCCESS: id=${id}, data=`, data);
+  }
+
   return { data, error };
 }
 

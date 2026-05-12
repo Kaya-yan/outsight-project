@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import type { Client } from "./data-access/base";
 
 export function normalizeUrl(url: string): string {
@@ -15,6 +16,14 @@ export function normalizeUrl(url: string): string {
   } catch {
     return url.trim().toLowerCase();
   }
+}
+
+/**
+ * Compute a SHA-256 hex digest of a normalized URL for dedup lookups.
+ * Uses the Node.js crypto module (available in all Node.js versions and Vercel Runtime).
+ */
+export function hashUrl(normalizedUrl: string): string {
+  return createHash("sha256").update(normalizedUrl).digest("hex");
 }
 
 export async function findExistingUrls(
