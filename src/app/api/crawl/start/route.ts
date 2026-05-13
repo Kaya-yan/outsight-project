@@ -1,68 +1,65 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createCrawlJob } from "@/lib/data-access/crawl-jobs";
+import { createCrawlJob, updateCrawlJob } from "@/lib/data-access/crawl-jobs";
+import { generateBatchPlan, getTotalBatchCount } from "@/lib/batch-planner";
 
+/**
+ * POST /api/crawl/start
+ *
+ * Creates a crawl job with a full batch execution plan and returns immediately.
+ * The actual work is done by /api/crawl/execute-batch, driven by the frontend
+ * in a sequential chain to avoid Vercel timeouts.
+ */
 export async function POST(request: Request) {
-  console.log("STEP 1: request received");
+  console.log("STEP 1: crawl/start — request received");
 
   try {
     console.log("STEP 2: checking auth");
     const supabase = await createClient();
     const { data: authData, error: authError } = await supabase.auth.getUser();
 
-    if (authError) {
-      console.error("AUTH_ERROR:", authError);
-      return NextResponse.json(
-        { success: false, error: `Auth error: ${authError.message}` },
-        { status: 401 },
-      );
-    }
-
-    if (!authData.user) {
-      console.error("AUTH_FAILED: no user");
+    if (authError || !authData.user) {
+      console.error("AUTH_FAILED:", authError ?? "no user");
       return NextResponse.json(
         { success: false, error: "未登录" },
         { status: 401 },
       );
     }
 
-    console.log("STEP 3: creating crawl job");
+    console.log("STEP 3: generating batch plan");
+    const batches = generateBatchPlan();
+    const batchTotal = batches.length;
+
+    console.log("STEP 4: creating crawl job");
     const { data: job, error: insertError } = await createCrawlJob(supabase, {
       triggered_by: authData.user.id,
       query_params: {
-        media: ["BBC"],
-        period: "2024H2",
-        sources: ["rss", "newsapi", "gdelt"],
+        batches,
+        batch_total: batchTotal,
+        scope: "全部6媒体 × 5时段(2022-2024) × 3数据源 + 搜索",
       },
     });
 
-    console.log("SUPABASE_INSERT_RESULT:", JSON.stringify({ job, error: insertError }));
+    console.log("SUPABASE_INSERT_RESULT:", JSON.stringify({ job_id: job?.id, error: insertError }));
 
-    if (insertError) {
+    if (insertError || !job) {
       console.error("CRAWL_START_ERROR:", insertError);
-      if (insertError instanceof Error) {
-        console.error("STACK:", insertError.stack);
-      }
       return NextResponse.json(
-        { success: false, error: `Database insert failed: ${String(insertError)}` },
+        { success: false, error: `无法创建采集任务: ${String(insertError)}` },
         { status: 500 },
       );
     }
 
-    if (!job) {
-      console.error("CRAWL_START_ERROR: createCrawlJob returned null/undefined job without error");
-      return NextResponse.json(
-        { success: false, error: "无法创建采集任务 — insert returned no data and no error" },
-        { status: 500 },
-      );
-    }
+    // Also persist the batch_total at the row level for quick access
+    await updateCrawlJob(supabase, job.id, { batch_total: batchTotal });
 
-    console.log("STEP 4: job created success", { job_id: job.id });
-    console.log(`[Crawl] 任务已创建: ${job.id}`);
+    console.log(`[Crawl] 任务已创建: ${job.id}, 共 ${batchTotal} 个批次`);
 
     return NextResponse.json({
       success: true,
       job_id: job.id,
+      total_batches: batchTotal,
+      message: `任务已创建，共 ${batchTotal} 个批次，将通过前端分批执行`,
     });
   } catch (error) {
     console.error("CRAWL_START_ERROR:", error);

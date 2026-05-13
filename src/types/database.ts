@@ -429,10 +429,12 @@ export interface Database {
       crawl_jobs: {
         Row: {
           id: string;
-          status: "pending" | "running" | "completed" | "failed";
+          status: "pending" | "running" | "partial_complete" | "completed" | "failed" | "timeout";
           progress: number;
           total_fetched: number;
           total_new: number;
+          batch_index: number;
+          batch_total: number;
           error_message: string | null;
           query_params: Record<string, unknown>;
           created_at: string;
@@ -441,19 +443,23 @@ export interface Database {
         };
         Insert: {
           id?: string;
-          status?: "pending" | "running" | "completed" | "failed";
+          status?: "pending" | "running" | "partial_complete" | "completed" | "failed" | "timeout";
           progress?: number;
           total_fetched?: number;
           total_new?: number;
+          batch_index?: number;
+          batch_total?: number;
           error_message?: string | null;
           query_params?: Record<string, unknown>;
           triggered_by?: string | null;
         };
         Update: {
-          status?: "pending" | "running" | "completed" | "failed";
+          status?: "pending" | "running" | "partial_complete" | "completed" | "failed" | "timeout";
           progress?: number;
           total_fetched?: number;
           total_new?: number;
+          batch_index?: number;
+          batch_total?: number;
           error_message?: string | null;
           finished_at?: string | null;
         };

@@ -3,58 +3,43 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { RefreshCw, CheckCircle2, XCircle, Clock, Play } from "lucide-react";
+import { RefreshCw, CheckCircle2, XCircle, Clock, Play, AlertTriangle } from "lucide-react";
 
 interface CrawlStats {
   totalFetched: number;
   totalInserted: number;
-  sourceBreakdown: {
-    rss: number;
-    newsapi: number;
-    gdelt: number;
-    search: number;
-  };
-  filterBreakdown: {
-    duplicate_url: number;
-    out_of_date_range_before: number;
-    out_of_date_range_after: number;
-    missing_publish_date: number;
-    unparseable_date: number;
-    hash_error: number;
-  };
+  sourceBreakdown?: { rss: number; newsapi: number; gdelt: number; search: number };
+  filterBreakdown?: Record<string, number>;
 }
 
 interface JobStatus {
   job_id: string;
-  status: "pending" | "running" | "completed" | "failed";
+  status: "pending" | "running" | "partial_complete" | "completed" | "failed" | "timeout";
   progress: number;
   total_fetched: number;
   total_new: number;
   error_message: string | null;
+  batch_index?: number;
+  batch_total?: number;
+  current_batch?: { type: string; label: string; status: string } | null;
 }
 
 interface SyncPanelProps {
   onSyncComplete?: () => void;
 }
 
-const FILTER_LABELS: Record<keyof CrawlStats["filterBreakdown"], string> = {
-  duplicate_url: "URL重复",
-  out_of_date_range_before: "早于研究范围(2022-10前)",
-  out_of_date_range_after: "晚于研究范围(2024-12后)",
-  missing_publish_date: "缺少发布日期",
-  unparseable_date: "日期无法解析",
-  hash_error: "URL哈希错误",
-};
-
 export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
   const [crawlStats, setCrawlStats] = useState<CrawlStats | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [batchProgress, setBatchProgress] = useState<string>("");
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const abortRef = useRef(false);
 
   useEffect(() => {
     return () => {
+      abortRef.current = true;
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
@@ -68,25 +53,23 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
 
   const startPolling = useCallback((jobId: string) => {
     stopPolling();
-
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/crawl/status/${jobId}`);
         if (!res.ok) return;
-
         const json = await res.json();
         setJobStatus(json);
-
-        if (json.status === "completed" || json.status === "failed") {
+        if (json.current_batch) {
+          setBatchProgress(`[${json.batch_index ?? 0}/${json.batch_total ?? "?"}] ${json.current_batch.type}: ${json.current_batch.label}`);
+        }
+        if (json.status === "completed" || json.status === "partial_complete" || json.status === "failed" || json.status === "timeout") {
           stopPolling();
-          if (json.status === "completed") {
+          if (json.status === "completed" || json.status === "partial_complete") {
             onSyncComplete?.();
           }
         }
-      } catch {
-        // Polling silently retries
-      }
-    }, 3000);
+      } catch { /* retry */ }
+    }, 2000);
   }, [stopPolling, onSyncComplete]);
 
   const handleStart = useCallback(async () => {
@@ -94,8 +77,11 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
     setError(null);
     setJobStatus(null);
     setCrawlStats(null);
+    setBatchProgress("");
+    abortRef.current = false;
 
     try {
+      // Step 1: Create job
       const startRes = await fetch("/api/crawl/start", { method: "POST" });
       const startJson = await startRes.json();
 
@@ -106,6 +92,7 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
       }
 
       const jobId = startJson.job_id;
+      const totalBatches = startJson.total_batches ?? 0;
 
       setJobStatus({
         job_id: jobId,
@@ -114,22 +101,56 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
         total_fetched: 0,
         total_new: 0,
         error_message: null,
+        batch_index: 0,
+        batch_total: totalBatches,
       });
 
+      setBatchProgress(`批次 0/${totalBatches}`);
       startPolling(jobId);
 
-      const execRes = await fetch("/api/crawl/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ job_id: jobId }),
-      });
+      // Step 2: Execute batches sequentially (frontend-driven chain)
+      let totalDiscovered = 0;
+      let totalInserted = 0;
 
-      const execJson = await execRes.json().catch(() => ({}));
+      for (let batchIdx = 0; batchIdx < totalBatches + 5; batchIdx++) {
+        if (abortRef.current) break;
 
-      if (!execRes.ok) {
-        setError(`执行引擎失败: ${(execJson as { error?: string }).error ?? execRes.status}`);
-      } else if (execJson.stats) {
-        setCrawlStats(execJson.stats as CrawlStats);
+        try {
+          const execRes = await fetch("/api/crawl/execute-batch", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ job_id: jobId }),
+          });
+
+          const execJson = await execRes.json();
+
+          if (execJson.total_fetched != null) totalDiscovered = execJson.total_fetched;
+          if (execJson.total_new != null) totalInserted = execJson.total_new;
+
+          setBatchProgress(`批次 ${execJson.batch_index ?? batchIdx + 1}/${execJson.batch_total ?? "?"}`);
+
+          setJobStatus((prev) => prev ? {
+            ...prev,
+            progress: execJson.progress ?? prev.progress,
+            batch_index: execJson.batch_index ?? prev.batch_index,
+          } : prev);
+
+          if (execJson.done) {
+            setCrawlStats({
+              totalFetched: totalDiscovered,
+              totalInserted: totalInserted,
+            });
+            break;
+          }
+
+          if (!execRes.ok) {
+            console.error(`[Frontend] Batch ${batchIdx + 1} HTTP error:`, execRes.status);
+            // Continue with next batch — individual failures don't stop the chain
+          }
+        } catch (err) {
+          console.error(`[Frontend] Batch ${batchIdx + 1} network error:`, err);
+          // Continue with next batch
+        }
       }
     } catch {
       setError("网络连接失败");
@@ -140,28 +161,28 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
 
   const isRunning = jobStatus?.status === "pending" || jobStatus?.status === "running";
 
+  // Status icon
+  const StatusIcon = () => {
+    if (isRunning) return <RefreshCw className="h-4 w-4 text-[#4A90A4] animate-spin" />;
+    if (jobStatus?.status === "completed") return <CheckCircle2 className="h-4 w-4 text-[#5DAD93]" />;
+    if (jobStatus?.status === "partial_complete") return <AlertTriangle className="h-4 w-4 text-[#E67E22]" />;
+    if (jobStatus?.status === "failed" || jobStatus?.status === "timeout") return <XCircle className="h-4 w-4 text-[#E67E22]" />;
+    return <Clock className="h-4 w-4 text-[#7F8A93]" />;
+  };
+
   return (
     <Card className="border-[#E2E5E9] shadow-card">
       <CardContent className="p-4">
-        {/* Header row: description + button */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {isRunning ? (
-              <RefreshCw className="h-4 w-4 text-[#4A90A4] animate-spin" />
-            ) : jobStatus?.status === "completed" ? (
-              <CheckCircle2 className="h-4 w-4 text-[#5DAD93]" />
-            ) : jobStatus?.status === "failed" ? (
-              <XCircle className="h-4 w-4 text-[#E67E22]" />
-            ) : (
-              <Clock className="h-4 w-4 text-[#7F8A93]" />
-            )}
+            <StatusIcon />
             <span className="text-sm text-[#2D3436]">
               {jobStatus
-                ? `任务 ${jobStatus.job_id.slice(0, 8)}...`
+                ? `任务 ${jobStatus.job_id.slice(0, 8)}... (${jobStatus.status})`
                 : "6媒体 · 5时段(2022-2024) · 4数据源 · 仅元数据"}
             </span>
           </div>
-
           <Button
             onClick={handleStart}
             disabled={isStarting || isRunning}
@@ -169,25 +190,16 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             className="h-8 text-xs gap-1.5"
           >
             {isRunning ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                采集中...
-              </>
+              <><RefreshCw className="h-3.5 w-3.5 animate-spin" />采集中...</>
             ) : isStarting ? (
-              <>
-                <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                启动中...
-              </>
+              <><RefreshCw className="h-3.5 w-3.5 animate-spin" />启动中...</>
             ) : (
-              <>
-                <Play className="h-3.5 w-3.5" />
-                开始采集
-              </>
+              <><Play className="h-3.5 w-3.5" />开始采集</>
             )}
           </Button>
         </div>
 
-        {/* Progress bar + details */}
+        {/* Progress + details */}
         {jobStatus && (
           <div className="mt-3 space-y-2">
             {/* Progress bar */}
@@ -195,11 +207,13 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
               <div className="flex-1 h-2 bg-[#F0F2F5] rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${
-                    jobStatus.status === "failed"
+                    jobStatus.status === "failed" || jobStatus.status === "timeout"
                       ? "bg-[#E67E22]"
-                      : jobStatus.status === "completed"
-                        ? "bg-[#5DAD93]"
-                        : "bg-[#4A90A4]"
+                      : jobStatus.status === "partial_complete"
+                        ? "bg-[#E67E22]"
+                        : jobStatus.status === "completed"
+                          ? "bg-[#5DAD93]"
+                          : "bg-[#4A90A4]"
                   }`}
                   style={{ width: `${jobStatus.progress}%` }}
                 />
@@ -209,67 +223,42 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
               </span>
             </div>
 
+            {/* Batch progress */}
+            {batchProgress && (
+              <div className="text-xs text-[#4A90A4] font-mono">{batchProgress}</div>
+            )}
+
+            {/* Current batch detail */}
+            {isRunning && jobStatus.current_batch && (
+              <div className="text-xs text-[#95A5A6]">
+                当前: [{jobStatus.current_batch.type}] {jobStatus.current_batch.label}
+              </div>
+            )}
+
             {/* Status text */}
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-[#7F8A93]">
-                {jobStatus.status === "pending" && "任务已创建，正在启动执行引擎..."}
-                {jobStatus.status === "running" && `正在采集... 已拉取 ${jobStatus.total_fetched} 篇`}
-                {jobStatus.status === "completed" && (() => {
-                  const filtered = jobStatus.total_fetched - jobStatus.total_new;
-                  if (jobStatus.total_fetched === 0) return "采集完成 · 未发现任何文章";
-                  if (jobStatus.total_new === 0) return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，但全部被过滤，未入库`;
-                  return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇`;
-                })()}
-                {jobStatus.status === "failed" && `任务失败: ${jobStatus.error_message ?? "未知错误"}`}
-              </span>
-              {isRunning && (
-                <span className="text-[#95A5A6]">每 3 秒刷新</span>
-              )}
+            <div className="text-xs text-[#7F8A93]">
+              {jobStatus.status === "pending" && "任务已创建，准备执行批次..."}
+              {jobStatus.status === "running" && `已发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇`}
+              {jobStatus.status === "completed" && (() => {
+                if (jobStatus.total_fetched === 0) return "采集完成 · 未发现任何文章";
+                if (jobStatus.total_new === 0) return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，全部被过滤`;
+                return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇`;
+              })()}
+              {jobStatus.status === "partial_complete" && (() => {
+                return `部分完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇 (部分批次失败)`;
+              })()}
+              {jobStatus.status === "failed" && `任务失败: ${jobStatus.error_message ?? "未知错误"}`}
+              {jobStatus.status === "timeout" && "任务超时: 部分批次未在时限内完成"}
             </div>
 
-            {/* Running: show actual scope */}
-            {isRunning && (
-              <div className="text-xs text-[#95A5A6] mt-1">
-                数据源: RSS 订阅源 + NewsAPI + GDELT 关键词 + 搜索引擎(Bing→Serper→Google fallback)
-              </div>
-            )}
-
-            {/* Completed: source breakdown */}
-            {jobStatus.status === "completed" && crawlStats && (
+            {/* Completed stats */}
+            {(jobStatus.status === "completed" || jobStatus.status === "partial_complete") && crawlStats && (
               <div className="text-xs text-[#7F8A93] space-y-1 mt-1">
-                <p className="font-medium text-[#2D3436]">各数据源发现数量：</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                  <span>RSS 订阅源: {crawlStats.sourceBreakdown.rss} 篇</span>
-                  <span>NewsAPI: {crawlStats.sourceBreakdown.newsapi} 篇</span>
-                  <span>GDELT: {crawlStats.sourceBreakdown.gdelt} 篇</span>
-                  <span>搜索引擎: {crawlStats.sourceBreakdown.search} 篇</span>
-                </div>
-              </div>
-            )}
-
-            {/* Completed: filter breakdown — only when data exists */}
-            {jobStatus.status === "completed" && crawlStats && crawlStats.totalFetched > 0 && (
-              <div className="text-xs text-[#7F8A93] space-y-1 mt-1">
-                <p className="font-medium text-[#2D3436]">
-                  {crawlStats.totalInserted === 0 ? "全部被过滤，原因明细：" : "过滤明细："}
-                </p>
-                {Object.entries(crawlStats.filterBreakdown)
-                  .filter(([, count]) => count > 0)
-                  .map(([key, count]) => (
-                    <p key={key}>
-                      {FILTER_LABELS[key as keyof CrawlStats["filterBreakdown"]] ?? key}: {count} 篇
-                    </p>
-                  ))}
-                {Object.values(crawlStats.filterBreakdown).every((c) => c === 0) && (
+                <p>共发现 {crawlStats.totalFetched} 篇，入库 {crawlStats.totalInserted} 篇，
+                过滤 {crawlStats.totalFetched - crawlStats.totalInserted} 篇</p>
+                {crawlStats.filterBreakdown && Object.values(crawlStats.filterBreakdown).every((c) => c === 0) && (
                   <p>所有文章通过检查</p>
                 )}
-              </div>
-            )}
-
-            {/* Completed but no stats: explain */}
-            {jobStatus.status === "completed" && !crawlStats && jobStatus.total_fetched > 0 && (
-              <div className="text-xs text-[#95A5A6] mt-1">
-                过滤原因明细（重复URL、超时间范围、日期缺失等）请查看 Vercel Runtime Logs
               </div>
             )}
           </div>

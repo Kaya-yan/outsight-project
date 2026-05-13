@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getCrawlJob } from "@/lib/data-access/crawl-jobs";
+import type { Batch } from "@/lib/batch-planner";
 
 export async function GET(
   _request: Request,
@@ -16,6 +17,12 @@ export async function GET(
     return NextResponse.json({ error: "任务不存在" }, { status: 404 });
   }
 
+  // Extract batch plan for detailed progress
+  const batches = (job.query_params as Record<string, unknown>)?.batches as Batch[] | undefined;
+  const currentBatch = batches
+    ? batches.find((b) => b.status === "running") ?? batches.find((b) => b.status === "pending") ?? null
+    : null;
+
   return NextResponse.json({
     job_id: job.id,
     status: job.status,
@@ -25,5 +32,10 @@ export async function GET(
     error_message: job.error_message,
     created_at: job.created_at,
     finished_at: job.finished_at,
+    batch_index: job.batch_index ?? 0,
+    batch_total: job.batch_total ?? 0,
+    current_batch: currentBatch
+      ? { type: currentBatch.type, label: currentBatch.label, status: currentBatch.status }
+      : null,
   });
 }
