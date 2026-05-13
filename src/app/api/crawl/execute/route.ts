@@ -95,6 +95,19 @@ export async function POST(request: Request) {
     keyword_combo?: string;
   }> = [];
 
+  // Accumulator variables declared at outer scope so the final
+  // return statement can always reference them safely.
+  let insertedCount = 0;
+  let sourceStats = { rss: 0, newsapi: 0, gdelt: 0, search: 0 };
+  let totalGuardStats = {
+    total: 0,
+    passed: 0,
+    filtered: {} as Record<string, number>,
+    details: [] as Array<{ url: string; title?: string; reason: string; detail: string }>,
+  };
+  let searchEngineStats: Record<string, unknown> | null = null;
+  let searchResultCount = 0;
+
   try {
     // ============================================================
     // Source 1: RSS (BBC feeds only)
@@ -169,8 +182,6 @@ export async function POST(request: Request) {
     // Source 4: Search Engine Discovery (Bing → Serper → Google)
     // ============================================================
     console.log(`[Crawl] 开始搜索引擎发现...`);
-    let searchEngineStats: Record<string, unknown> | null = null;
-    let searchResultCount = 0;
     const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy"];
     const searchMedia = ["BBC"]; // currently hard-coded; extend to all 6 later
     const searchQueries = expandSearchQueries(searchTiers, searchMedia);
@@ -220,14 +231,7 @@ export async function POST(request: Request) {
     // Time filter + Dedup + Insert (batch guard with full stats)
     // ============================================================
     console.log(`[Crawl] 开始时间过滤、去重并写入数据库...`);
-    let insertedCount = 0;
     const batchSize = 25;
-    // Accumulate stats across batches
-    const totalGuardStats = {
-      total: 0, passed: 0,
-      filtered: {} as Record<string, number>,
-      details: [] as Array<{ url: string; title?: string; reason: string; detail: string }>,
-    };
 
     for (let i = 0; i < allArticles.length; i += batchSize) {
       const batch = allArticles.slice(i, i + batchSize).map((a) => ({
@@ -335,12 +339,12 @@ export async function POST(request: Request) {
         search: sourceStats.search,
       },
       filterBreakdown: {
-        duplicate_url: f.duplicate_url ?? 0,
-        out_of_date_range_before: f.out_of_date_range_before ?? 0,
-        out_of_date_range_after: f.out_of_date_range_after ?? 0,
-        missing_publish_date: f.missing_publish_date ?? 0,
-        unparseable_date: f.unparseable_date ?? 0,
-        hash_error: f.hash_error ?? 0,
+        duplicate_url: totalGuardStats.filtered.duplicate_url ?? 0,
+        out_of_date_range_before: totalGuardStats.filtered.out_of_date_range_before ?? 0,
+        out_of_date_range_after: totalGuardStats.filtered.out_of_date_range_after ?? 0,
+        missing_publish_date: totalGuardStats.filtered.missing_publish_date ?? 0,
+        unparseable_date: totalGuardStats.filtered.unparseable_date ?? 0,
+        hash_error: totalGuardStats.filtered.hash_error ?? 0,
       },
     },
   });
