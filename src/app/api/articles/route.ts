@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { listArticles, createArticle } from "@/lib/data-access/articles";
-import { isWithinResearchPeriod } from "@/lib/time-filter";
+import { isWithinResearchPeriod, autoPeriod } from "@/lib/time-filter";
 import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
@@ -74,6 +74,7 @@ export async function POST(request: Request) {
   body.created_by = user.id;
   body.media = body.media ?? body.source;
   body.source = body.source ?? body.media;
+  body.period = body.period ?? autoPeriod(body.publish_date) ?? undefined;
   body.url_hash = urlHash;
   body.full_text_status = body.full_text_status ?? (body.content ? "manual_uploaded" : "missing");
 

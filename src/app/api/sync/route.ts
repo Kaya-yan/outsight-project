@@ -9,6 +9,7 @@ import { fetchRssArticles } from "@/lib/rss-parser";
 import { fetchNewsApiArticles } from "@/lib/newsapi-client";
 import { fetchGdeltArticles } from "@/lib/gdelt-client";
 import { checkArticleBeforeInsert } from "@/lib/insert-guard";
+import { autoPeriod } from "@/lib/time-filter";
 // Phase 2 (content extraction) temporarily disabled for stability testing
 // import { extractWithConcurrency, summarizeExtraction } from "@/lib/extraction-pool";
 
@@ -140,6 +141,7 @@ export async function POST(request: Request) {
           source: article.source,
           publish_date: article.publish_date ?? undefined,
           status: "已入库",
+          period: autoPeriod(article.publish_date) ?? undefined,
           abstract: article.description ?? undefined,
           content: "",
           full_text_status: "missing",

@@ -6,62 +6,91 @@ import { fetchRssArticles } from "@/lib/rss-parser";
 import { fetchNewsApiArticles } from "@/lib/newsapi-client";
 import { batchGuardCheck } from "@/lib/insert-guard";
 import { discoverArticles } from "@/lib/search-engine-client";
-import { expandSearchQueries, type KeywordTier } from "@/lib/keyword-expander";
+import { expandSearchQueries, type KeywordTier, MEDIA_SEARCH_DOMAINS } from "@/lib/keyword-expander";
 import { TIER_1_COMBOS } from "@/lib/gdelt-keywords";
+import { autoPeriod } from "@/lib/time-filter";
 
 // ============================================================
-// Hard-coded scope for stability testing
+// All 6 media outlets × 5 research periods
 // ============================================================
-const OUTLET = { name: "BBC", domains: "bbc.com OR bbc.co.uk" };
-const TIMESPAN = "20240701000000-20241231235959"; // 2024H2 only
+const ALL_MEDIA = [
+  { name: "NYT", domains: "nytimes.com" },
+  { name: "WP", domains: "washingtonpost.com" },
+  { name: "WSJ", domains: "wsj.com" },
+  { name: "Guardian", domains: "theguardian.com" },
+  { name: "Economist", domains: "economist.com" },
+  { name: "BBC", domains: "bbc.com OR bbc.co.uk" },
+];
+
+const ALL_PERIODS = [
+  { value: "2022.10-2023.03", timespan: "20221001000000-20230331235959" },
+  { value: "2023.04-2023.09", timespan: "20230401000000-20230930235959" },
+  { value: "2023.10-2024.03", timespan: "20231001000000-20240331235959" },
+  { value: "2024.04-2024.09", timespan: "20240401000000-20240930235959" },
+  { value: "2024.10-2024.12", timespan: "20241001000000-20241231235959" },
+];
+
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
-async function queryGdeltBbc(query: string) {
+/** Query GDELT for one combo across all 6 outlets within a single timespan. */
+async function queryGdeltAllOutlets(query: string, timespan: string, sourceLabel: string) {
+  const domainFilter = ALL_MEDIA.map((m) => m.domains).join(" OR ");
   const params = new URLSearchParams({
-    query: `(${query}) domain:${OUTLET.domains} sourcelang:eng`,
+    query: `(${query}) domain:${domainFilter} sourcelang:eng`,
     mode: "artlist",
     format: "json",
     maxrecords: "250",
-    timespan: TIMESPAN,
+    timespan,
     sort: "datedesc",
   });
 
-  const res = await fetch(`${GDELT_BASE}?${params}`, {
-    headers: { "User-Agent": "OutSight/1.0 (Academic Research Tool)" },
-    signal: AbortSignal.timeout(25000),
-  });
+  const url = `${GDELT_BASE}?${params}`;
 
-  if (!res.ok) {
-    console.log(`[Crawl] GDELT HTTP ${res.status} for query: ${query}`);
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "OutSight/2.0 (Academic Research Tool)" },
+      signal: AbortSignal.timeout(25000),
+    });
+
+    if (!res.ok) {
+      console.log(`[Crawl] GDELT HTTP ${res.status} for: ${sourceLabel}`);
+      return [];
+    }
+
+    const text = await res.text();
+    if (!text || text.length < 10) return [];
+
+    const json = JSON.parse(text);
+    if (!json.articles || !Array.isArray(json.articles)) return [];
+
+    console.log(`[Crawl] GDELT ${json.articles.length} 条: ${sourceLabel}`);
+    return json.articles
+      .filter(
+        (a: Record<string, unknown>) =>
+          a.title && typeof a.title === "string" && a.title.length > 5 &&
+          a.url && typeof a.url === "string" && a.url.startsWith("http"),
+      )
+      .map((a: Record<string, unknown>) => {
+        const seendate = String(a.seendate ?? "");
+        const domain = String(a.domain ?? "").toLowerCase();
+        const matchedMedia = ALL_MEDIA.find((m) =>
+          m.domains.toLowerCase().includes(domain) || domain.includes(m.domains.toLowerCase().split(" OR ")[0]),
+        );
+        return {
+          title: String(a.title),
+          url: String(a.url),
+          publish_date: seendate.length >= 8
+            ? `${seendate.slice(0, 4)}-${seendate.slice(4, 6)}-${seendate.slice(6, 8)}`
+            : null,
+          source: matchedMedia?.name ?? "未知",
+          description: null,
+          keyword_combo: query,
+        };
+      });
+  } catch (err) {
+    console.log(`[Crawl] GDELT 查询失败: ${err instanceof Error ? err.message : err}`);
     return [];
   }
-
-  const text = await res.text();
-  if (!text || text.length < 10) return [];
-
-  const json = JSON.parse(text);
-  if (!json.articles || !Array.isArray(json.articles)) return [];
-
-  console.log(`[Crawl] GDELT 返回 ${json.articles.length} 条: "${query}"`);
-  return json.articles
-    .filter(
-      (a: Record<string, unknown>) =>
-        a.title && typeof a.title === "string" && a.title.length > 5 &&
-        a.url && typeof a.url === "string" && a.url.startsWith("http"),
-    )
-    .map((a: Record<string, unknown>) => {
-      const seendate = String(a.seendate ?? "");
-      return {
-        title: String(a.title),
-        url: String(a.url),
-        publish_date: seendate.length >= 8
-          ? `${seendate.slice(0, 4)}-${seendate.slice(4, 6)}-${seendate.slice(6, 8)}`
-          : null,
-        source: "BBC",
-        description: null,
-        keyword_combo: query,
-      };
-    });
 }
 
 export async function POST(request: Request) {
@@ -77,7 +106,7 @@ export async function POST(request: Request) {
 
   console.log(`[Crawl] ========================================`);
   console.log(`[Crawl] 后台采集开始: ${jobId}`);
-  console.log(`[Crawl] 范围: BBC / 2024H2 / 仅元数据`);
+  console.log(`[Crawl] 范围: 全部6媒体 / 5时段(2022-2024) / 仅元数据`);
   console.log(`[Crawl] ========================================`);
 
   // Mark job as running
@@ -110,82 +139,76 @@ export async function POST(request: Request) {
 
   try {
     // ============================================================
-    // Source 1: RSS (BBC feeds only)
+    // Source 1: RSS (all feeds)
     // ============================================================
-    console.log(`[Crawl] 开始请求 RSS (BBC)...`);
+    console.log(`[Crawl] 开始请求 RSS...`);
     let rssArticles: Awaited<ReturnType<typeof fetchRssArticles>> = [];
     try {
       rssArticles = await fetchRssArticles();
-      const bbcRss = rssArticles.filter((a) => a.source === "BBC");
-      console.log(`[Crawl] RSS: ${bbcRss.length} 篇 BBC 文章`);
-      allArticles.push(...bbcRss);
+      console.log(`[Crawl] RSS: ${rssArticles.length} 篇 (BBC/Guardian)`);
+      allArticles.push(...rssArticles);
     } catch (err) {
       console.log(`[Crawl] RSS 请求失败: ${err instanceof Error ? err.message : err}`);
     }
 
     // ============================================================
-    // Source 2: NewsAPI (BBC only)
+    // Source 2: NewsAPI (all 6 media)
     // ============================================================
     console.log(`[Crawl] 开始请求 NewsAPI...`);
     let newsApiArticles: Awaited<ReturnType<typeof fetchNewsApiArticles>> = [];
     try {
       newsApiArticles = await fetchNewsApiArticles();
-      const bbcNewsApi = newsApiArticles.filter((a) => a.source === "BBC");
-      console.log(`[Crawl] NewsAPI: ${bbcNewsApi.length} 篇 BBC 文章`);
-      allArticles.push(...bbcNewsApi);
+      console.log(`[Crawl] NewsAPI: ${newsApiArticles.length} 篇 (全部媒体)`);
+      allArticles.push(...newsApiArticles);
     } catch (err) {
       console.log(`[Crawl] NewsAPI 请求失败: ${err instanceof Error ? err.message : err}`);
     }
 
     // ============================================================
-    // Source 3: GDELT (BBC + 2024H2 + Tier 1 combos)
+    // Source 3: GDELT (all 6 outlets × 5 periods × Tier 1 combos)
     // ============================================================
-    console.log(`[Crawl] 开始请求 GDELT (${TIER_1_COMBOS.length} 个关键词组合)...`);
-    const totalCombos = TIER_1_COMBOS.length;
+    const gdeltTotalQueries = ALL_PERIODS.length * TIER_1_COMBOS.length;
+    console.log(`[Crawl] 开始请求 GDELT (${ALL_PERIODS.length} 时段 × 全部6媒体 × ${TIER_1_COMBOS.length} 关键词 = ${gdeltTotalQueries} 次查询)`);
 
-    for (let i = 0; i < TIER_1_COMBOS.length; i++) {
-      const combo = TIER_1_COMBOS[i];
-      console.log(`[Crawl] GDELT [${i + 1}/${totalCombos}] "${combo.label}"...`);
+    let gdeltQueryCount = 0;
+    for (const period of ALL_PERIODS) {
+      for (let ci = 0; ci < TIER_1_COMBOS.length; ci++) {
+        const combo = TIER_1_COMBOS[ci];
+        gdeltQueryCount++;
+        const label = `[${period.value}] ${combo.label}`;
+        console.log(`[Crawl] GDELT [${gdeltQueryCount}/${gdeltTotalQueries}] ${label}`);
 
-      let gdeltArticles: Array<{
-        title: string;
-        url: string;
-        publish_date: string | null;
-        source: string;
-        description: string | null;
-        keyword_combo?: string;
-      }> = [];
+        try {
+          const gdeltArticles = await queryGdeltAllOutlets(combo.query, period.timespan, label);
+          allArticles.push(...gdeltArticles);
+        } catch (err) {
+          console.log(`[Crawl] GDELT 查询失败: ${err instanceof Error ? err.message : err}`);
+        }
 
-      try {
-        gdeltArticles = await queryGdeltBbc(combo.query);
-      } catch (err) {
-        console.log(`[Crawl] GDELT 查询失败: ${err instanceof Error ? err.message : err}`);
-      }
+        // Update progress: 0-5% RSS+NewsAPI, 5-95% GDELT
+        const progress = 5 + Math.round((gdeltQueryCount / gdeltTotalQueries) * 90);
+        await updateCrawlJob(supabase, jobId, {
+          progress,
+          total_fetched: allArticles.length,
+        });
+        console.log(`[Crawl] 当前累计 ${allArticles.length} 篇 (进度 ${progress}%)`);
 
-      allArticles.push(...gdeltArticles);
-
-      // Update progress: 5% for RSS+NewsAPI, 90% for GDELT combos
-      const progress = 5 + Math.round(((i + 1) / totalCombos) * 90);
-      await updateCrawlJob(supabase, jobId, {
-        progress,
-        total_fetched: allArticles.length,
-      });
-      console.log(`[Crawl] 当前已完成 ${allArticles.length} 篇 (进度 ${progress}%)`);
-
-      // Rate limit: 3000ms
-      if (i < TIER_1_COMBOS.length - 1) {
-        await new Promise((r) => setTimeout(r, 3000));
+        // Rate limit: 1500ms between queries
+        const isLast = period === ALL_PERIODS[ALL_PERIODS.length - 1] && ci === TIER_1_COMBOS.length - 1;
+        if (!isLast) {
+          await new Promise((r) => setTimeout(r, 1500));
+        }
       }
     }
 
     // ============================================================
-    // Source 4: Search Engine Discovery (Bing → Serper → Google)
+    // Source 4: Search Engine Discovery (all 6 media)
     // ============================================================
     console.log(`[Crawl] 开始搜索引擎发现...`);
     const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy"];
-    const searchMedia = ["BBC"]; // currently hard-coded; extend to all 6 later
+    const searchMedia = ALL_MEDIA.map((m) => m.name);
     const searchQueries = expandSearchQueries(searchTiers, searchMedia);
-    console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.join(", ")})`);
+    console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.length}媒体)`);
 
     try {
       const { results, engineStats } = await discoverArticles({
@@ -258,9 +281,10 @@ export async function POST(request: Request) {
           return createArticle(supabase, {
             title: article.title ?? original?.title ?? "Untitled",
             url: article.url,
-            media: original?.source ?? "BBC",
-            source: original?.source ?? "BBC",
+            media: original?.source ?? "未知",
+            source: original?.source ?? "未知",
             publish_date: article.publish_date ?? undefined,
+            period: autoPeriod(article.publish_date) ?? undefined,
             status: "已入库",
             abstract: original?.description ?? undefined,
             content: "",

@@ -4,6 +4,7 @@ import { createArticle } from "@/lib/data-access/articles";
 import { discoverArticles, type SearchEngine } from "@/lib/search-engine-client";
 import { expandSearchQueries, type KeywordTier } from "@/lib/keyword-expander";
 import { batchGuardCheck } from "@/lib/insert-guard";
+import { autoPeriod } from "@/lib/time-filter";
 
 /**
  * POST /api/search/discover
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
       media: original?.source ?? "未知",
       source: original?.source ?? "未知",
       publish_date: article.publish_date ?? undefined,
+      period: autoPeriod(article.publish_date) ?? undefined,
       status: "已入库",
       abstract: original?.snippet ?? undefined,
       content: "",

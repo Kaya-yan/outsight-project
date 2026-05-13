@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createArticle } from "@/lib/data-access/articles";
-import { isWithinResearchPeriod } from "@/lib/time-filter";
+import { isWithinResearchPeriod, autoPeriod } from "@/lib/time-filter";
 import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
@@ -62,7 +62,7 @@ export async function POST(request: Request) {
       title: title ?? fileName.replace(/\.[^.]+$/, ""),
       url: url ?? "",
       media: media ?? undefined,
-      period: period ?? undefined,
+      period: period ?? autoPeriod(publishDate) ?? undefined,
       publish_date: publishDate ?? undefined,
       content,
       word_count: wordCount,
