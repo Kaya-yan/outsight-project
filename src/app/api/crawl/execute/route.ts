@@ -166,25 +166,35 @@ export async function POST(request: Request) {
     }
 
     // ============================================================
-    // Source 4: Search Engine Discovery (Google / Bing)
+    // Source 4: Search Engine Discovery (Bing → Serper → Google)
     // ============================================================
     console.log(`[Crawl] 开始搜索引擎发现...`);
-    let searchResults: Awaited<ReturnType<typeof discoverArticles>> = [];
+    let searchEngineStats: Record<string, unknown> | null = null;
+    let searchResultCount = 0;
     const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy"];
     const searchMedia = ["BBC"]; // currently hard-coded; extend to all 6 later
     const searchQueries = expandSearchQueries(searchTiers, searchMedia);
     console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.join(", ")})`);
 
     try {
-      searchResults = await discoverArticles({
+      const { results, engineStats } = await discoverArticles({
         queries: searchQueries,
-        engine: "both",
+        engine: "auto",
         maxPerQuery: 10,
       });
-      console.log(`[Crawl] 搜索引擎: ${searchResults.length} 篇发现`);
+
+      searchResultCount = results.length;
+      searchEngineStats = {
+        enginesUsed: engineStats.enginesUsed,
+        engineResults: engineStats.engineResults,
+        totalQueries: engineStats.totalQueries,
+        productiveQueries: engineStats.productiveQueries,
+      };
+
+      console.log(`[Crawl] 搜索引擎: ${searchResultCount} 篇发现 (引擎: ${engineStats.enginesUsed.join(", ") || "无"})`);
 
       // Convert SearchResult to crawl article format
-      for (const r of searchResults) {
+      for (const r of results) {
         allArticles.push({
           title: r.title,
           url: r.url,
@@ -199,12 +209,10 @@ export async function POST(request: Request) {
     }
 
     // Per-source counts
-    const sourceStats = {
-      rss: allArticles.filter((a) => rssArticles.some((r) => r.url === a.url)).length,
-      newsapi: allArticles.filter((a) => newsApiArticles.some((n) => n.url === a.url)).length,
-      gdelt: allArticles.length - (searchResults.length),
-      search: searchResults.length,
-    };
+    const rssCount = allArticles.filter((a) => rssArticles.some((r) => r.url === a.url)).length;
+    const newsapiCount = allArticles.filter((a) => newsApiArticles.some((n) => n.url === a.url)).length;
+    const gdeltCount = allArticles.length - rssCount - newsapiCount - searchResultCount;
+    const sourceStats = { rss: rssCount, newsapi: newsapiCount, gdelt: gdeltCount, search: searchResultCount };
 
     console.log(`[Crawl] 四源合计拉取 ${allArticles.length} 篇 (RSS:${sourceStats.rss} NewsAPI:${sourceStats.newsapi} GDELT:估算 search:${sourceStats.search})`);
 
@@ -315,5 +323,25 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ success: true });
+  return NextResponse.json({
+    success: true,
+    stats: {
+      totalFetched: allArticles.length,
+      totalInserted: insertedCount,
+      sourceBreakdown: {
+        rss: sourceStats.rss,
+        newsapi: sourceStats.newsapi,
+        gdelt: allArticles.length - (sourceStats.rss + sourceStats.newsapi + sourceStats.search),
+        search: sourceStats.search,
+      },
+      filterBreakdown: {
+        duplicate_url: f.duplicate_url ?? 0,
+        out_of_date_range_before: f.out_of_date_range_before ?? 0,
+        out_of_date_range_after: f.out_of_date_range_after ?? 0,
+        missing_publish_date: f.missing_publish_date ?? 0,
+        unparseable_date: f.unparseable_date ?? 0,
+        hash_error: f.hash_error ?? 0,
+      },
+    },
+  });
 }

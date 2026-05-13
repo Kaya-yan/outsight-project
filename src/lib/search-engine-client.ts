@@ -1,17 +1,20 @@
 /**
- * Search Engine Discovery Client
+ * Search Engine Discovery Client — Multi-Engine Redundant Architecture
  *
- * Supports Google Custom Search JSON API and Bing Web Search API v7.
- * Both engines use site:{domain} operator to restrict searches to target media outlets.
- * No API key → silently skipped (returns empty array).
+ * Priority chain: Bing Search → Serper.dev → Google CSE
+ * Each engine is tried in sequence; the first that returns results wins.
+ * If all engines fail or are unconfigured, returns empty array.
+ * RSS/NewsAPI/GDELT always run independently regardless of search engine outcome.
  *
  * Environment variables:
+ *   BING_SEARCH_API_KEY       — Bing Web Search API v7 key (Azure Marketplace)
+ *   SERPER_API_KEY            — Serper.dev Google Search API key
  *   GOOGLE_SEARCH_API_KEY     — Google Custom Search JSON API key
  *   GOOGLE_SEARCH_ENGINE_ID   — Google Programmable Search Engine ID (cx)
- *   BING_SEARCH_API_KEY       — Bing Web Search API v7 key (Azure Marketplace)
  */
 
 import type { SearchQuery } from "./keyword-expander";
+import { searchSerper } from "./serper-client";
 
 export interface SearchResult {
   title: string;
@@ -178,53 +181,175 @@ async function searchBing(
 }
 
 // ============================================================
-// Unified interface
+// Unified interface — Multi-engine with priority fallback chain
 // ============================================================
+
+export type SearchEngine = "google" | "bing" | "serper" | "both" | "auto" | "all";
 
 export interface DiscoverOptions {
   queries: SearchQuery[];
-  /** Which engine(s) to use. Default: tries both, returns results from any that have API keys configured. */
-  engine?: "google" | "bing" | "both";
+  /**
+   * Engine selection:
+   *   "bing"   — Bing only
+   *   "serper" — Serper.dev only
+   *   "google" — Google CSE only
+   *   "both"   — Bing + Google in parallel (legacy)
+   *   "auto"   — Bing → Serper → Google sequential fallback (default)
+   *   "all"    — All three in parallel
+   */
+  engine?: SearchEngine;
   maxPerQuery?: number;
 }
 
-export async function discoverArticles(opts: DiscoverOptions): Promise<SearchResult[]> {
-  const { queries, engine = "both", maxPerQuery = 10 } = opts;
+export interface EngineUsageStats {
+  /** Which engines were actually used (had API keys configured and returned results) */
+  enginesUsed: string[];
+  /** Per-engine result counts */
+  engineResults: Record<string, number>;
+  /** Total queries executed */
+  totalQueries: number;
+  /** Queries that returned at least 1 result */
+  productiveQueries: number;
+}
+
+export async function discoverArticles(opts: DiscoverOptions): Promise<{
+  results: SearchResult[];
+  engineStats: EngineUsageStats;
+}> {
+  const { queries, engine = "auto", maxPerQuery = 10 } = opts;
   const allResults: SearchResult[] = [];
 
-  console.log(`[SearchEngine] Starting discovery: ${queries.length} queries, engine=${engine}`);
+  // Track per-engine statistics
+  const engineHits: Record<string, number> = {};
+  const enginesUsed = new Set<string>();
+  let productiveQueries = 0;
+
+  console.log(`[SearchEngine] Starting discovery: ${queries.length} queries, mode=${engine}`);
+
+  const hasBing = !!process.env.BING_SEARCH_API_KEY;
+  const hasSerper = !!process.env.SERPER_API_KEY;
+  const hasGoogle = !!(process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_ENGINE_ID);
+
+  console.log(
+    `[SearchEngine] API keys: Bing=${hasBing}, Serper=${hasSerper}, Google=${hasGoogle}`,
+  );
 
   let i = 0;
   for (const q of queries) {
     i++;
-    console.log(`[SearchEngine] [${i}/${queries.length}] "${q.keyword}" site:${q.site} (${q.tier})`);
+    const qLabel = `"${q.keyword}" site:${q.site} (${q.tier})`;
+    console.log(`[SearchEngine] [${i}/${queries.length}] ${qLabel}`);
 
-    const googlePromise = (engine === "google" || engine === "both")
-      ? searchGoogle(q, maxPerQuery)
-      : Promise.resolve([] as SearchResult[]);
+    let queryResults: SearchResult[] = [];
+    let usedEngine = "none";
 
-    const bingPromise = (engine === "bing" || engine === "both")
-      ? searchBing(q, maxPerQuery)
-      : Promise.resolve([] as SearchResult[]);
-
-    const [googleResults, bingResults] = await Promise.all([googlePromise, bingPromise]);
-
-    // Merge and dedup by URL within this query batch
-    const seen = new Set<string>();
-    for (const r of [...googleResults, ...bingResults]) {
-      const key = r.url.toLowerCase().trim();
-      if (!seen.has(key)) {
-        seen.add(key);
-        allResults.push(r);
+    // Determine which engines to try based on mode
+    if (engine === "auto") {
+      // Priority fallback chain: Bing → Serper → Google
+      if (hasBing) {
+        queryResults = await searchBing(q, maxPerQuery);
+        if (queryResults.length > 0) {
+          usedEngine = "bing";
+        }
       }
+
+      if (queryResults.length === 0 && hasSerper) {
+        queryResults = await searchSerper(q, maxPerQuery);
+        if (queryResults.length > 0) {
+          usedEngine = "serper";
+        }
+      }
+
+      if (queryResults.length === 0 && hasGoogle) {
+        queryResults = await searchGoogle(q, maxPerQuery);
+        if (queryResults.length > 0) {
+          usedEngine = "google";
+        }
+      }
+    } else if (engine === "bing") {
+      queryResults = await searchBing(q, maxPerQuery);
+      usedEngine = queryResults.length > 0 ? "bing" : "none";
+    } else if (engine === "serper") {
+      queryResults = await searchSerper(q, maxPerQuery);
+      usedEngine = queryResults.length > 0 ? "serper" : "none";
+    } else if (engine === "google") {
+      queryResults = await searchGoogle(q, maxPerQuery);
+      usedEngine = queryResults.length > 0 ? "google" : "none";
+    } else if (engine === "both") {
+      // Legacy: Bing + Google in parallel
+      const [bingRes, googleRes] = await Promise.all([
+        hasBing ? searchBing(q, maxPerQuery) : [],
+        hasGoogle ? searchGoogle(q, maxPerQuery) : [],
+      ]);
+      queryResults = dedupByUrl([...bingRes, ...googleRes]);
+      if (bingRes.length > 0) usedEngine = "bing";
+      if (googleRes.length > 0) usedEngine = usedEngine === "none" ? "google" : `${usedEngine}+google`;
+    } else if (engine === "all") {
+      // All three in parallel
+      const [bingRes, serperRes, googleRes] = await Promise.all([
+        hasBing ? searchBing(q, maxPerQuery) : [],
+        hasSerper ? searchSerper(q, maxPerQuery) : [],
+        hasGoogle ? searchGoogle(q, maxPerQuery) : [],
+      ]);
+      queryResults = dedupByUrl([...bingRes, ...serperRes, ...googleRes]);
+      const parts: string[] = [];
+      if (bingRes.length > 0) parts.push("bing");
+      if (serperRes.length > 0) parts.push("serper");
+      if (googleRes.length > 0) parts.push("google");
+      usedEngine = parts.length > 0 ? parts.join("+") : "none";
     }
 
-    // Rate limit: 1s between queries for free tier APIs
+    // Track engine usage
+    if (usedEngine !== "none") {
+      enginesUsed.add(usedEngine);
+      engineHits[usedEngine] = (engineHits[usedEngine] ?? 0) + queryResults.length;
+      if (queryResults.length > 0) productiveQueries++;
+    }
+
+    console.log(
+      `[SearchEngine] [${i}/${queries.length}] engine=${usedEngine}, returned=${queryResults.length}`,
+    );
+
+    allResults.push(...queryResults);
+
+    // Rate limit: 1s between queries
     if (i < queries.length) {
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
 
-  console.log(`[SearchEngine] Discovery complete: ${allResults.length} unique articles found`);
-  return allResults;
+  // Build engine results map
+  const engineResults: Record<string, number> = {};
+  for (const eng of enginesUsed) {
+    engineResults[eng] = engineHits[eng] ?? 0;
+  }
+
+  const engineStats: EngineUsageStats = {
+    enginesUsed: Array.from(enginesUsed),
+    engineResults,
+    totalQueries: queries.length,
+    productiveQueries,
+  };
+
+  console.log(`[SearchEngine] ========== 搜索完成 ==========`);
+  console.log(`[SearchEngine] 查询数: ${queries.length}`);
+  console.log(`[SearchEngine] 有效查询: ${productiveQueries} (返回至少1条结果)`);
+  console.log(`[SearchEngine] 使用引擎: ${enginesUsed.size > 0 ? Array.from(enginesUsed).join(", ") : "无 (所有引擎均未配置或失败)"}`);
+  for (const [eng, count] of Object.entries(engineResults)) {
+    console.log(`[SearchEngine]   ${eng}: ${count} 条`);
+  }
+  console.log(`[SearchEngine] 去重后总计: ${allResults.length} 篇`);
+  console.log(`[SearchEngine] =================================`);
+
+  return { results: allResults, engineStats };
+}
+
+function dedupByUrl(articles: SearchResult[]): SearchResult[] {
+  const seen = new Set<string>();
+  return articles.filter((r) => {
+    const key = r.url.toLowerCase().trim();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }

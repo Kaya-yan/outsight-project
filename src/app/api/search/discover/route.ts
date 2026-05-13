@@ -1,22 +1,22 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createArticle } from "@/lib/data-access/articles";
-import { discoverArticles } from "@/lib/search-engine-client";
+import { discoverArticles, type SearchEngine } from "@/lib/search-engine-client";
 import { expandSearchQueries, type KeywordTier } from "@/lib/keyword-expander";
 import { batchGuardCheck } from "@/lib/insert-guard";
 
 /**
  * POST /api/search/discover
  *
- * Standalone search engine discovery endpoint.
+ * Standalone search engine discovery endpoint (Bing → Serper → Google fallback chain).
  * Accepts optional media, tier, and engine filters.
  * Runs search → guard → insert, and returns full statistics.
  *
  * Body (all optional):
  * {
- *   media?: string[],           // default: all 6
- *   tiers?: KeywordTier[],      // default: ["tier1_core"]
- *   engine?: "google" | "bing" | "both",  // default: "both"
+ *   media?: string[],                  // default: all 6
+ *   tiers?: KeywordTier[],             // default: ["tier1_core"]
+ *   engine?: SearchEngine,             // default: "auto" (Bing → Serper → Google)
  * }
  */
 export async function POST(request: Request) {
@@ -27,13 +27,13 @@ export async function POST(request: Request) {
   // Parse optional parameters
   let media: string[];
   let tiers: KeywordTier[];
-  let engine: "google" | "bing" | "both" = "both";
+  let engine: SearchEngine = "auto";
 
   try {
     const body = await request.json().catch(() => ({}));
     media = body.media ?? ["NYT", "WP", "WSJ", "Guardian", "Economist", "BBC"];
     tiers = body.tiers ?? ["tier1_core"];
-    engine = body.engine ?? "both";
+    engine = body.engine ?? "auto";
   } catch {
     media = ["BBC"];
     tiers = ["tier1_core"];
@@ -45,25 +45,31 @@ export async function POST(request: Request) {
   const queries = expandSearchQueries(tiers, media);
   console.log(`[Search/Discover] ${queries.length} queries generated`);
 
-  // Step 2: Run search engine discovery
-  let searchResults: Awaited<ReturnType<typeof discoverArticles>>;
+  // Step 2: Run search engine discovery (now returns { results, engineStats })
+  let discoverResult: Awaited<ReturnType<typeof discoverArticles>>;
   try {
-    searchResults = await discoverArticles({ queries, engine, maxPerQuery: 10 });
+    discoverResult = await discoverArticles({ queries, engine, maxPerQuery: 10 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[Search/Discover] Search failed:`, msg);
     return NextResponse.json({ error: `搜索引擎发现失败: ${msg}` }, { status: 500 });
   }
 
+  const { results: searchResults, engineStats } = discoverResult;
+
   console.log(`[Search/Discover] ${searchResults.length} unique articles found`);
+  console.log(`[Search/Discover] Engines used: ${engineStats.enginesUsed.join(", ") || "none"}`);
 
   if (searchResults.length === 0) {
     return NextResponse.json({
       success: true,
       found: 0,
       inserted: 0,
+      engineStats,
       filterStats: null,
-      message: "搜索引擎未发现新文章（可能没有配置API Key或所有结果均已被收录）",
+      message: engineStats.enginesUsed.length === 0
+        ? "所有搜索引擎均未配置 API Key（BING_SEARCH_API_KEY / SERPER_API_KEY / GOOGLE_SEARCH_API_KEY）"
+        : "搜索引擎未发现新文章（所有结果均已被收录或不在研究范围内）",
     });
   }
 
@@ -108,12 +114,13 @@ export async function POST(request: Request) {
     success: true,
     found: searchResults.length,
     inserted: insertedCount,
+    engineStats,
     filterStats: {
       total: stats.total,
       passed: stats.passed,
       filtered: stats.filtered,
       detailSample: stats.details.slice(0, 10),
     },
-    message: `搜索引擎发现 ${searchResults.length} 篇文章，入库 ${insertedCount} 篇`,
+    message: `搜索引擎发现 ${searchResults.length} 篇文章，入库 ${insertedCount} 篇 (引擎: ${engineStats.enginesUsed.join(", ") || "无"})`,
   });
 }

@@ -5,6 +5,25 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RefreshCw, CheckCircle2, XCircle, Clock, Play } from "lucide-react";
 
+interface CrawlStats {
+  totalFetched: number;
+  totalInserted: number;
+  sourceBreakdown: {
+    rss: number;
+    newsapi: number;
+    gdelt: number;
+    search: number;
+  };
+  filterBreakdown: {
+    duplicate_url: number;
+    out_of_date_range_before: number;
+    out_of_date_range_after: number;
+    missing_publish_date: number;
+    unparseable_date: number;
+    hash_error: number;
+  };
+}
+
 interface JobStatus {
   job_id: string;
   status: "pending" | "running" | "completed" | "failed";
@@ -18,13 +37,22 @@ interface SyncPanelProps {
   onSyncComplete?: () => void;
 }
 
+const FILTER_LABELS: Record<keyof CrawlStats["filterBreakdown"], string> = {
+  duplicate_url: "URL重复",
+  out_of_date_range_before: "早于研究范围(2022-10前)",
+  out_of_date_range_after: "晚于研究范围(2024-12后)",
+  missing_publish_date: "缺少发布日期",
+  unparseable_date: "日期无法解析",
+  hash_error: "URL哈希错误",
+};
+
 export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
   const [jobStatus, setJobStatus] = useState<JobStatus | null>(null);
+  const [crawlStats, setCrawlStats] = useState<CrawlStats | null>(null);
   const [isStarting, setIsStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -65,9 +93,9 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
     setIsStarting(true);
     setError(null);
     setJobStatus(null);
+    setCrawlStats(null);
 
     try {
-      // Step 1: Create crawl job
       const startRes = await fetch("/api/crawl/start", { method: "POST" });
       const startJson = await startRes.json();
 
@@ -90,16 +118,18 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
 
       startPolling(jobId);
 
-      // Step 2: Trigger execution in its own serverless function
       const execRes = await fetch("/api/crawl/execute", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ job_id: jobId }),
       });
 
+      const execJson = await execRes.json().catch(() => ({}));
+
       if (!execRes.ok) {
-        const execJson = await execRes.json().catch(() => ({}));
-        setError(`执行引擎启动失败: ${(execJson as { error?: string }).error ?? execRes.status}`);
+        setError(`执行引擎失败: ${(execJson as { error?: string }).error ?? execRes.status}`);
+      } else if (execJson.stats) {
+        setCrawlStats(execJson.stats as CrawlStats);
       }
     } catch {
       setError("网络连接失败");
@@ -128,7 +158,7 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             <span className="text-sm text-[#2D3436]">
               {jobStatus
                 ? `任务 ${jobStatus.job_id.slice(0, 8)}...`
-                : "BBC · 2024H2 · 仅元数据"}
+                : "BBC · 3数据源 + 搜索 · 仅元数据"}
             </span>
           </div>
 
@@ -146,18 +176,18 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             ) : isStarting ? (
               <>
                 <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                创建任务...
+                启动中...
               </>
             ) : (
               <>
                 <Play className="h-3.5 w-3.5" />
-                开始搜索
+                开始采集
               </>
             )}
           </Button>
         </div>
 
-        {/* Progress bar + details (shown when job is active) */}
+        {/* Progress bar + details */}
         {jobStatus && (
           <div className="mt-3 space-y-2">
             {/* Progress bar */}
@@ -182,11 +212,13 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             {/* Status text */}
             <div className="flex items-center justify-between text-xs">
               <span className="text-[#7F8A93]">
-                {jobStatus.status === "pending" && "任务已启动，等待执行引擎启动..."}
-                {jobStatus.status === "running" && `正在采集... 已发现 ${jobStatus.total_fetched} 篇`}
+                {jobStatus.status === "pending" && "任务已创建，正在启动执行引擎..."}
+                {jobStatus.status === "running" && `正在采集... 已拉取 ${jobStatus.total_fetched} 篇`}
                 {jobStatus.status === "completed" && (() => {
                   const filtered = jobStatus.total_fetched - jobStatus.total_new;
-                  return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇，过滤 ${filtered} 篇`;
+                  if (jobStatus.total_fetched === 0) return "采集完成 · 未发现任何文章";
+                  if (jobStatus.total_new === 0) return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，但全部被过滤，未入库`;
+                  return `采集完成 · 发现 ${jobStatus.total_fetched} 篇，入库 ${jobStatus.total_new} 篇`;
                 })()}
                 {jobStatus.status === "failed" && `任务失败: ${jobStatus.error_message ?? "未知错误"}`}
               </span>
@@ -195,27 +227,50 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
               )}
             </div>
 
-            {/* Filter breakdown on completion */}
-            {jobStatus.status === "completed" && (
-              <div className="text-xs text-[#7F8A93] space-y-0.5 mt-1">
-                <p>过滤明细（重复URL、超时间范围、日期缺失等）：</p>
-                <p>共过滤 {jobStatus.total_fetched - jobStatus.total_new} 篇，查看 Vercel Runtime Logs 获取逐篇过滤原因</p>
+            {/* Running: show actual scope */}
+            {isRunning && (
+              <div className="text-xs text-[#95A5A6] mt-1">
+                数据源: RSS 订阅源 + NewsAPI + GDELT 关键词 + 搜索引擎(Bing→Serper→Google fallback)
               </div>
             )}
 
-            {/* Running: show discovery method hints */}
-            {isRunning && (
-              <div className="text-xs text-[#95A5A6] space-y-0.5 mt-1">
-                <p>数据源: RSS + NewsAPI + GDELT + 搜索引擎</p>
-                <p>过滤规则: 时间范围(2022-10~2024-12) + URL去重 + 日期有效性</p>
+            {/* Completed: source breakdown */}
+            {jobStatus.status === "completed" && crawlStats && (
+              <div className="text-xs text-[#7F8A93] space-y-1 mt-1">
+                <p className="font-medium text-[#2D3436]">各数据源发现数量：</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  <span>RSS 订阅源: {crawlStats.sourceBreakdown.rss} 篇</span>
+                  <span>NewsAPI: {crawlStats.sourceBreakdown.newsapi} 篇</span>
+                  <span>GDELT: {crawlStats.sourceBreakdown.gdelt} 篇</span>
+                  <span>搜索引擎: {crawlStats.sourceBreakdown.search} 篇</span>
+                </div>
               </div>
             )}
 
-            {/* Show job_id for debugging */}
-            {isRunning && (
-              <p className="text-xs text-[#95A5A6] font-mono">
-                Job: {jobStatus.job_id}
-              </p>
+            {/* Completed: filter breakdown — only when data exists */}
+            {jobStatus.status === "completed" && crawlStats && crawlStats.totalFetched > 0 && (
+              <div className="text-xs text-[#7F8A93] space-y-1 mt-1">
+                <p className="font-medium text-[#2D3436]">
+                  {crawlStats.totalInserted === 0 ? "全部被过滤，原因明细：" : "过滤明细："}
+                </p>
+                {Object.entries(crawlStats.filterBreakdown)
+                  .filter(([, count]) => count > 0)
+                  .map(([key, count]) => (
+                    <p key={key}>
+                      {FILTER_LABELS[key as keyof CrawlStats["filterBreakdown"]] ?? key}: {count} 篇
+                    </p>
+                  ))}
+                {Object.values(crawlStats.filterBreakdown).every((c) => c === 0) && (
+                  <p>所有文章通过检查</p>
+                )}
+              </div>
+            )}
+
+            {/* Completed but no stats: explain */}
+            {jobStatus.status === "completed" && !crawlStats && jobStatus.total_fetched > 0 && (
+              <div className="text-xs text-[#95A5A6] mt-1">
+                过滤原因明细（重复URL、超时间范围、日期缺失等）请查看 Vercel Runtime Logs
+              </div>
             )}
           </div>
         )}
