@@ -5,6 +5,7 @@ import { useCodingStore } from "@/stores/coding-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Languages, BookOpen, AlertCircle, Loader2 } from "lucide-react";
 
+// ── Word lookup: Free Dictionary API ──
 const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
 
 interface DictEntry {
@@ -18,6 +19,7 @@ interface DictEntry {
 
 type Status = "idle" | "loading" | "paragraph" | "word" | "error" | "invalid";
 
+// ── helpers ──
 function isWordLike(text: string): boolean {
   return /^[a-zA-Z'-]+$/.test(text) && text.length > 1 && text.length <= 45;
 }
@@ -31,11 +33,8 @@ export function TranslationAssistant() {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Paragraph mode
   const [sourceText, setSourceText] = useState("");
   const [translated, setTranslated] = useState("");
-
-  // Word mode
   const [entries, setEntries] = useState<DictEntry[]>([]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -57,73 +56,41 @@ export function TranslationAssistant() {
       if (isWordLike(text)) {
         await lookupWord(text);
       } else if (isParagraphLike(text)) {
-        await translateParagraph(text);
+        await translateWithDeepSeek(text);
       } else {
         setStatus("invalid");
-        setErrorMsg("当前选区无有效英文词汇或句子（包含非英文字符或无法识别）");
+        setErrorMsg("当前选区无有效英文词汇或句子");
       }
-    }, 350);
+    }, 400);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [selectedText]);
 
-  async function translateParagraph(text: string) {
+  // ── Paragraph: DeepSeek academic translator ──
+  async function translateWithDeepSeek(text: string) {
     setSourceText(text);
-
-    // Try direct API first (may fail with CORS on some networks)
-    let ok = await tryDirectTranslate(text);
-    if (!ok) {
-      // Fall back to backend proxy
-      ok = await tryProxyTranslate(text);
-    }
-    if (!ok) {
+    try {
+      const res = await fetch("/api/ai/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(30000),
+      });
+      if (!res.ok) throw new Error("upstream");
+      const data = await res.json();
+      if (data.translatedText) {
+        setTranslated(data.translatedText);
+        setStatus("paragraph");
+      } else {
+        throw new Error("empty");
+      }
+    } catch {
       setStatus("error");
-      setErrorMsg("翻译服务暂不可用，请稍后重试（已尝试直连与代理两种方式）");
+      setErrorMsg("翻译服务暂不可用，请稍后重试（使用 DeepSeek 学术翻译引擎）");
     }
   }
 
-  async function tryDirectTranslate(text: string): Promise<boolean> {
-    try {
-      const res = await fetch("https://translate.argosopentech.com/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: text, source: "en", target: "zh", format: "text" }),
-        signal: AbortSignal.timeout(10000),
-      });
-      if (!res.ok) return false;
-      const data = await res.json();
-      if (data.translatedText) {
-        setTranslated(data.translatedText);
-        setStatus("paragraph");
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
-  async function tryProxyTranslate(text: string): Promise<boolean> {
-    try {
-      const res = await fetch("/api/tools/translate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ q: text, source: "en", target: "zh" }),
-        signal: AbortSignal.timeout(15000),
-      });
-      if (!res.ok) return false;
-      const data = await res.json();
-      if (data.translatedText) {
-        setTranslated(data.translatedText);
-        setStatus("paragraph");
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
-    }
-  }
-
+  // ── Word: Free Dictionary API ──
   async function lookupWord(word: string) {
     try {
       const res = await fetch(`${DICT_URL}/${encodeURIComponent(word)}`);
@@ -150,7 +117,6 @@ export function TranslationAssistant() {
           翻译助手
         </h3>
 
-        {/* Loading */}
         {status === "loading" && (
           <div className="flex items-center gap-2 py-3 text-xs text-[#95A5A6]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -158,7 +124,6 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Error / invalid */}
         {(status === "error" || status === "invalid") && (
           <div className="flex items-start gap-2 py-2 text-xs text-[#E67E22] bg-[#E67E22]/5 rounded px-2">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
@@ -166,7 +131,7 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Paragraph result */}
+        {/* Paragraph translation result */}
         {status === "paragraph" && translated && (
           <div className="space-y-2 max-h-[220px] overflow-y-auto">
             <div className="bg-[#F0F2F5] rounded p-2">
@@ -174,13 +139,13 @@ export function TranslationAssistant() {
               <p className="text-xs text-[#2D3436] leading-relaxed">{sourceText}</p>
             </div>
             <div className="bg-[#4A90A4]/5 rounded p-2 border-l-2 border-[#4A90A4]">
-              <p className="text-[10px] text-[#95A5A6] mb-1">译文</p>
+              <p className="text-[10px] text-[#95A5A6] mb-1">DeepSeek 学术翻译</p>
               <p className="text-xs text-[#2D3436] leading-relaxed">{translated}</p>
             </div>
           </div>
         )}
 
-        {/* Word result */}
+        {/* Word lookup result */}
         {status === "word" && entries.length > 0 && (
           <div className="space-y-2 max-h-[300px] overflow-y-auto">
             <div className="flex items-baseline gap-2">
@@ -209,7 +174,6 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Idle */}
         {status === "idle" && (
           <p className="text-xs text-[#95A5A6] py-2">
             <BookOpen className="h-3.5 w-3.5 inline mr-1 opacity-50" />
