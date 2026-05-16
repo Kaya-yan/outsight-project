@@ -140,7 +140,7 @@ const BUILTIN_DICT: Record<string, number[]> = {
   dread: [3], embarrassment: [3], fear: [3], fearful: [3], frightening: [3],
   hesitate: [3], hesitation: [3], insecure: [3], intimidated: [3], nervous: [3],
   overwhelm: [3], panic: [3], phobia: [3], pressure: [3], restless: [3], scared: [3],
-  self-conscious: [3], shake: [3], shy: [3], stress: [3], stressed: [3],
+  "self-conscious": [3], shake: [3], shy: [3], stress: [3], stressed: [3],
   suspense: [3], tense: [3], tension: [3], terrified: [3], terror: [3],
   timid: [3], uncertain: [3], uncertainty: [3], uneasy: [3], unstable: [3],
   vigilance: [3], wary: [3], worried: [3], worry: [3],
@@ -276,8 +276,8 @@ export interface LiwcResult {
  * Analyze text using a LIWC dictionary.
  */
 export function analyzeWithLiwc(text: string, dict: LiwcDict, dictSource: "builtin" | "external" = "builtin"): LiwcResult {
-  // Tokenize
-  const words = text.toLowerCase().replace(/[^a-z\s'-]/g, "").split(/\s+/).filter(Boolean);
+  // Tokenize: keep letters, spaces, hyphens, apostrophes, underscores
+  const words = text.toLowerCase().replace(/[^a-z\s'_-]/g, "").split(/\s+/).filter(Boolean);
   const totalWords = words.length;
 
   // Count per category
