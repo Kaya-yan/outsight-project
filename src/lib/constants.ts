@@ -22,7 +22,7 @@ export const ARCHIVE_AFTER_DAYS = 90;
 
 export const APP_NAME = "外眼 2.0";
 export const APP_CODE = "OutSight";
-export const APP_VERSION = "1.0.0";
+export const APP_VERSION = "2.0.0";
 
 export const MEDIA_OUTLETS = [
   { value: "NYT", label: "The New York Times" },
