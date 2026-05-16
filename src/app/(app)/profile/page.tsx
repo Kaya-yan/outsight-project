@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
+import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -127,10 +128,31 @@ function SourceBars({ byMedia }: { byMedia: Record<string, number> }) {
 
 // ── page component ──
 export default function ProfilePage() {
-  const { profile } = useAuthStore();
+  const { profile, refreshProfile } = useAuthStore();
   const { stats, fetchStats } = useDashboardStore();
+  const supabase = createClient();
+
+  // Load motto from profile metadata on mount
   const [motto, setMotto] = useState("");
   const [editingMotto, setEditingMotto] = useState(false);
+  const [savingMotto, setSavingMotto] = useState(false);
+  useEffect(() => {
+    if (profile) {
+      const saved = (profile.metadata as Record<string, unknown>)?.motto as string | undefined;
+      if (saved) setMotto(saved);
+    }
+  }, [profile]);
+
+  const handleSaveMotto = useCallback(async () => {
+    if (!profile) return;
+    setSavingMotto(true);
+    try {
+      const meta = { ...((profile.metadata as Record<string, unknown>) ?? {}), motto };
+      await supabase.from("profiles").update({ metadata: meta }).eq("id", profile.id);
+      await refreshProfile();
+    } catch { /* silent */ }
+    finally { setSavingMotto(false); setEditingMotto(false); }
+  }, [profile, motto, supabase, refreshProfile]);
 
   // Password change
   const [currentPassword, setCurrentPassword] = useState("");
@@ -199,9 +221,9 @@ export default function ProfilePage() {
           <p className="text-xs text-[#7F8A93] mt-0.5 flex items-center gap-1"><Mail className="h-3 w-3" />{profile.email}</p>
           <div className="mt-2 flex items-center gap-2">
             {editingMotto ? (
-              <form onSubmit={(e) => { e.preventDefault(); setEditingMotto(false); }} className="flex items-center gap-2 flex-1">
+              <form onSubmit={(e) => { e.preventDefault(); handleSaveMotto(); }} className="flex items-center gap-2 flex-1">
                 <Input value={motto} onChange={(e) => setMotto(e.target.value)} placeholder="输入你的研究格言..." className="h-7 text-xs border-[#E2E5E9] flex-1" autoFocus />
-                <Button type="submit" size="sm" className="h-7 text-xs bg-[#4A90A4] text-white">保存</Button>
+                <Button type="submit" size="sm" disabled={savingMotto} className="h-7 text-xs bg-[#4A90A4] text-white">{savingMotto ? "保存中..." : "保存"}</Button>
                 <Button type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => setEditingMotto(false)}>取消</Button>
               </form>
             ) : (

@@ -28,17 +28,15 @@ export const TERMINAL = {
 
 export type OrbState = "idle" | "searching" | "completed" | "error" | "waiting";
 
-/** State → display label */
 export const STATE_LABEL: Record<OrbState, string> = {
   idle: "standby", searching: "crawling", completed: "synced", error: "error", waiting: "pause",
 };
 
-/** State → color */
 export const STATE_COLOR: Record<OrbState, string> = {
   idle: "#38bdf8", searching: "#f59e0b", completed: "#10b981", error: "#f43f5e", waiting: "#94a3b8",
 };
 
-/** Daily quotes (indexed by day-of-month) */
+/** Daily English quotes */
 export const QUOTES = [
   "Progress, not perfection.",
   "Small steps every day.",
@@ -57,18 +55,21 @@ export const QUOTES = [
   "Your potential is infinite.",
 ];
 
-/** Placeholder data when real API unavailable */
-export const PLACEHOLDER = {
-  corpusTotal: 479,
-  todayNew: 23,
-  progress: 0,
-  pendingJobs: 12,
-  processingJobs: 3,
-  completedToday: 8,
-  health: 97,
-  stability: "stable" as const,
-  driftIndex: 0.18,
-  driftLevel: "low" as const,
-  signalCount: 2,
-  signalNames: "framing, sentiment",
-} as const;
+/** Daily Chinese encouragement */
+export const CN_QUOTES = [
+  "今天也要开心哦",
+  "我们是最棒的",
+  "慢慢来，比较快",
+  "每一步都算数",
+  "专注的你闪闪发光",
+  "保持好奇心",
+  "研究是一场马拉松",
+  "安静的坚持最有力量",
+  "你今天编码的样子很帅",
+  "语料库又长大了一点点",
+  "读懂世界，也读懂自己",
+  "每一个标注都是思考的痕迹",
+  "深夜的研究者不孤单",
+  "做研究的人自带光芒",
+  "相信积累的力量",
+];

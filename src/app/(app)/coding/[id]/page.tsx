@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/articles/status-badge";
 import { AiPanel } from "@/components/coding/ai-panel";
+import { TranslationAssistant } from "@/components/coding/translation-assistant";
 import { FrameworkTree } from "@/components/coding/framework-tree";
 import { AnnotationForm } from "@/components/coding/annotation-form";
 import { AnnotationList } from "@/components/coding/annotation-list";
@@ -208,6 +209,9 @@ export default function CodingWorkspacePage() {
 
         {/* Right: Tools panel */}
         <div className="w-[380px] shrink-0 space-y-3 overflow-y-auto max-h-[calc(100vh-140px)]">
+          {/* Translation Assistant */}
+          <TranslationAssistant />
+
           {/* AI Panel */}
           <AiPanel
             articleId={article.id}
