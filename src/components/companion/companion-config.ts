@@ -1,25 +1,25 @@
-export const EDGE_INSET = 28;
-export const Z_INDEX = 100;
+export const EDGE_INSET = 24;
+export const Z_INDEX = 50;
+export const ORB_SIZE = 56;
 export const MOBILE_BREAKPOINT = 1024;
 export const LEFT_DOCK_PAGES = ["/coding"] as const;
 
 export const TIMING = {
-  breathingCycle: 4200,       // orb scale+glow oscillation
+  breathingCycle: 4200,
   blinkMin: 4000,
   blinkMax: 10000,
-  blinkDuration: 250,         // eye briefly dims, not "blink"
-  pupilMaxOffset: 4,
+  blinkDuration: 250,
+  pupilMaxOffset: 3,
   eyeDelay: 320,
-  stateTransition: 800,       // ms for color/ring transitions
+  stateTransition: 800,
 } as const;
 
-/** Orb state enums passed from parent */
 export type OrbState = "idle" | "searching" | "completed" | "error" | "waiting";
 
-export const ORB_COLORS: Record<OrbState, { core: string; ring: string; glow: string }> = {
-  idle:     { core: "#4A90A4", ring: "rgba(74,144,164,0.25)", glow: "rgba(74,144,164,0.10)" },
-  searching:{ core: "#5B9FBF", ring: "rgba(74,144,164,0.45)", glow: "rgba(74,144,164,0.16)" },
-  completed:{ core: "#5DAD93", ring: "rgba(93,173,147,0.35)", glow: "rgba(93,173,147,0.14)" },
-  error:    { core: "#E67E22", ring: "rgba(230,126,34,0.35)",  glow: "rgba(230,126,34,0.12)" },
-  waiting:  { core: "#7A8A94", ring: "rgba(122,138,148,0.18)", glow: "rgba(122,138,148,0.06)" },
+export const ORB_COLORS: Record<OrbState, { core: string; ring: string }> = {
+  idle:     { core: "#0ea5e9", ring: "rgba(14,165,233,0.25)" },
+  searching:{ core: "#38bdf8", ring: "rgba(56,189,248,0.40)" },
+  completed:{ core: "#22c55e", ring: "rgba(34,197,94,0.35)" },
+  error:    { core: "#f97316", ring: "rgba(249,115,22,0.35)" },
+  waiting:  { core: "#64748b", ring: "rgba(100,116,139,0.18)" },
 } as const;

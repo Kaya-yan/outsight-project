@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { XiaoWaiSVG } from "./xiaowai-svg";
 import { XiaoWaiMobile } from "./xiaowai-mobile";
 import { useBreathing, useBlink, useEyeTracking, useIsMobile, useDockLeft } from "./companion-hooks";
-import { containerStyle, modalOpacity } from "./companion-styles";
+import { orbContainerStyle, orbHoverStyle, orbModalOpacity } from "./companion-styles";
 import type { OrbState } from "./companion-config";
 
 export function XiaoWaiCompanion() {
@@ -12,12 +12,13 @@ export function XiaoWaiCompanion() {
   const mobile = useIsMobile();
   const dockLeft = useDockLeft();
   const breathing = useBreathing();
-  const eyeDimmed = useBlink(); // blink → eye briefly dims
+  const eyeDimmed = useBlink();
   const pupil = useEyeTracking(ref);
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [hasModal, setHasModal] = useState(false);
+  const [hovering, setHovering] = useState(false);
 
-  // Detect page modals → dim orb
+  // Modal detection
   useEffect(() => {
     const check = () => setHasModal(!!document.querySelector('[class*="fixed inset-0 z-50"]'));
     check();
@@ -26,12 +27,11 @@ export function XiaoWaiCompanion() {
     return () => obs.disconnect();
   }, []);
 
-  // ── System event → orb state (lightweight Phase 1 binding) ──
+  // System event → orb state
   useEffect(() => {
     function onState(e: Event) {
       const state = (e as CustomEvent<OrbState>).detail;
       if (state) setOrbState(state);
-      // Auto-reset to idle after a few seconds
       if (state === "completed" || state === "error") {
         setTimeout(() => setOrbState("idle"), 4500);
       }
@@ -45,7 +45,13 @@ export function XiaoWaiCompanion() {
   return (
     <div
       ref={ref}
-      style={{ ...containerStyle(dockLeft), opacity: modalOpacity(hasModal), transition: "opacity 0.6s ease" }}
+      style={{
+        ...orbContainerStyle(dockLeft),
+        opacity: orbModalOpacity(hasModal),
+        ...orbHoverStyle(hovering),
+      }}
+      onMouseEnter={() => setHovering(true)}
+      onMouseLeave={() => setHovering(false)}
       aria-label="Companion Orb"
     >
       <XiaoWaiSVG
