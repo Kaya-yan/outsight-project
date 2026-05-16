@@ -1,10 +1,9 @@
 import { EDGE_INSET, Z_INDEX, ORB_SIZE } from "./companion-config";
 
 export const SVG_STYLE: React.CSSProperties = {
-  width: "100%", height: "100%", overflow: "visible",
+  width: "100%", height: "100%", overflow: "visible", position: "absolute", inset: 0,
 };
 
-/** Outer glass orb container */
 export function orbContainerStyle(dockLeft: boolean): React.CSSProperties {
   return {
     position: "fixed",
@@ -14,27 +13,28 @@ export function orbContainerStyle(dockLeft: boolean): React.CSSProperties {
     height: ORB_SIZE,
     borderRadius: "50%",
     zIndex: Z_INDEX,
-    cursor: "default",
+    cursor: "pointer",
     userSelect: "none",
-    pointerEvents: "auto",
-    // Dark glass
-    background: "rgba(15, 23, 42, 0.75)",
-    backdropFilter: "blur(12px)",
-    WebkitBackdropFilter: "blur(12px)",
-    border: "1px solid rgba(255, 255, 255, 0.15)",
-    boxShadow: "0 8px 32px rgba(0, 0, 0, 0.15), inset 0 0 0 1px rgba(255,255,255,0.05)",
-    transition: "transform 0.3s ease, background 0.3s ease, opacity 0.6s ease",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    background: "radial-gradient(circle at 50% 50%, rgba(10,25,60,0.9) 0%, rgba(5,10,30,0.95) 100%)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    border: "1px solid rgba(100,180,255,0.2)",
+    boxShadow: "0 0 20px rgba(56,189,248,0.15), 0 8px 24px rgba(0,0,0,0.2)",
+    overflow: "hidden",
+    transition: "transform 0.5s cubic-bezier(0.34,1.56,0.64,1), width 0.5s cubic-bezier(0.34,1.56,0.64,1), height 0.5s cubic-bezier(0.34,1.56,0.64,1), border-radius 0.5s cubic-bezier(0.34,1.56,0.64,1)",
+    display: "flex", alignItems: "center", justifyContent: "center",
   };
 }
 
-export function orbHoverStyle(hovering: boolean): React.CSSProperties {
-  return hovering ? {
-    transform: "scale(1.05)",
-    background: "rgba(15, 23, 42, 0.85)",
-  } : {};
+/** Expanded sizes: hover=120px, click=200px */
+export const EXPAND_SIZES = { hover: 120, click: 200 } as const;
+
+export function orbExpandStyle(size: number | null): React.CSSProperties {
+  if (!size) return {};
+  return {
+    width: size, height: size,
+    borderRadius: size > 120 ? "16px" : "50%",
+  };
 }
 
 export function orbModalOpacity(hasModal: boolean): number {

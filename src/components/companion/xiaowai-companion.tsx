@@ -4,7 +4,7 @@ import { useRef, useState, useEffect } from "react";
 import { XiaoWaiSVG } from "./xiaowai-svg";
 import { XiaoWaiMobile } from "./xiaowai-mobile";
 import { useBreathing, useBlink, useEyeTracking, useIsMobile, useDockLeft } from "./companion-hooks";
-import { orbContainerStyle, orbHoverStyle, orbModalOpacity } from "./companion-styles";
+import { orbContainerStyle, orbExpandStyle, EXPAND_SIZES, orbModalOpacity } from "./companion-styles";
 import type { OrbState } from "./companion-config";
 
 export function XiaoWaiCompanion() {
@@ -16,7 +16,7 @@ export function XiaoWaiCompanion() {
   const pupil = useEyeTracking(ref);
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [hasModal, setHasModal] = useState(false);
-  const [hovering, setHovering] = useState(false);
+  const [expanded, setExpanded] = useState<"hover" | "click" | null>(null);
 
   // Modal detection
   useEffect(() => {
@@ -40,7 +40,22 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
+  // Close click-expand on outside click
+  useEffect(() => {
+    if (expanded !== "click") return;
+    function onClick(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setExpanded(null);
+      }
+    }
+    // Delay add to avoid the same click that opened it
+    const t = setTimeout(() => document.addEventListener("click", onClick), 100);
+    return () => { clearTimeout(t); document.removeEventListener("click", onClick); };
+  }, [expanded]);
+
   if (mobile) return <XiaoWaiMobile />;
+
+  const expandSize = expanded === "click" ? EXPAND_SIZES.click : expanded === "hover" ? EXPAND_SIZES.hover : null;
 
   return (
     <div
@@ -48,17 +63,22 @@ export function XiaoWaiCompanion() {
       style={{
         ...orbContainerStyle(dockLeft),
         opacity: orbModalOpacity(hasModal),
-        ...orbHoverStyle(hovering),
+        ...orbExpandStyle(expandSize),
       }}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      aria-label="Companion Orb"
+      onMouseEnter={() => { if (!expanded) setExpanded("hover"); }}
+      onMouseLeave={() => { if (expanded === "hover") setExpanded(null); }}
+      onClick={(e) => {
+        e.stopPropagation();
+        setExpanded((p) => p === "click" ? null : "click");
+      }}
+      aria-label="Night Earth Orb"
     >
       <XiaoWaiSVG
         breathingScale={breathing}
         eyeDimmed={eyeDimmed}
         pupilOffset={pupil}
         orbState={orbState}
+        expanded={expanded}
       />
     </div>
   );
