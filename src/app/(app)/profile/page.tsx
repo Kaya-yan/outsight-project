@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X } from "lucide-react";
 
+// Earth image import
+import earthPng from "@/../reference/地球.png";
+
 // ── constants ──
 const roleMap: Record<string, string> = {
   admin: "管理员", lead_researcher: "组长", researcher: "研究员", coder: "编码员", viewer: "观察员",
@@ -62,37 +65,39 @@ OutEye 2.0（以下简称"本平台"）是由研究团队开发的学术话语�
 
 通过使用本平台，即表示您已阅读并同意上述条款。`;
 
-// ── abstract globe SVG ──
-function MiniGlobe() {
+// ── Earth image with circular crop + fade-in + fallback ──
+function EarthImage() {
+  const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    // Graceful fallback: dark circle placeholder
+    return (
+      <div
+        className="rounded-full bg-[rgba(4,14,36,0.9)] flex items-center justify-center"
+        style={{ width: 160, height: 160 }}
+      >
+        <Globe className="h-10 w-10 text-[#4A90A4]/20" />
+      </div>
+    );
+  }
+
   return (
-    <svg viewBox="0 0 200 200" style={{ width: "100%", height: "auto", maxHeight: 180 }}>
-      {/* ocean */}
-      <circle cx="100" cy="100" r="92" fill="rgba(4,14,36,0.9)" />
-      {/* atmosphere */}
-      <circle cx="100" cy="100" r="92" fill="none" stroke="rgba(74,144,164,0.15)" strokeWidth="2" />
-      <circle cx="100" cy="100" r="88" fill="none" stroke="rgba(148,200,220,0.08)" strokeWidth="1" />
-      {/* lat/long hints */}
-      <ellipse cx="100" cy="100" rx="60" ry="85" fill="none" stroke="rgba(180,210,230,0.06)" strokeWidth="0.5" />
-      <ellipse cx="100" cy="100" rx="30" ry="85" fill="none" stroke="rgba(180,210,230,0.06)" strokeWidth="0.5" />
-      <line x1="100" y1="15" x2="100" y2="185" stroke="rgba(180,210,230,0.06)" strokeWidth="0.5" />
-      <line x1="15" y1="100" x2="185" y2="100" stroke="rgba(180,210,230,0.08)" strokeWidth="0.5" />
-      <line x1="40" y1="100" x2="160" y2="100" stroke="rgba(180,210,230,0.04)" strokeWidth="0.3" />
-      {/* continents as subtle light dots */}
-      {/* N America */}
-      {[[42,38],[38,36],[44,40],[46,44],[50,42],[40,34]].map(([x,y],i)=><circle key={`na-${i}`} cx={x} cy={y} r="1.8" fill="rgba(74,144,164,0.35)" />)}
-      {/* S America */}
-      {[[44,78],[46,82],[42,80],[40,76]].map(([x,y],i)=><circle key={`sa-${i}`} cx={x} cy={y} r="1.5" fill="rgba(74,144,164,0.30)" />)}
-      {/* Europe */}
-      {[[90,40],[86,38],[94,36],[88,34],[96,40],[84,42]].map(([x,y],i)=><circle key={`eu-${i}`} cx={x} cy={y} r="1.6" fill="rgba(74,144,164,0.35)" />)}
-      {/* Africa */}
-      {[[88,60],[84,64],[90,68],[86,72],[92,62],[82,66],[88,76],[94,70]].map(([x,y],i)=><circle key={`af-${i}`} cx={x} cy={y} r="1.6" fill="rgba(74,144,164,0.35)" />)}
-      {/* Asia */}
-      {[[110,38],[120,36],[130,40],[140,38],[115,44],[125,42],[135,46],[118,50],[130,48]].map(([x,y],i)=><circle key={`as-${i}`} cx={x} cy={y} r="1.7" fill="rgba(74,144,164,0.35)" />)}
-      {/* Australia */}
-      {[[140,78],[144,80],[138,82],[142,84]].map(([x,y],i)=><circle key={`au-${i}`} cx={x} cy={y} r="1.4" fill="rgba(74,144,164,0.30)" />)}
-      {/* city light spots */}
-      {[[118,42],[90,44],[130,52],[44,42],[142,80]].map(([x,y],i)=><circle key={`cl-${i}`} cx={x} cy={y} r="2.2" fill="#38bdf8" opacity="0.55" />)}
-    </svg>
+    <img
+      src={earthPng.src}
+      alt="Earth"
+      onLoad={() => setLoaded(true)}
+      onError={() => setFailed(true)}
+      style={{
+        width: 160,
+        height: 160,
+        borderRadius: "50%",
+        objectFit: "cover",
+        opacity: loaded ? 1 : 0,
+        transition: "opacity 0.5s ease",
+        border: "1px solid rgba(74,144,164,0.12)",
+      }}
+    />
   );
 }
 
@@ -261,8 +266,10 @@ export default function ProfilePage() {
             <CardContent className="p-5">
               <h2 className="text-sm font-semibold text-[#2D3436] mb-1 flex items-center gap-2"><Globe className="h-4 w-4 text-[#4A90A4]" />语料来源分布</h2>
               <p className="text-xs text-[#7F8A93] mb-4">团队语料库 · 共 {stats?.totalArticles ?? 0} 篇</p>
-              <MiniGlobe />
-              <div className="mt-4 pt-4 border-t border-[#F0F2F5]">
+              <div className="flex justify-center my-4">
+                <EarthImage />
+              </div>
+              <div className="pt-4 border-t border-[#F0F2F5]">
                 <SourceBars byMedia={stats?.byMedia ?? {}} />
               </div>
             </CardContent>
