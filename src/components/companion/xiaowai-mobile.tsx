@@ -1,44 +1,30 @@
-"use client";
-
-/** Phase 1: Mobile fallback — static icon, zero animation, zero JS overhead beyond render. */
-
 import { memo } from "react";
-import { COLORS, VIEWBOX } from "./companion-config";
 
 function XiaoWaiMobileInner() {
-  const b = COLORS;
-  const s = 48; // display size in px
-
   return (
     <div
       style={{
-        position: "fixed",
-        right: 16,
-        bottom: 16,
-        width: s,
-        height: s,
-        opacity: 0.6,
-        pointerEvents: "none",
-        zIndex: 100,
+        position: "fixed", right: 16, bottom: 16,
+        width: 48, height: 48, opacity: 0.55, pointerEvents: "none", zIndex: 100,
       }}
       aria-label="XiaoWai"
     >
-      <svg viewBox="0 0 60 60" width={s} height={s}>
-        {/* Simplified head */}
-        <ellipse cx="30" cy="28" rx="18" ry="16" fill={b.body} stroke={b.outline} strokeWidth="2" />
-        {/* Ears */}
-        <path d="M18 22 Q12 16 16 10 Q22 8 24 18 Z" fill={b.body} stroke={b.outline} strokeWidth="1.8" />
-        <path d="M42 22 Q48 16 44 10 Q38 8 36 18 Z" fill={b.body} stroke={b.outline} strokeWidth="1.8" />
-        {/* Eyes (closed — calm) */}
-        <path d="M23 27 Q26 24 29 27" fill="none" stroke={b.outline} strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M31 27 Q34 24 37 27" fill="none" stroke={b.outline} strokeWidth="1.5" strokeLinecap="round" />
-        {/* Nose */}
-        <polygon points="30,33 28,36 32,36" fill={b.nose} />
-        {/* Glasses hint */}
-        <circle cx="26" cy="27" r="6" fill="none" stroke={b.glasses} strokeWidth="1" />
-        <circle cx="34" cy="27" r="6" fill="none" stroke={b.glasses} strokeWidth="1" />
-        {/* Scarf hint */}
-        <path d="M16 38 Q30 44 44 38" fill="none" stroke={b.scarf} strokeWidth="3" strokeLinecap="round" />
+      <svg viewBox="0 0 200 200" width="48" height="48">
+        <path
+          d="M 68 72 C 65 52, 82 40, 100 40 C 118 40, 135 52, 132 72 C 134 82, 130 92, 122 98 C 114 104, 86 104, 78 98 C 70 92, 66 82, 68 72 Z"
+          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+        />
+        <path
+          d="M 72 55 C 48 50, 38 72, 42 92 C 44 108, 58 114, 68 102"
+          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+        />
+        <path
+          d="M 128 55 C 152 50, 162 72, 158 92 C 156 108, 142 114, 132 102"
+          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+        />
+        <circle cx="88" cy="70" r="3" fill="#2D2D2D" />
+        <circle cx="112" cy="70" r="3" fill="#2D2D2D" />
+        <circle cx="100" cy="82" r="2.5" fill="#2D2D2D" />
       </svg>
     </div>
   );

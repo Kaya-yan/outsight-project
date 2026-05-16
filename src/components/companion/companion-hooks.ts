@@ -1,190 +1,121 @@
-/** Phase 1: Companion hooks — breathing, blink, eye tracking, time atmosphere. */
-
 import { useEffect, useRef, useState, useCallback } from "react";
-import { TIMING, MOBILE_BREAKPOINT } from "./companion-config";
+import { TIMING, MOBILE_BREAKPOINT, LEFT_DOCK_PAGES } from "./companion-config";
 
-// ============================================================
-// useBreathing — gentle body scale oscillation
-// ============================================================
-
+// ── breathing: scale 1.0 ↔ 1.03 ──
 export function useBreathing(): number {
-  const [scale, setScale] = useState(1);
-  const frameRef = useRef<number>(0);
+  const [s, setS] = useState(1);
+  const rf = useRef(0);
 
   useEffect(() => {
-    let running = true;
-    const start = performance.now();
-
+    let ok = true;
+    const t0 = performance.now();
     function tick(now: number) {
-      if (!running) return;
-      const elapsed = (now - start) % TIMING.breathingCycle;
-      const t = elapsed / TIMING.breathingCycle; // 0..1
-      const s = 1 + Math.sin(t * Math.PI * 2) * 0.015; // 1.000 ~ 1.015
-      setScale(s);
-      frameRef.current = requestAnimationFrame(tick);
+      if (!ok) return;
+      const p = ((now - t0) % TIMING.breathingCycle) / TIMING.breathingCycle;
+      setS(1 + Math.sin(p * Math.PI * 2) * 0.03);
+      rf.current = requestAnimationFrame(tick);
     }
-
-    frameRef.current = requestAnimationFrame(tick);
-    return () => { running = false; cancelAnimationFrame(frameRef.current); };
+    rf.current = requestAnimationFrame(tick);
+    return () => { ok = false; cancelAnimationFrame(rf.current); };
   }, []);
 
-  return scale;
+  return s;
 }
 
-// ============================================================
-// useBlink — random blink state (open / closed)
-// ============================================================
-
+// ── blink: random interval, 200ms closed ──
 export function useBlink(): boolean {
   const [closed, setClosed] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const t = useRef<ReturnType<typeof setTimeout>>();
 
-  const scheduleNext = useCallback(() => {
-    const delay = TIMING.blinkIntervalMin + Math.random() * (TIMING.blinkIntervalMax - TIMING.blinkIntervalMin);
-    timerRef.current = setTimeout(() => {
+  const next = useCallback(() => {
+    const d = TIMING.blinkMin + Math.random() * (TIMING.blinkMax - TIMING.blinkMin);
+    t.current = setTimeout(() => {
       setClosed(true);
       setTimeout(() => setClosed(false), TIMING.blinkDuration);
-      scheduleNext();
-    }, delay);
+      next();
+    }, d);
   }, []);
 
-  useEffect(() => {
-    scheduleNext();
-    return () => clearTimeout(timerRef.current);
-  }, [scheduleNext]);
-
+  useEffect(() => { next(); return () => clearTimeout(t.current); }, [next]);
   return closed;
 }
 
-// ============================================================
-// useEyeTracking — pupil follows mouse with lazy easing
-// ============================================================
-
-export interface PupilOffset { dx: number; dy: number }
-
-export function useEyeTracking(containerRef: React.RefObject<HTMLElement | null>): PupilOffset {
-  const offsetRef = useRef<PupilOffset>({ dx: 0, dy: 0 });
-  const [offset, setOffset] = useState<PupilOffset>({ dx: 0, dy: 0 });
-  const mouseRef = useRef({ x: 0, y: 0 });
-  const targetRef = useRef({ dx: 0, dy: 0 });
+// ── eye tracking: rAF, max 3px, ~300ms delay ──
+export function useEyeTracking(ref: React.RefObject<HTMLElement | null>) {
+  const [off, setOff] = useState({ dx: 0, dy: 0 });
+  const cur = useRef({ dx: 0, dy: 0 });
+  const tgt = useRef({ dx: 0, dy: 0 });
+  const mouse = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    // Skip on mobile
-    if (typeof window !== "undefined" && window.innerWidth < MOBILE_BREAKPOINT) return;
+    if (typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
+    let ok = true;
 
-    let frame: number;
-    let running = true;
-
-    const onMouse = (e: MouseEvent) => {
-      mouseRef.current = { x: e.clientX, y: e.clientY };
-    };
-    window.addEventListener("mousemove", onMouse, { passive: true });
+    const mv = (e: MouseEvent) => { mouse.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener("mousemove", mv, { passive: true });
 
     function tick() {
-      if (!running) return;
-      const el = containerRef.current;
+      if (!ok) return;
+      const el = ref.current;
       if (el) {
-        const rect = el.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height * 0.32; // eyes are in upper portion
-        const dist = Math.hypot(mouseRef.current.x - cx, mouseRef.current.y - cy);
-
-        if (dist < 250) {
-          targetRef.current.dx = Math.max(-TIMING.pupilMaxOffset, Math.min(TIMING.pupilMaxOffset, (mouseRef.current.x - cx) * 0.018));
-          targetRef.current.dy = Math.max(-TIMING.pupilMaxOffset, Math.min(TIMING.pupilMaxOffset, (mouseRef.current.y - cy) * 0.018));
+        const r = el.getBoundingClientRect();
+        const cx = r.left + r.width / 2;
+        const cy = r.top + r.height * 0.35;
+        const dist = Math.hypot(mouse.current.x - cx, mouse.current.y - cy);
+        if (dist < 220) {
+          tgt.current.dx = Math.max(-TIMING.pupilMaxOffset, Math.min(TIMING.pupilMaxOffset, (mouse.current.x - cx) * 0.018));
+          tgt.current.dy = Math.max(-TIMING.pupilMaxOffset, Math.min(TIMING.pupilMaxOffset, (mouse.current.y - cy) * 0.018));
         } else {
-          targetRef.current.dx = 0;
-          targetRef.current.dy = 0;
+          tgt.current.dx = 0; tgt.current.dy = 0;
         }
       }
-
-      // Ease toward target (~280ms)
-      const ease = 0.07;
-      offsetRef.current.dx += (targetRef.current.dx - offsetRef.current.dx) * ease;
-      offsetRef.current.dy += (targetRef.current.dy - offsetRef.current.dy) * ease;
-
-      setOffset({ dx: offsetRef.current.dx, dy: offsetRef.current.dy });
-      frame = requestAnimationFrame(tick);
+      const e = 0.07;
+      cur.current.dx += (tgt.current.dx - cur.current.dx) * e;
+      cur.current.dy += (tgt.current.dy - cur.current.dy) * e;
+      setOff({ dx: Math.round(cur.current.dx * 100) / 100, dy: Math.round(cur.current.dy * 100) / 100 });
+      requestAnimationFrame(tick);
     }
+    requestAnimationFrame(tick);
+    return () => { ok = false; window.removeEventListener("mousemove", mv); };
+  }, [ref]);
 
-    frame = requestAnimationFrame(tick);
-    return () => {
-      running = false;
-      cancelAnimationFrame(frame);
-      window.removeEventListener("mousemove", onMouse);
-    };
-  }, [containerRef]);
-
-  return offset;
+  return off;
 }
 
-// ============================================================
-// useTimeAtmosphere — returns glow color+opacity based on hour
-// ============================================================
+// ── head tilt: random ±5°, 1.5s ──
+export function useHeadTilt(): number {
+  const [deg, setDeg] = useState(0);
+  const t = useRef<ReturnType<typeof setTimeout>>();
 
-export interface AtmosphereGlow {
-  color: string;
-  opacity: number;
-  isNight: boolean;
-}
-
-export function useTimeAtmosphere(): AtmosphereGlow {
-  const [glow, setGlow] = useState<AtmosphereGlow>({ color: "transparent", opacity: 0, isNight: false });
-
-  useEffect(() => {
-    function update() {
-      const hour = new Date().getHours();
-      if (hour >= 6 && hour < 10)       setGlow({ color: "#F5E6C8", opacity: 0.12, isNight: false });
-      else if (hour >= 10 && hour < 17)  setGlow({ color: "transparent", opacity: 0, isNight: false });
-      else if (hour >= 17 && hour < 20)  setGlow({ color: "#F0D5B0", opacity: 0.10, isNight: false });
-      else                               setGlow({ color: "#F5D5A0", opacity: 0.10, isNight: true });
-    }
-    update();
-    const timer = setInterval(update, 600_000); // every 10 min
-    return () => clearInterval(timer);
+  const next = useCallback(() => {
+    const d = TIMING.tiltMin + Math.random() * (TIMING.tiltMax - TIMING.tiltMin);
+    t.current = setTimeout(() => {
+      setDeg((Math.random() > 0.5 ? 1 : -1) * TIMING.tiltAngle);
+      setTimeout(() => setDeg(0), TIMING.tiltDuration);
+      next();
+    }, d);
   }, []);
 
-  return glow;
+  useEffect(() => { next(); return () => clearTimeout(t.current); }, [next]);
+  return deg;
 }
 
-// ============================================================
-// useIsMobile — responsive breakpoint
-// ============================================================
-
+// ── mobile detect ──
 export function useIsMobile(): boolean {
-  const [mobile, setMobile] = useState(false);
-
+  const [m, setM] = useState(false);
   useEffect(() => {
-    function check() { setMobile(window.innerWidth < MOBILE_BREAKPOINT); }
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    const c = () => setM(window.innerWidth < MOBILE_BREAKPOINT);
+    c(); window.addEventListener("resize", c); return () => window.removeEventListener("resize", c);
   }, []);
-
-  return mobile;
+  return m;
 }
 
-// ============================================================
-// useShouldDockLeft — per-page docking
-// ============================================================
-
-import { LEFT_DOCK_PAGES } from "./companion-config";
-
-export function useShouldDockLeft(): boolean {
-  const [dockLeft, setDockLeft] = useState(false);
-
+// ── dock left for certain pages ──
+export function useDockLeft(): boolean {
+  const [l, setL] = useState(false);
   useEffect(() => {
-    function check() {
-      const path = window.location.pathname;
-      setDockLeft(LEFT_DOCK_PAGES.some((p) => path.startsWith(p)));
-    }
-    check();
-    // Re-check on navigation (Next.js soft nav doesn't always fire popstate;
-    // we use a MutationObserver on the URL or rely on the parent re-render)
-    const onPop = () => check();
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
+    const c = () => setL(LEFT_DOCK_PAGES.some((p) => location.pathname.startsWith(p)));
+    c(); window.addEventListener("popstate", c); return () => window.removeEventListener("popstate", c);
   }, []);
-
-  return dockLeft;
+  return l;
 }
