@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X } from "lucide-react";
+import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X, Zap } from "lucide-react";
+import { ConfettiBurst } from "@/components/shared/confetti-burst";
 
 // Earth image import
 import earthPng from "@/../reference/地球.png";
@@ -136,6 +137,8 @@ export default function ProfilePage() {
   const [motto, setMotto] = useState("");
   const [editingMotto, setEditingMotto] = useState(false);
   const [savingMotto, setSavingMotto] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+
   useEffect(() => {
     if (profile) {
       const saved = (profile.metadata as Record<string, unknown>)?.motto as string | undefined;
@@ -210,9 +213,11 @@ export default function ProfilePage() {
     <div className="space-y-5 max-w-4xl">
       {/* ═══ User Identity Banner ═══ */}
       <div className="flex items-center gap-4 p-5 bg-white rounded-lg border border-[#E2E5E9] shadow-sm">
-        <Avatar size="lg">
-          <AvatarFallback className="bg-[#4A90A4] text-white text-lg font-semibold">{initials}</AvatarFallback>
-        </Avatar>
+        <ConfettiBurst onActivate={() => { setShowToast(true); setTimeout(() => setShowToast(false), 2200); }}>
+          <Avatar size="lg">
+            <AvatarFallback className="bg-[#4A90A4] text-white text-lg font-semibold">{initials}</AvatarFallback>
+          </Avatar>
+        </ConfettiBurst>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-lg font-semibold text-[#2D3436]">{profile.display_name || profile.username}</h1>
@@ -359,6 +364,22 @@ export default function ProfilePage() {
           </Card>
         </div>
       )}
+
+      {/* Confetti toast */}
+      {showToast && (
+        <div style={{
+          position: "fixed", top: 24, right: 24, zIndex: 2100,
+          background: "rgba(15,23,42,0.9)", color: "white",
+          borderRadius: 8, padding: "10px 18px", fontSize: 13,
+          display: "flex", alignItems: "center", gap: 6,
+          animation: "toast-in 0.3s ease-out",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.2)",
+        }}>
+          <Zap className="h-4 w-4 text-[#fbbf24]" />
+          今日科研能量 +1
+        </div>
+      )}
+      <style>{`@keyframes toast-in{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}`}</style>
     </div>
   );
 }

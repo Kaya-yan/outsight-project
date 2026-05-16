@@ -14,6 +14,7 @@ import { AnnotationForm } from "@/components/coding/annotation-form";
 import { AnnotationList } from "@/components/coding/annotation-list";
 import type { Annotation, CodingNode } from "@/types/database";
 import { ArrowLeft, FileText } from "lucide-react";
+import { NightBanner } from "@/components/shared/night-banner";
 
 export default function CodingWorkspacePage() {
   const params = useParams();
@@ -156,6 +157,9 @@ export default function CodingWorkspacePage() {
 
   return (
     <div className="space-y-3 max-w-7xl">
+      {/* Night research banner */}
+      <NightBanner />
+
       {/* Top bar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
