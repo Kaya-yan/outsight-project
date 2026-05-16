@@ -1,7 +1,6 @@
-/** Phase 1: XiaoWai SVG character — Maltese research companion. */
+/** Phase 1: XiaoWai SVG character — zero animation library dependency. */
 
 import { memo } from "react";
-import { motion } from "framer-motion";
 import { COLORS, VIEWBOX } from "./companion-config";
 import { HandDrawnFilter, HAND_DRAWN_FILTER_ID, SVG_CONTAINER_STYLE } from "./companion-styles";
 
@@ -15,12 +14,29 @@ interface XiaoWaiSVGProps {
 function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: XiaoWaiSVGProps) {
   const b = COLORS;
 
+  // Compute pupil positions from props (updated via rAF in the parent hook)
+  const leftIrisCX = 89 + pupilOffset.dx * 0.4;
+  const leftIrisCY = 97 + pupilOffset.dy * 0.4;
+  const rightIrisCX = 111 + pupilOffset.dx * 0.4;
+  const rightIrisCY = 97 + pupilOffset.dy * 0.4;
+  const leftPupilCX = 89 + pupilOffset.dx;
+  const leftPupilCY = 97 + pupilOffset.dy;
+  const rightPupilCX = 111 + pupilOffset.dx;
+  const rightPupilCY = 97 + pupilOffset.dy;
+  const leftHighlightCX = 87 + pupilOffset.dx * 0.3;
+  const leftHighlightCY = 94 + pupilOffset.dy * 0.3;
+  const rightHighlightCX = 109 + pupilOffset.dx * 0.3;
+  const rightHighlightCY = 94 + pupilOffset.dy * 0.3;
+
   return (
-    <motion.svg
+    <svg
       viewBox={VIEWBOX}
-      style={SVG_CONTAINER_STYLE}
-      animate={{ scale: breathingScale }}
-      transition={{ duration: 0 }}
+      style={{
+        ...SVG_CONTAINER_STYLE,
+        transform: `scale(${breathingScale})`,
+        transformOrigin: "center center",
+        willChange: breathingScale !== 1 ? "transform" : "auto",
+      }}
     >
       <defs>
         <HandDrawnFilter />
@@ -52,7 +68,7 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
       {/* ============================================ */}
       {/* Layer 0: Body (lying posture) */}
       {/* ============================================ */}
-      <motion.ellipse
+      <ellipse
         cx="100" cy="165" rx="46" ry="32"
         fill="url(#body-grad)"
         stroke={b.outline} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -78,40 +94,32 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
       {/* Layer 2: Scarf (behind head, above body) */}
       {/* ============================================ */}
       <g>
-        {/* Scarf wrap around neck */}
         <path
           d="M 72 122 Q 100 132 128 122"
-          fill="none" stroke={b.scarf} strokeWidth="8" strokeLinecap="round"
-          opacity="0.9"
+          fill="none" stroke={b.scarf} strokeWidth="8" strokeLinecap="round" opacity="0.9"
         />
         <path
           d="M 72 122 Q 100 132 128 122"
-          fill="none" stroke={b.scarfStripe} strokeWidth="1.5" strokeLinecap="round"
-          opacity="0.6"
+          fill="none" stroke={b.scarfStripe} strokeWidth="1.5" strokeLinecap="round" opacity="0.6"
           transform="translate(0, -2)"
         />
-        {/* Scarf tail hanging down */}
         <path
           d="M 120 125 Q 126 145 122 170"
-          fill="none" stroke={b.scarf} strokeWidth="7" strokeLinecap="round"
-          opacity="0.9"
+          fill="none" stroke={b.scarf} strokeWidth="7" strokeLinecap="round" opacity="0.9"
         />
         <path
           d="M 120 125 Q 126 145 122 170"
-          fill="none" stroke={b.scarfStripe} strokeWidth="1.5" strokeLinecap="round"
-          opacity="0.6"
+          fill="none" stroke={b.scarfStripe} strokeWidth="1.5" strokeLinecap="round" opacity="0.6"
           transform="translate(-2, 0)"
         />
-        {/* Knit texture overlay */}
         <path
           d="M 72 122 Q 100 132 128 122 M 120 125 Q 126 145 122 170"
-          fill="none" stroke="url(#scarf-knit)" strokeWidth="8" strokeLinecap="round"
-          opacity="0.6"
+          fill="none" stroke="url(#scarf-knit)" strokeWidth="8" strokeLinecap="round" opacity="0.6"
         />
       </g>
 
       {/* ============================================ */}
-      {/* Layer 3: Ears (Maltese floppy triangle ears) */}
+      {/* Layer 3: Ears */}
       {/* ============================================ */}
       {/* Left ear */}
       <g>
@@ -123,8 +131,7 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
         />
         <path
           d="M 73 78 Q 68 68 72 60"
-          fill="none" stroke={b.earInner} strokeWidth="4" strokeLinecap="round"
-          opacity="0.5"
+          fill="none" stroke={b.earInner} strokeWidth="4" strokeLinecap="round" opacity="0.5"
         />
         {/* Ear fur wisps */}
         <path d="M 70 58 Q 66 52 68 48" fill="none" stroke={b.furWisp} strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
@@ -140,8 +147,7 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
         />
         <path
           d="M 127 78 Q 132 68 128 60"
-          fill="none" stroke={b.earInner} strokeWidth="4" strokeLinecap="round"
-          opacity="0.5"
+          fill="none" stroke={b.earInner} strokeWidth="4" strokeLinecap="round" opacity="0.5"
         />
         <path d="M 130 58 Q 134 52 132 48" fill="none" stroke={b.furWisp} strokeWidth="0.8" strokeLinecap="round" opacity="0.5" />
         <path d="M 128 56 Q 130 48 127 44" fill="none" stroke={b.furWisp} strokeWidth="0.8" strokeLinecap="round" opacity="0.4" />
@@ -166,7 +172,6 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
         <circle cx="89" cy="97" r="11" fill="none" stroke={b.glasses} strokeWidth="1.5" />
         <circle cx="111" cy="97" r="11" fill="none" stroke={b.glasses} strokeWidth="1.5" />
         <line x1="100" y1="97" x2="100" y2="97" stroke={b.glasses} strokeWidth="1.2" />
-        {/* Night mode: glasses warm tint */}
         {isNight && (
           <>
             <circle cx="89" cy="97" r="11" fill="none" stroke="rgba(245,213,160,0.25)" strokeWidth="1.5" />
@@ -176,62 +181,45 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
       </g>
 
       {/* ============================================ */}
-      {/* Layer 6: Eyes (almond-shaped with iris+pupil+white) */}
+      {/* Layer 6: Eyes */}
       {/* ============================================ */}
       <g>
-        {/* Left eye white */}
+        {/* Eye whites */}
         <ellipse cx="89" cy="97" rx="8" ry="9" fill={b.eyeWhite} />
-        {/* Right eye white */}
         <ellipse cx="111" cy="97" rx="8" ry="9" fill={b.eyeWhite} />
 
-        {/* Left iris */}
-        <motion.circle
-          cx={89 + pupilOffset.dx * 0.4} cy={97 + pupilOffset.dy * 0.4} r="5.5"
-          fill={b.iris}
-          transition={{ duration: 0 }}
-        />
-        {/* Right iris */}
-        <motion.circle
-          cx={111 + pupilOffset.dx * 0.4} cy={97 + pupilOffset.dy * 0.4} r="5.5"
-          fill={b.iris}
-          transition={{ duration: 0 }}
-        />
+        {/* Irises (position computed from pupilOffset, updated via rAF) */}
+        <circle cx={leftIrisCX} cy={leftIrisCY} r="5.5" fill={b.iris} />
+        <circle cx={rightIrisCX} cy={rightIrisCY} r="5.5" fill={b.iris} />
 
-        {/* Iris highlight */}
-        <circle cx={87 + pupilOffset.dx * 0.3} cy={94 + pupilOffset.dy * 0.3} r="1.5" fill="white" opacity="0.7" />
-        <circle cx={109 + pupilOffset.dx * 0.3} cy={94 + pupilOffset.dy * 0.3} r="1.5" fill="white" opacity="0.7" />
+        {/* Iris highlights */}
+        <circle cx={leftHighlightCX} cy={leftHighlightCY} r="1.5" fill="white" opacity="0.7" />
+        <circle cx={rightHighlightCX} cy={rightHighlightCY} r="1.5" fill="white" opacity="0.7" />
 
-        {/* Left pupil */}
-        <motion.circle
-          cx={89 + pupilOffset.dx} cy={97 + pupilOffset.dy} r="3"
-          fill={b.pupil}
-          transition={{ duration: 0 }}
-        />
-        {/* Right pupil */}
-        <motion.circle
-          cx={111 + pupilOffset.dx} cy={97 + pupilOffset.dy} r="3"
-          fill={b.pupil}
-          transition={{ duration: 0 }}
-        />
+        {/* Pupils */}
+        <circle cx={leftPupilCX} cy={leftPupilCY} r="3" fill={b.pupil} />
+        <circle cx={rightPupilCX} cy={rightPupilCY} r="3" fill={b.pupil} />
 
-        {/* Eyelids (blink animation) — wrapper <g> for correct SVG transform-origin */}
-        <g transform="translate(89, 88)">
-          <motion.ellipse
-            cx="0" cy="9" rx="9" ry="10"
-            fill={b.body}
-            animate={{ scaleY: blinkClosed ? 1 : 0 }}
-            transition={{ duration: blinkClosed ? 0.08 : 0.05 }}
-            style={{ transformOrigin: "0px 0px" }}
-          />
+        {/* Eyelids — blink via CSS transition on scaleY */}
+        <g
+          transform="translate(89, 88)"
+          style={{
+            transform: `scaleY(${blinkClosed ? 1 : 0})`,
+            transformOrigin: "0px 0px",
+            transition: `transform ${blinkClosed ? "0.08s" : "0.05s"} ease`,
+          }}
+        >
+          <ellipse cx="0" cy="9" rx="9" ry="10" fill={b.body} />
         </g>
-        <g transform="translate(111, 88)">
-          <motion.ellipse
-            cx="0" cy="9" rx="9" ry="10"
-            fill={b.body}
-            animate={{ scaleY: blinkClosed ? 1 : 0 }}
-            transition={{ duration: blinkClosed ? 0.08 : 0.05 }}
-            style={{ transformOrigin: "0px 0px" }}
-          />
+        <g
+          transform="translate(111, 88)"
+          style={{
+            transform: `scaleY(${blinkClosed ? 1 : 0})`,
+            transformOrigin: "0px 0px",
+            transition: `transform ${blinkClosed ? "0.08s" : "0.05s"} ease`,
+          }}
+        >
+          <ellipse cx="0" cy="9" rx="9" ry="10" fill={b.body} />
         </g>
       </g>
 
@@ -239,18 +227,11 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
       {/* Layer 7: Nose + Mouth */}
       {/* ============================================ */}
       <polygon points="100,107 96,111 104,111" fill={b.nose} />
-      {/* Mouth — barely there arc */}
       <path
         d="M 97 114 Q 100 117 103 114"
-        fill="none" stroke={b.outline} strokeWidth="0.8" strokeLinecap="round"
-        opacity="0.35"
+        fill="none" stroke={b.outline} strokeWidth="0.8" strokeLinecap="round" opacity="0.35"
       />
-
-      {/* ============================================ */}
-      {/* Layer 8: Ear fur wisps (animated micro-float) */}
-      {/* Done at ear level above, kept static in Phase 1 */}
-      {/* ============================================ */}
-    </motion.svg>
+    </svg>
   );
 }
 
