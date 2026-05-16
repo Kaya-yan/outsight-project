@@ -1,110 +1,132 @@
+/**
+ * Companion Orb — minimalist AI presence.
+ * Glass sphere, breathing glow, subtle eye, state-aware ring.
+ */
+
 import { memo } from "react";
 import { SVG_STYLE } from "./companion-styles";
-
-const STROKE = "#2D2D2D";
-const SW = 3;
+import { ORB_COLORS, type OrbState } from "./companion-config";
 
 interface Props {
   breathingScale: number;
-  blinkClosed: boolean;
+  /** Eye dimming (replaces "blink" — eye briefly fades) */
+  eyeDimmed: boolean;
+  /** Eye dot offset from cursor tracking */
   pupilOffset: { dx: number; dy: number };
-  headTilt: number;
+  orbState: OrbState;
 }
 
-function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, headTilt }: Props) {
-  const ex = 88 + pupilOffset.dx;
-  const ey = 70 + pupilOffset.dy;
-  const ex2 = 112 + pupilOffset.dx;
-  const ey2 = 70 + pupilOffset.dy;
+function XiaoWaiSVGInner({ breathingScale, eyeDimmed, pupilOffset, orbState }: Props) {
+  const c = ORB_COLORS[orbState];
+  const cx = 60, cy = 62; // orb center in 120x120 viewBox
+  const orbR = 28;        // main sphere radius
+
+  // Eye dot position: center of orb + offset, clamped within sphere
+  const eyeX = cx + pupilOffset.dx;
+  const eyeY = cy + pupilOffset.dy;
 
   return (
-    <svg viewBox="0 0 200 200" style={SVG_STYLE}>
+    <svg viewBox="0 0 120 120" style={SVG_STYLE}>
 
-      {/* ── breathing wrapper ── */}
+      {/* ── breathing + state-driven wrapper ── */}
       <g style={{
         transform: `scale(${breathingScale})`,
-        transformOrigin: "100px 110px",
+        transformOrigin: `${cx}px ${cy}px`,
         transition: "transform 0s",
       }}>
 
-        {/* ── head tilt wrapper ── */}
-        <g style={{
-          transform: `rotate(${headTilt}deg)`,
-          transformOrigin: "100px 72px",
-          transition: headTilt !== 0 ? "transform 0.4s ease-out" : "transform 0.6s ease-in-out",
-        }}>
+        {/* ── outer glow halo ── */}
+        <circle cx={cx} cy={cy} r={orbR + 12}
+          fill="none"
+          stroke={c.glow} strokeWidth="8"
+          opacity={0.6}
+          style={{ transition: `stroke ${800}ms ease` }}
+        />
+        <circle cx={cx} cy={cy} r={orbR + 20}
+          fill="none"
+          stroke={c.glow} strokeWidth="16"
+          opacity={0.25}
+          style={{ transition: `stroke ${800}ms ease` }}
+        />
 
-          {/* === 头部轮廓 === */}
-          <path
-            d="M 68 72 C 65 52, 82 40, 100 40 C 118 40, 135 52, 132 72 C 134 82, 130 92, 122 98 C 114 104, 86 104, 78 98 C 70 92, 66 82, 68 72 Z"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 左耳 === */}
-          <path
-            d="M 72 55 C 48 50, 38 72, 42 92 C 44 108, 58 114, 68 102"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 右耳 === */}
-          <path
-            d="M 128 55 C 152 50, 162 72, 158 92 C 156 108, 142 114, 132 102"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 身体轮廓 === */}
-          <path
-            d="M 80 100 C 72 112, 68 132, 72 150 C 74 162, 86 168, 100 168 C 114 168, 126 162, 128 150 C 132 132, 128 112, 120 100"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 左前脚 === */}
-          <path
-            d="M 85 158 C 82 170, 88 176, 96 172 C 100 168, 98 162, 95 158"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 右前脚 === */}
-          <path
-            d="M 115 158 C 118 170, 112 176, 104 172 C 100 168, 102 162, 105 158"
-            fill="none" stroke={STROKE} strokeWidth={SW}
-            strokeLinecap="round" strokeLinejoin="round"
-          />
-
-          {/* === 左眼 === */}
-          <circle cx={ex} cy={ey} r="3" fill={STROKE} />
-          {/* === 右眼 === */}
-          <circle cx={ex2} cy={ey2} r="3" fill={STROKE} />
-
-          {/* === 鼻子 === */}
-          <circle cx="100" cy="82" r="2.5" fill={STROKE} />
-
-          {/* === 嘴巴 === */}
-          <path
-            d="M 100 86 L 97 91 M 100 86 L 103 91"
-            fill="none" stroke={STROKE} strokeWidth="2.5"
+        {/* ── state ring (searching / completed / error) ── */}
+        {(orbState === "searching" || orbState === "completed" || orbState === "error") && (
+          <circle cx={cx} cy={cy} r={orbR + 6}
+            fill="none"
+            stroke={c.ring} strokeWidth="1.5"
+            strokeDasharray={orbState === "searching" ? "40 160" : "180 0"}
             strokeLinecap="round"
+            opacity={orbState === "searching" ? 1 : 0.7}
+            style={{
+              transition: `stroke ${800}ms ease, stroke-dasharray ${800}ms ease`,
+              transformOrigin: `${cx}px ${cy}px`,
+              animation: orbState === "searching" ? "orb-spin 3s linear infinite" : "none",
+            }}
           />
+        )}
 
-        </g>
+        {/* ── main sphere body ── */}
+        <defs>
+          <radialGradient id="orb-body" cx="40%" cy="35%" r="60%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
+            <stop offset="40%" stopColor="rgba(255,255,255,0.06)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0.12)" />
+          </radialGradient>
+          <radialGradient id="orb-core" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor={c.core} stopOpacity="0.55" />
+            <stop offset="100%" stopColor={c.core} stopOpacity="0.08" />
+          </radialGradient>
+        </defs>
 
-        {/* ── blink overlay (outside tilt group so lines stay level) ── */}
-        <g style={{
-          opacity: blinkClosed ? 1 : 0,
-          transition: `opacity ${blinkClosed ? "0.05s" : "0.03s"} ease`,
-        }}>
-          <line x1={ex - 4} y1={ey} x2={ex + 4} y2={ey}
-            stroke={STROKE} strokeWidth="2.5" strokeLinecap="round" />
-          <line x1={ex2 - 4} y1={ey2} x2={ex2 + 4} y2={ey2}
-            stroke={STROKE} strokeWidth="2.5" strokeLinecap="round" />
-        </g>
+        {/* Sphere glass surface */}
+        <circle cx={cx} cy={cy} r={orbR}
+          fill="url(#orb-body)"
+          stroke="rgba(255,255,255,0.12)" strokeWidth="0.8"
+        />
 
+        {/* Inner core glow */}
+        <circle cx={cx} cy={cy} r={orbR - 6}
+          fill="url(#orb-core)"
+          style={{ transition: `fill ${800}ms ease` }}
+        />
+
+        {/* Core highlight — tiny bright spot */}
+        <circle cx={cx - 8} cy={cy - 10} r="5"
+          fill="rgba(255,255,255,0.10)"
+        />
+
+        {/* ── eye dot — tiny luminous point that follows cursor ── */}
+        <circle
+          cx={eyeX} cy={eyeY} r="2.5"
+          fill="white"
+          opacity={eyeDimmed ? 0.15 : 0.65}
+          style={{
+            transition: `opacity ${eyeDimmed ? "0.1s" : "0.3s"} ease`,
+          }}
+        />
+        {/* Eye soft halo */}
+        <circle
+          cx={eyeX} cy={eyeY} r="7"
+          fill="white"
+          opacity={eyeDimmed ? 0.02 : 0.08}
+          style={{ transition: `opacity ${eyeDimmed ? "0.1s" : "0.3s"} ease` }}
+        />
+
+        {/* ── subtle ring highlight on sphere edge ── */}
+        <circle cx={cx} cy={cy} r={orbR - 1}
+          fill="none"
+          stroke="rgba(255,255,255,0.08)" strokeWidth="0.8"
+          strokeDasharray="60 120" strokeLinecap="round"
+        />
       </g>
+
+      {/* ── CSS keyframes for scanning ring ── */}
+      <style>{`
+        @keyframes orb-spin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+      `}</style>
     </svg>
   );
 }

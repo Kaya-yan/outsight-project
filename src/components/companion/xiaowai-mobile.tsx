@@ -5,26 +5,21 @@ function XiaoWaiMobileInner() {
     <div
       style={{
         position: "fixed", right: 16, bottom: 16,
-        width: 48, height: 48, opacity: 0.55, pointerEvents: "none", zIndex: 100,
+        width: 36, height: 36, opacity: 0.50, pointerEvents: "none", zIndex: 100,
       }}
-      aria-label="XiaoWai"
+      aria-label="Companion Orb"
     >
-      <svg viewBox="0 0 200 200" width="48" height="48">
-        <path
-          d="M 68 72 C 65 52, 82 40, 100 40 C 118 40, 135 52, 132 72 C 134 82, 130 92, 122 98 C 114 104, 86 104, 78 98 C 70 92, 66 82, 68 72 Z"
-          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-        />
-        <path
-          d="M 72 55 C 48 50, 38 72, 42 92 C 44 108, 58 114, 68 102"
-          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-        />
-        <path
-          d="M 128 55 C 152 50, 162 72, 158 92 C 156 108, 142 114, 132 102"
-          fill="none" stroke="#2D2D2D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
-        />
-        <circle cx="88" cy="70" r="3" fill="#2D2D2D" />
-        <circle cx="112" cy="70" r="3" fill="#2D2D2D" />
-        <circle cx="100" cy="82" r="2.5" fill="#2D2D2D" />
+      <svg viewBox="0 0 100 100" width="36" height="36">
+        <defs>
+          <radialGradient id="mo" cx="40%" cy="35%" r="60%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.22)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0.08)" />
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="36" fill="url(#mo)" stroke="rgba(255,255,255,0.10)" strokeWidth="0.8" />
+        <circle cx="50" cy="50" r="22" fill="rgba(74,144,164,0.18)" />
+        <circle cx="44" cy="44" r="3.5" fill="rgba(255,255,255,0.15)" />
+        <circle cx="50" cy="50" r="2" fill="white" opacity="0.55" />
       </svg>
     </div>
   );
