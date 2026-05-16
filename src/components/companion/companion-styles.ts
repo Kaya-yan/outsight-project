@@ -1,42 +1,55 @@
-import { EDGE_INSET, Z_INDEX, ORB_SIZE } from "./companion-config";
+import { EDGE_INSET, Z_INDEX, TERMINAL } from "./companion-config";
 
-export const SVG_STYLE: React.CSSProperties = {
-  width: "100%", height: "100%", overflow: "visible", position: "absolute", inset: 0,
-};
-
-export function orbContainerStyle(dockLeft: boolean): React.CSSProperties {
+/** Mini terminal bar (default state) */
+export function miniBarStyle(dockLeft: boolean): React.CSSProperties {
   return {
     position: "fixed",
     [dockLeft ? "left" : "right"]: EDGE_INSET,
     bottom: EDGE_INSET,
-    width: ORB_SIZE,
-    height: ORB_SIZE,
-    borderRadius: "50%",
+    width: TERMINAL.mini.w,
+    height: TERMINAL.mini.h,
     zIndex: Z_INDEX,
-    cursor: "pointer",
+    cursor: "default",
     userSelect: "none",
-    background: "radial-gradient(circle at 50% 50%, rgba(10,25,60,0.9) 0%, rgba(5,10,30,0.95) 100%)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    border: "1px solid rgba(100,180,255,0.2)",
-    boxShadow: "0 0 20px rgba(56,189,248,0.15), 0 8px 24px rgba(0,0,0,0.2)",
+    background: "rgba(15, 23, 42, 0.88)",
+    backdropFilter: "blur(14px)",
+    WebkitBackdropFilter: "blur(14px)",
+    border: "1px solid rgba(56, 189, 248, 0.12)",
+    borderRadius: TERMINAL.borderRadius,
+    boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+    fontFamily: TERMINAL.font,
+    fontSize: TERMINAL.fontSize,
+    lineHeight: TERMINAL.lineHeight,
+    color: "rgba(226, 232, 240, 0.85)",
+    display: "flex",
+    alignItems: "center",
+    padding: "0 14px",
     overflow: "hidden",
-    transition: "transform 0.5s cubic-bezier(0.34,1.56,0.64,1), width 0.5s cubic-bezier(0.34,1.56,0.64,1), height 0.5s cubic-bezier(0.34,1.56,0.64,1), border-radius 0.5s cubic-bezier(0.34,1.56,0.64,1)",
-    display: "flex", alignItems: "center", justifyContent: "center",
+    whiteSpace: "nowrap",
+    transition: `width ${400}ms ease-out, height ${400}ms ease-out, border-radius ${400}ms ease-out`,
   };
 }
 
-/** Expanded sizes: hover=120px, click=200px */
-export const EXPAND_SIZES = { hover: 120, click: 200 } as const;
-
-export function orbExpandStyle(size: number | null): React.CSSProperties {
-  if (!size) return {};
+/** Expanded panel (hover state) */
+export function panelStyle(dockLeft: boolean): React.CSSProperties {
   return {
-    width: size, height: size,
-    borderRadius: size > 120 ? "16px" : "50%",
+    ...miniBarStyle(dockLeft),
+    width: TERMINAL.panel.w,
+    height: TERMINAL.panel.h,
+    borderRadius: TERMINAL.panelRadius,
+    background: "rgba(15, 23, 42, 0.92)",
+    backdropFilter: "blur(18px)",
+    WebkitBackdropFilter: "blur(18px)",
+    border: "1px solid rgba(56, 189, 248, 0.18)",
+    boxShadow: "0 12px 48px rgba(0, 0, 0, 0.3)",
+    padding: "16px 18px",
+    flexDirection: "column",
+    alignItems: "stretch",
+    whiteSpace: "normal",
+    overflow: "hidden",
   };
 }
 
 export function orbModalOpacity(hasModal: boolean): number {
-  return hasModal ? 0.25 : 1;
+  return hasModal ? 0.2 : 1;
 }
