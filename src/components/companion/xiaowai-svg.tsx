@@ -1,175 +1,151 @@
-/** Phase 1 · Visual Rebuild: Line-dog inspired minimalist character. */
+/**
+ * XiaoWai SVG — faithful line-dog visual reconstruction.
+ * Direct reference: minimal sitting dog, dot eyes, floppy ears, soft proportions.
+ * Zero carryover from earlier designs.
+ */
 
 import { memo } from "react";
-import { HAND_DRAWN_FILTER_ID, SVG_CONTAINER_STYLE } from "./companion-styles";
+import { SVG_CONTAINER_STYLE } from "./companion-styles";
 
-// Direct color constants — no indirection for aesthetic-critical values
-const BODY = "#FAF8F5";
-const OUTLINE = "#3D4446";
-const GLASSES = "rgba(74,144,164,0.28)";
-const SCARF = "#4A90A4";
-const SCARF_STRIPE = "#5DAD93";
-const NOSE = "#4A4A4A";
-const SHADOW = "rgba(45,52,54,0.04)";
+// === Aesthetic-critical constants (no config indirection) ===
+const BODY = "#FEFCF8";
+const LINE = "#3A3E42";
+const LINE_W = 2.2;
+const FILTER_ID = "hd";
 
-interface XiaoWaiSVGProps {
+interface Props {
   breathingScale: number;
   blinkClosed: boolean;
   pupilOffset: { dx: number; dy: number };
   isNight: boolean;
 }
 
-function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: XiaoWaiSVGProps) {
-  // Eyes center: two dots that shift gently with pupilOffset
-  const lx = 84 + pupilOffset.dx * 0.5;
-  const ly = 76 + pupilOffset.dy * 0.5;
-  const rx = 116 + pupilOffset.dx * 0.5;
-  const ry = 76 + pupilOffset.dy * 0.5;
+function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: Props) {
+  // Eye dot centers — drift with pupilOffset
+  const exL = 67 + pupilOffset.dx * 0.5;
+  const eyL = 76 + pupilOffset.dy * 0.4;
+  const exR = 93 + pupilOffset.dx * 0.5;
+  const eyR = 76 + pupilOffset.dy * 0.4;
 
   return (
     <svg
-      viewBox="0 0 200 200"
+      viewBox="0 0 160 210"
       style={{
         ...SVG_CONTAINER_STYLE,
         transform: `scale(${breathingScale})`,
-        transformOrigin: "center center",
+        transformOrigin: "50% 50%",
       }}
     >
       <defs>
-        <filter id={HAND_DRAWN_FILTER_ID} x="-10%" y="-10%" width="120%" height="120%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="2" result="noise" />
-          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.5" xChannelSelector="R" yChannelSelector="G" />
+        <filter id={FILTER_ID} x="-12%" y="-12%" width="124%" height="124%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.06" numOctaves="2" result="n" />
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="0.45" xChannelSelector="R" yChannelSelector="G" />
         </filter>
-
-        <radialGradient id="bodyGrad" cx="50%" cy="45%" r="55%">
+        <radialGradient id="bg" cx="50%" cy="40%" r="55%">
           <stop offset="0%" stopColor={BODY} />
-          <stop offset="100%" stopColor="#F5F2EC" />
+          <stop offset="100%" stopColor="#F8F4EC" />
         </radialGradient>
       </defs>
 
-      {/* ============================================================ */}
-      {/* Shadow — just enough to ground the character */}
-      {/* ============================================================ */}
-      <ellipse cx="100" cy="192" rx="38" ry="5" fill={SHADOW} />
+      {/* ── shadow ── */}
+      <ellipse cx="80" cy="200" rx="30" ry="4" fill="rgba(45,52,54,0.045)" />
 
-      {/* ============================================================ */}
-      {/* Body — a single soft rounded shape, like a beanbag */}
-      {/* ============================================================ */}
+      {/* ── body: sitting pose, rounded bean ── */}
       <ellipse
-        cx="100" cy="152" rx="42" ry="32"
-        fill="url(#bodyGrad)"
-        stroke={OUTLINE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+        cx="80" cy="148" rx="34" ry="26"
+        fill="url(#bg)" stroke={LINE} strokeWidth={LINE_W}
+        strokeLinecap="round" filter={`url(#${FILTER_ID})`}
       />
 
-      {/* ============================================================ */}
-      {/* Front paws — two simple ovals, slightly apart */}
-      {/* ============================================================ */}
-      <ellipse cx="74" cy="180" rx="9" ry="6"
-        fill={BODY} stroke={OUTLINE} strokeWidth="1.8" strokeLinecap="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+      {/* ── front paws ── */}
+      <ellipse cx="60" cy="172" rx="8" ry="5.5"
+        fill={BODY} stroke={LINE} strokeWidth={LINE_W * 0.82}
+        strokeLinecap="round" filter={`url(#${FILTER_ID})`}
       />
-      <ellipse cx="126" cy="180" rx="9" ry="6"
-        fill={BODY} stroke={OUTLINE} strokeWidth="1.8" strokeLinecap="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+      <ellipse cx="100" cy="172" rx="8" ry="5.5"
+        fill={BODY} stroke={LINE} strokeWidth={LINE_W * 0.82}
+        strokeLinecap="round" filter={`url(#${FILTER_ID})`}
       />
 
-      {/* ============================================================ */}
-      {/* Ears — floppy soft triangles hanging from head sides */}
-      {/* ============================================================ */}
-      {/* Left ear */}
+      {/* ── ears: floppy triangles hanging from head sides ── */}
+      {/* left */}
       <path
-        d="M 70 66 Q 58 64 62 50 Q 66 40 76 44 Q 78 56 78 60"
-        fill={BODY} stroke={OUTLINE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+        d="M 50 55 Q 38 60 42 40 Q 46 24 58 30 Q 64 38 60 48"
+        fill={BODY} stroke={LINE} strokeWidth={LINE_W * 0.9}
+        strokeLinecap="round" strokeLinejoin="round"
+        filter={`url(#${FILTER_ID})`}
       />
-      {/* Right ear */}
+      {/* right */}
       <path
-        d="M 130 66 Q 142 64 138 50 Q 134 40 124 44 Q 122 56 122 60"
-        fill={BODY} stroke={OUTLINE} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+        d="M 110 55 Q 122 60 118 40 Q 114 24 102 30 Q 96 38 100 48"
+        fill={BODY} stroke={LINE} strokeWidth={LINE_W * 0.9}
+        strokeLinecap="round" strokeLinejoin="round"
+        filter={`url(#${FILTER_ID})`}
       />
 
-      {/* ============================================================ */}
-      {/* Head — large round shape, the focal point */}
-      {/* ============================================================ */}
+      {/* ── head: the focal point, large and round ── */}
       <ellipse
-        cx="100" cy="78" rx="38" ry="34"
-        fill="url(#bodyGrad)"
-        stroke={OUTLINE} strokeWidth="2" strokeLinecap="round"
-        filter={`url(#${HAND_DRAWN_FILTER_ID})`}
+        cx="80" cy="70" rx="40" ry="36"
+        fill="url(#bg)" stroke={LINE} strokeWidth={LINE_W}
+        strokeLinecap="round" filter={`url(#${FILTER_ID})`}
       />
 
-      {/* ============================================================ */}
-      {/* Scarf — thin band around neck, modest tail */}
-      {/* ============================================================ */}
-      <path d="M 66 104 Q 100 114 134 104"
-        fill="none" stroke={SCARF} strokeWidth="6" strokeLinecap="round" opacity="0.85" />
-      <path d="M 66 104 Q 100 114 134 104"
-        fill="none" stroke={SCARF_STRIPE} strokeWidth="1.2" strokeLinecap="round" opacity="0.5"
-        transform="translate(0, -1.5)" />
-      <path d="M 128 107 Q 132 124 129 140"
-        fill="none" stroke={SCARF} strokeWidth="5" strokeLinecap="round" opacity="0.85" />
+      {/* ── eyebrows: tiny arcs, barely there ── */}
+      <path d="M 55 56 Q 62 54 69 57" fill="none" stroke={LINE}
+        strokeWidth="1" strokeLinecap="round" opacity="0.22" />
+      <path d="M 91 57 Q 98 54 105 56" fill="none" stroke={LINE}
+        strokeWidth="1" strokeLinecap="round" opacity="0.22" />
 
-      {/* ============================================================ */}
-      {/* Eyebrows — barely-there arcs */}
-      {/* ============================================================ */}
-      <path d="M 76 60 Q 84 57 92 60" fill="none" stroke={OUTLINE} strokeWidth="1.2" strokeLinecap="round" opacity="0.25" />
-      <path d="M 108 60 Q 116 57 124 60" fill="none" stroke={OUTLINE} strokeWidth="1.2" strokeLinecap="round" opacity="0.25" />
+      {/* ── OutEye glasses: thin round frames ── */}
+      <circle cx={exL} cy={eyL - 2} r="10" fill="none"
+        stroke="rgba(74,144,164,0.30)" strokeWidth="1.2" />
+      <circle cx={exR} cy={eyR - 2} r="10" fill="none"
+        stroke="rgba(74,144,164,0.30)" strokeWidth="1.2" />
+      <line x1={exL + 10} y1={eyL - 2} x2={exR - 10} y2={eyR - 2}
+        stroke="rgba(74,144,164,0.30)" strokeWidth="1" />
 
-      {/* ============================================================ */}
-      {/* Glasses — simple round frames, thin */}
-      {/* ============================================================ */}
-      <circle cx={lx} cy={ly - 2} r="9" fill="none" stroke={GLASSES} strokeWidth="1.3" />
-      <circle cx={rx} cy={ry - 2} r="9" fill="none" stroke={GLASSES} strokeWidth="1.3" />
-      <line x1={lx + 9} y1={ly - 2} x2={rx - 9} y2={ry - 2} stroke={GLASSES} strokeWidth="1" />
+      {/* ── eyes: two dark dots with tiny highlight ── */}
+      <circle cx={exL} cy={eyL} r="3.2" fill={LINE} />
+      <circle cx={exR} cy={eyR} r="3.2" fill={LINE} />
+      <circle cx={exL - 0.8} cy={eyL - 1} r="1.1" fill="white" opacity="0.28" />
+      <circle cx={exR - 0.8} cy={eyR - 1} r="1.1" fill="white" opacity="0.28" />
 
-      {/* Night glasses warm tint */}
-      {isNight && (
-        <>
-          <circle cx={lx} cy={ly - 2} r="9" fill="none" stroke="rgba(245,213,160,0.22)" strokeWidth="1.3" />
-          <circle cx={rx} cy={ry - 2} r="9" fill="none" stroke="rgba(245,213,160,0.22)" strokeWidth="1.3" />
-        </>
-      )}
-
-      {/* ============================================================ */}
-      {/* Eyes — two dark dots, the soul of the character */}
-      {/* ============================================================ */}
-      <circle cx={lx} cy={ly} r="3.5" fill={OUTLINE} />
-      <circle cx={rx} cy={ry} r="3.5" fill={OUTLINE} />
-
-      {/* Tiny eye highlights */}
-      <circle cx={lx - 1} cy={ly - 1.2} r="1.2" fill="white" opacity="0.35" />
-      <circle cx={rx - 1} cy={ry - 1.2} r="1.2" fill="white" opacity="0.35" />
-
-      {/* ============================================================ */}
-      {/* Blink — two thin lines that slide down over the eyes */}
-      {/* ============================================================ */}
-      <g
-        style={{
-          transform: `scaleY(${blinkClosed ? 1 : 0})`,
-          transformOrigin: "center",
-          transition: `transform ${blinkClosed ? "0.06s" : "0.04s"} ease`,
-        }}
-      >
-        <line x1={lx - 4} y1={ly} x2={lx + 4} y2={ly}
-          stroke={OUTLINE} strokeWidth="2" strokeLinecap="round" />
-        <line x1={rx - 4} y1={ry} x2={rx + 4} y2={ry}
-          stroke={OUTLINE} strokeWidth="2" strokeLinecap="round" />
+      {/* ── blink: thin lines over eyes ── */}
+      <g style={{
+        transform: `scaleY(${blinkClosed ? 1 : 0})`,
+        transition: `transform ${blinkClosed ? "0.05s" : "0.03s"} ease`,
+      }}>
+        <line x1={exL - 4.5} y1={eyL} x2={exL + 4.5} y2={eyL}
+          stroke={LINE} strokeWidth="1.8" strokeLinecap="round" />
+        <line x1={exR - 4.5} y1={eyR} x2={exR + 4.5} y2={eyR}
+          stroke={LINE} strokeWidth="1.8" strokeLinecap="round" />
       </g>
 
-      {/* ============================================================ */}
-      {/* Nose — small filled oval */}
-      {/* ============================================================ */}
-      <ellipse cx="100" cy="92" rx="4" ry="3" fill={NOSE} opacity="0.85" />
+      {/* ── nose: tiny oval ── */}
+      <ellipse cx="80" cy="90" rx="3.8" ry="2.8" fill="#4A4A4A" opacity="0.85" />
 
-      {/* ============================================================ */}
-      {/* Mouth — tiny relaxed arc, barely there */}
-      {/* ============================================================ */}
-      <path
-        d="M 96 98 Q 100 101 104 98"
-        fill="none" stroke={OUTLINE} strokeWidth="0.9" strokeLinecap="round" opacity="0.25"
-      />
+      {/* ── mouth: tiny relaxed arc ── */}
+      <path d="M 76 95 Q 80 98 84 95" fill="none" stroke={LINE}
+        strokeWidth="0.8" strokeLinecap="round" opacity="0.22" />
+
+      {/* ── OutEye scarf: thin band around neck, tiny tail ── */}
+      <path d="M 47 100 Q 80 112 113 100" fill="none"
+        stroke="#4A90A4" strokeWidth="5.5" strokeLinecap="round" opacity="0.82" />
+      <path d="M 47 100 Q 80 112 113 100" fill="none"
+        stroke="#5DAD93" strokeWidth="1.2" strokeLinecap="round" opacity="0.45"
+        transform="translate(0,-1.5)" />
+      <path d="M 108 104 Q 112 120 110 136" fill="none"
+        stroke="#4A90A4" strokeWidth="4.5" strokeLinecap="round" opacity="0.82" />
+
+      {/* ── night glasses warm tint ── */}
+      {isNight && (
+        <>
+          <circle cx={exL} cy={eyL - 2} r="10" fill="none"
+            stroke="rgba(245,213,160,0.20)" strokeWidth="1.2" />
+          <circle cx={exR} cy={eyR - 2} r="10" fill="none"
+            stroke="rgba(245,213,160,0.20)" strokeWidth="1.2" />
+        </>
+      )}
     </svg>
   );
 }
