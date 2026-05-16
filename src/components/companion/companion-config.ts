@@ -1,7 +1,7 @@
 export const EDGE_INSET = 24;
 export const Z_INDEX = 50;
 export const MOBILE_BREAKPOINT = 1024;
-export const LEFT_DOCK_PAGES = ["/coding"] as const;
+export const LEFT_DOCK_PAGES = [] as const;
 
 export const TIMING = {
   breathingCycle: 6000,

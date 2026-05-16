@@ -5,8 +5,6 @@ import { useCodingStore } from "@/stores/coding-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Languages, BookOpen, AlertCircle, Loader2 } from "lucide-react";
 
-// ── Free APIs ──
-const TRANSLATE_URL = "https://translate.argosopentech.com/translate";
 const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
 
 interface DictEntry {
@@ -18,93 +16,131 @@ interface DictEntry {
   }>;
 }
 
-interface TranslationResult {
-  translatedText: string;
+type Status = "idle" | "loading" | "paragraph" | "word" | "error" | "invalid";
+
+function isWordLike(text: string): boolean {
+  return /^[a-zA-Z'-]+$/.test(text) && text.length > 1 && text.length <= 45;
 }
 
-// ── helpers ──
-function isWord(text: string): boolean {
-  return /^[a-zA-Z]+$/.test(text) && text.length > 1 && text.length <= 45;
-}
-function isParagraph(text: string): boolean {
-  return /\s/.test(text) || text.length > 45;
+function isParagraphLike(text: string): boolean {
+  return text.length > 45 || /\s/.test(text) || /[.,!?;:"]/.test(text);
 }
 
 export function TranslationAssistant() {
   const selectedText = useCodingStore((s) => s.selectedText);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<Status>("idle");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Paragraph mode
   const [sourceText, setSourceText] = useState("");
   const [translated, setTranslated] = useState("");
 
   // Word mode
-  const [word, setWord] = useState("");
   const [entries, setEntries] = useState<DictEntry[]>([]);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const lastTextRef = useRef("");
 
   useEffect(() => {
     const text = selectedText?.trim();
-    if (!text || text.length === 0) return;
+    if (!text || text.length === 0 || text === lastTextRef.current) return;
+    lastTextRef.current = text;
 
-    // Debounce 350ms
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      // Reset
-      setError(null);
+      setStatus("loading");
+      setErrorMsg("");
       setSourceText("");
       setTranslated("");
-      setWord("");
       setEntries([]);
 
-      if (isWord(text)) {
-        // ── word lookup ──
-        setLoading(true);
-        setWord(text);
-        try {
-          const res = await fetch(`${DICT_URL}/${encodeURIComponent(text)}`);
-          if (!res.ok) throw new Error("not found");
-          const data = await res.json();
-          if (Array.isArray(data) && data.length > 0) {
-            setEntries(data as DictEntry[]);
-          } else {
-            setError(`未找到 "${text}" 的释义`);
-          }
-        } catch {
-          setError(`词典服务暂不可用，请稍后重试`);
-        } finally {
-          setLoading(false);
-        }
-      } else if (isParagraph(text)) {
-        // ── paragraph translation ──
-        setLoading(true);
-        setSourceText(text);
-        try {
-          const res = await fetch(TRANSLATE_URL, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ q: text, source: "en", target: "zh", format: "text" }),
-          });
-          if (!res.ok) throw new Error("translate failed");
-          const data: TranslationResult = await res.json();
-          setTranslated(data.translatedText || "");
-        } catch {
-          setError("翻译服务暂不可用，请稍后重试");
-        } finally {
-          setLoading(false);
-        }
+      if (isWordLike(text)) {
+        await lookupWord(text);
+      } else if (isParagraphLike(text)) {
+        await translateParagraph(text);
       } else {
-        // ── invalid ──
-        setError("当前选区无有效词汇或句子（仅支持英文单词或段落）");
+        setStatus("invalid");
+        setErrorMsg("当前选区无有效英文词汇或句子（包含非英文字符或无法识别）");
       }
     }, 350);
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [selectedText]);
 
-  const hasResult = !!translated || entries.length > 0;
+  async function translateParagraph(text: string) {
+    setSourceText(text);
+
+    // Try direct API first (may fail with CORS on some networks)
+    let ok = await tryDirectTranslate(text);
+    if (!ok) {
+      // Fall back to backend proxy
+      ok = await tryProxyTranslate(text);
+    }
+    if (!ok) {
+      setStatus("error");
+      setErrorMsg("翻译服务暂不可用，请稍后重试（已尝试直连与代理两种方式）");
+    }
+  }
+
+  async function tryDirectTranslate(text: string): Promise<boolean> {
+    try {
+      const res = await fetch("https://translate.argosopentech.com/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: text, source: "en", target: "zh", format: "text" }),
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.translatedText) {
+        setTranslated(data.translatedText);
+        setStatus("paragraph");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  async function tryProxyTranslate(text: string): Promise<boolean> {
+    try {
+      const res = await fetch("/api/tools/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ q: text, source: "en", target: "zh" }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.translatedText) {
+        setTranslated(data.translatedText);
+        setStatus("paragraph");
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  async function lookupWord(word: string) {
+    try {
+      const res = await fetch(`${DICT_URL}/${encodeURIComponent(word)}`);
+      if (!res.ok) throw new Error("not found");
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        setEntries(data as DictEntry[]);
+        setStatus("word");
+      } else {
+        setStatus("error");
+        setErrorMsg(`未找到 "${word}" 的词典释义`);
+      }
+    } catch {
+      setStatus("error");
+      setErrorMsg("词典服务暂不可用，请稍后重试");
+    }
+  }
 
   return (
     <Card className="border-[#E2E5E9] shadow-card">
@@ -115,7 +151,7 @@ export function TranslationAssistant() {
         </h3>
 
         {/* Loading */}
-        {loading && (
+        {status === "loading" && (
           <div className="flex items-center gap-2 py-3 text-xs text-[#95A5A6]">
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
             查询中...
@@ -123,16 +159,16 @@ export function TranslationAssistant() {
         )}
 
         {/* Error / invalid */}
-        {!loading && error && !hasResult && (
+        {(status === "error" || status === "invalid") && (
           <div className="flex items-start gap-2 py-2 text-xs text-[#E67E22] bg-[#E67E22]/5 rounded px-2">
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-            <span>{error}</span>
+            <span>{errorMsg}</span>
           </div>
         )}
 
-        {/* Paragraph translation result */}
-        {!loading && translated && (
-          <div className="space-y-2 max-h-[200px] overflow-y-auto">
+        {/* Paragraph result */}
+        {status === "paragraph" && translated && (
+          <div className="space-y-2 max-h-[220px] overflow-y-auto">
             <div className="bg-[#F0F2F5] rounded p-2">
               <p className="text-[10px] text-[#95A5A6] mb-1">原文</p>
               <p className="text-xs text-[#2D3436] leading-relaxed">{sourceText}</p>
@@ -144,18 +180,15 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Word lookup result */}
-        {!loading && entries.length > 0 && (
-          <div className="space-y-2 max-h-[280px] overflow-y-auto">
-            {/* Word + phonetic */}
+        {/* Word result */}
+        {status === "word" && entries.length > 0 && (
+          <div className="space-y-2 max-h-[300px] overflow-y-auto">
             <div className="flex items-baseline gap-2">
               <span className="text-sm font-semibold text-[#2D3436]">{entries[0].word}</span>
               {entries[0].phonetic && (
                 <span className="text-xs text-[#95A5A6] font-mono">{entries[0].phonetic}</span>
               )}
             </div>
-
-            {/* Meanings */}
             {entries[0].meanings?.slice(0, 3).map((m, mi) => (
               <div key={mi} className="bg-[#FAFBFC] rounded p-2 border border-[#F0F2F5]">
                 <span className="text-[10px] text-[#4A90A4] font-medium bg-[#4A90A4]/8 px-1.5 py-0.5 rounded">
@@ -176,11 +209,11 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Idle placeholder */}
-        {!loading && !error && !hasResult && (
+        {/* Idle */}
+        {status === "idle" && (
           <p className="text-xs text-[#95A5A6] py-2">
             <BookOpen className="h-3.5 w-3.5 inline mr-1 opacity-50" />
-            选中原文中的文字或单词即可翻译
+            选中原文中的单词或句子即可翻译
           </p>
         )}
       </CardContent>
