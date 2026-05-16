@@ -2,7 +2,7 @@
 
 import { memo } from "react";
 import { COLORS, VIEWBOX } from "./companion-config";
-import { HandDrawnFilter, HAND_DRAWN_FILTER_ID, SVG_CONTAINER_STYLE } from "./companion-styles";
+import { HAND_DRAWN_FILTER_ID, SVG_CONTAINER_STYLE } from "./companion-styles";
 
 interface XiaoWaiSVGProps {
   breathingScale: number;
@@ -39,7 +39,11 @@ function XiaoWaiSVGInner({ breathingScale, blinkClosed, pupilOffset, isNight }: 
       }}
     >
       <defs>
-        <HandDrawnFilter />
+        {/* Hand-drawn line jitter filter — inlined to keep .ts file JSX-free */}
+        <filter id={HAND_DRAWN_FILTER_ID} x="-8%" y="-8%" width="116%" height="116%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="2" result="noise" />
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="0.4" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
 
         {/* Scarf knit texture pattern */}
         <pattern id="scarf-knit" width="4" height="4" patternUnits="userSpaceOnUse">

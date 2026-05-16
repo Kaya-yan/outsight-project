@@ -1,32 +1,9 @@
-/** Phase 1: Companion CSS-in-JS styles and SVG filter definitions. */
+/** Phase 1: Companion styles — pure TS, zero JSX. */
 
-import { COLORS, TIMING, Z_INDEX, Z_INDEX_MODAL, EDGE_INSET } from "./companion-config";
+import { EDGE_INSET, Z_INDEX } from "./companion-config";
 
-// ============================================================
-// SVG filter: hand-drawn line jitter
-// ============================================================
-
+// Filter ID constant (filter JSX lives in xiaowai-svg.tsx)
 export const HAND_DRAWN_FILTER_ID = "hand-drawn-outline";
-
-export function HandDrawnFilter() {
-  return (
-    <filter id={HAND_DRAWN_FILTER_ID} x="-8%" y="-8%" width="116%" height="116%">
-      <feTurbulence
-        type="fractalNoise"
-        baseFrequency="0.04"
-        numOctaves="2"
-        result="noise"
-      />
-      <feDisplacementMap
-        in="SourceGraphic"
-        in2="noise"
-        scale="0.4"
-        xChannelSelector="R"
-        yChannelSelector="G"
-      />
-    </filter>
-  );
-}
 
 // ============================================================
 // Companion container positioning
