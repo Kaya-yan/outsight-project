@@ -219,6 +219,7 @@ export interface Database {
           article_id: string;
           node_id: string;
           coder_id: string;
+          task_id: string | null;
           quote_text: string | null;
           start_offset: number | null;
           end_offset: number | null;
@@ -236,6 +237,7 @@ export interface Database {
           article_id: string;
           node_id: string;
           coder_id: string;
+          task_id?: string | null;
           quote_text?: string | null;
           start_offset?: number | null;
           end_offset?: number | null;
@@ -245,6 +247,7 @@ export interface Database {
         };
         Update: {
           node_id?: string;
+          task_id?: string | null;
           quote_text?: string | null;
           start_offset?: number | null;
           end_offset?: number | null;
@@ -497,6 +500,61 @@ export interface Database {
           arbiter_note?: string | null;
         };
       };
+      coding_tasks: {
+        Row: {
+          id: string;
+          article_id: string;
+          task_type: "solo" | "dual";
+          framework_id: string | null;
+          coder_a_id: string;
+          coder_b_id: string | null;
+          reviewer_id: string | null;
+          status: "open" | "in_progress" | "completed" | "reviewed";
+          coder_a_done: boolean;
+          coder_b_done: boolean;
+          agreement_rate: number | null;
+          kappa: number | null;
+          reviewer_note: string | null;
+          reviewed_at: string | null;
+          priority: number;
+          due_date: string | null;
+          notes: string | null;
+          created_by: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          article_id: string;
+          task_type?: "solo" | "dual";
+          framework_id?: string | null;
+          coder_a_id: string;
+          coder_b_id?: string | null;
+          reviewer_id?: string | null;
+          status?: "open" | "in_progress" | "completed" | "reviewed";
+          coder_a_done?: boolean;
+          coder_b_done?: boolean;
+          agreement_rate?: number | null;
+          kappa?: number | null;
+          priority?: number;
+          due_date?: string | null;
+          notes?: string | null;
+          created_by: string;
+        };
+        Update: {
+          status?: "open" | "in_progress" | "completed" | "reviewed";
+          coder_a_done?: boolean;
+          coder_b_done?: boolean;
+          agreement_rate?: number | null;
+          kappa?: number | null;
+          reviewer_id?: string | null;
+          reviewer_note?: string | null;
+          reviewed_at?: string | null;
+          priority?: number;
+          due_date?: string | null;
+          notes?: string | null;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -522,6 +580,7 @@ export type AiJob = Tables["ai_queue"]["Row"];
 export type AiPrompt = Tables["ai_prompts"]["Row"];
 export type DualCodingRound = Tables["dual_coding_rounds"]["Row"];
 export type CrawlJob = Tables["crawl_jobs"]["Row"];
+export type CodingTask = Tables["coding_tasks"]["Row"];
 
 export type FullTextStatus = "missing" | "partial" | "complete" | "manual_uploaded";
 
@@ -550,4 +609,18 @@ export const ARTICLE_STATUS_TRANSITIONS: Record<ArticleStatus, ArticleStatus[]> 
   "待编码": ["编码完成", "已封存"],
   "编码完成": ["已封存"],
   "已封存": [],
+};
+
+export type TaskStatus = "open" | "in_progress" | "completed" | "reviewed";
+
+/** Map legacy article statuses into readiness groups. No DB changes needed. */
+export const ARTICLE_READY_GROUP: Record<string, "discovered" | "processing" | "ready" | "coded" | "archived"> = {
+  "待发现": "discovered",
+  "已入库": "discovered",
+  "已下载全文": "processing",
+  "已清洗": "processing",
+  "已预读": "processing",
+  "待编码": "ready",
+  "编码完成": "coded",
+  "已封存": "archived",
 };

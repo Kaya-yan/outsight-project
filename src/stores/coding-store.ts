@@ -10,6 +10,9 @@ interface CodingStoreState {
   selectedNode: CodingNode | null;
   selectedText: string;
 
+  // Task context
+  currentTaskId: string | null;
+
   isLoading: boolean;
   isSubmitting: boolean;
 
@@ -19,6 +22,7 @@ interface CodingStoreState {
   setNodes: (nodes: CodingNode[]) => void;
   setSelectedNode: (node: CodingNode | null) => void;
   setSelectedText: (text: string) => void;
+  setCurrentTaskId: (taskId: string | null) => void;
   setLoading: (loading: boolean) => void;
   setSubmitting: (submitting: boolean) => void;
 
@@ -42,6 +46,7 @@ export const useCodingStore = create<CodingStoreState>((set, get) => ({
   nodes: [],
   selectedNode: null,
   selectedText: "",
+  currentTaskId: null,
   isLoading: true,
   isSubmitting: false,
 
@@ -51,6 +56,7 @@ export const useCodingStore = create<CodingStoreState>((set, get) => ({
   setNodes: (nodes) => set({ nodes }),
   setSelectedNode: (node) => set({ selectedNode: node }),
   setSelectedText: (text) => set({ selectedText: text }),
+  setCurrentTaskId: (taskId) => set({ currentTaskId: taskId }),
   setLoading: (loading) => set({ isLoading: loading }),
   setSubmitting: (submitting) => set({ isSubmitting: submitting }),
 
@@ -104,7 +110,7 @@ export const useCodingStore = create<CodingStoreState>((set, get) => ({
   },
 
   submitAnnotation: async (data) => {
-    const { article } = get();
+    const { article, currentTaskId } = get();
     if (!article) return false;
 
     set({ isSubmitting: true });
@@ -118,6 +124,7 @@ export const useCodingStore = create<CodingStoreState>((set, get) => ({
           quote_text: data.quote_text,
           confidence: data.confidence,
           note: data.note,
+          task_id: currentTaskId,
         }),
       });
       if (res.ok) {

@@ -29,6 +29,7 @@ export async function createAnnotation(
     article_id: string;
     node_id: string;
     coder_id: string;
+    task_id?: string | null;
     quote_text?: string;
     start_offset?: number;
     end_offset?: number;
@@ -60,6 +61,7 @@ export async function batchCreateAnnotations(
     article_id: string;
     node_id: string;
     coder_id: string;
+    task_id?: string | null;
     quote_text?: string;
     start_offset?: number;
     end_offset?: number;

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useCodingStore } from "@/stores/coding-store";
+import { useTaskStore } from "@/stores/task-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/articles/status-badge";
 import { AiPanel } from "@/components/coding/ai-panel";
@@ -13,12 +15,21 @@ import { FrameworkTree } from "@/components/coding/framework-tree";
 import { AnnotationForm } from "@/components/coding/annotation-form";
 import { AnnotationList } from "@/components/coding/annotation-list";
 import type { Annotation, CodingNode } from "@/types/database";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, CheckCircle2 } from "lucide-react";
 import { NightBanner } from "@/components/shared/night-banner";
+
+const TASK_STATUS_LABELS: Record<string, string> = {
+  open: "待开始",
+  in_progress: "进行中",
+  completed: "已完成",
+  reviewed: "已终审",
+};
 
 export default function CodingWorkspacePage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const articleId = params.id as string;
+  const taskId = searchParams.get("task_id");
 
   const {
     article,
@@ -34,13 +45,33 @@ export default function CodingWorkspacePage() {
     loadAnnotations,
     loadFrameworkNodes,
     setSelectedNode,
+    setCurrentTaskId,
     submitAnnotation,
     deleteAnnotation,
   } = useCodingStore();
 
+  const {
+    selectedTask,
+    loadTaskDetail,
+    submitTask,
+  } = useTaskStore();
+
   const [showForm, setShowForm] = useState(false);
   const [editingAnnotation, setEditingAnnotation] = useState<Annotation | null>(null);
   const [activeFrameworkId, setActiveFrameworkId] = useState<string | null>(null);
+  const [isSubmittingTask, setIsSubmittingTask] = useState(false);
+
+  // Set task context
+  useEffect(() => {
+    setCurrentTaskId(taskId);
+  }, [taskId, setCurrentTaskId]);
+
+  // Load task detail if task_id present
+  useEffect(() => {
+    if (taskId) {
+      loadTaskDetail(taskId);
+    }
+  }, [taskId, loadTaskDetail]);
 
   useEffect(() => {
     loadArticle(articleId);
@@ -123,6 +154,13 @@ export default function CodingWorkspacePage() {
     await deleteAnnotation(a.id);
   }, [deleteAnnotation]);
 
+  const handleSubmitTask = useCallback(async () => {
+    if (!taskId) return;
+    setIsSubmittingTask(true);
+    await submitTask(taskId);
+    setIsSubmittingTask(false);
+  }, [taskId, submitTask]);
+
   const handlePreReadComplete = useCallback(() => {
     loadArticle(articleId);
   }, [articleId, loadArticle]);
@@ -159,6 +197,47 @@ export default function CodingWorkspacePage() {
     <div className="space-y-3 max-w-7xl">
       {/* Night research banner */}
       <NightBanner />
+
+      {/* Task context banner */}
+      {selectedTask && (
+        <div className="flex items-center gap-3 px-3 py-2 rounded border border-[#4A90A4]/20 bg-[#4A90A4]/5">
+          <div className="flex-1 flex items-center gap-2 text-xs">
+            <span className="text-[#7F8A93]">任务</span>
+            <Badge className={`text-[10px] ${
+              selectedTask.task_type === "dual"
+                ? "bg-[#E67E22]/10 text-[#E67E22]"
+                : "bg-[#4A90A4]/10 text-[#4A90A4]"
+            }`}>
+              {selectedTask.task_type === "solo" ? "单人编码" : "双人编码"}
+            </Badge>
+            <Badge className="text-[10px] bg-[#7F8A93]/10 text-[#7F8A93]">
+              {TASK_STATUS_LABELS[selectedTask.status] ?? selectedTask.status}
+            </Badge>
+          </div>
+          {selectedTask.status !== "completed" && selectedTask.status !== "reviewed" && (
+            <Button
+              onClick={handleSubmitTask}
+              disabled={isSubmittingTask}
+              className="h-7 text-xs gap-1 bg-[#5DAD93] hover:bg-[#4C9A82] text-white"
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              {isSubmittingTask ? "提交中..." : "提交完成"}
+            </Button>
+          )}
+          {selectedTask.status === "completed" && (
+            <span className="text-xs text-[#5DAD93] flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              已提交，等待审核
+            </span>
+          )}
+          {selectedTask.status === "reviewed" && (
+            <span className="text-xs text-[#2D3436] flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              已终审
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Top bar */}
       <div className="flex items-center justify-between">

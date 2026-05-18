@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     article_id: body.article_id,
     node_id: body.node_id,
     coder_id: user.id,
+    task_id: body.task_id ?? null,
     quote_text: body.quote_text,
     start_offset: body.start_offset,
     end_offset: body.end_offset,

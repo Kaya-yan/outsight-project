@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/articles/status-badge";
-import { AssignmentPanel } from "@/components/coding/assignment-panel";
+import { MyTasksList } from "@/components/coding/my-tasks-list";
 import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
+import { useTaskStore } from "@/stores/task-store";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
-import { Code2, Search, ArrowRight, Users } from "lucide-react";
+import { Code2, Search, ArrowRight, Users, UserPlus } from "lucide-react";
 
 interface ArticleRow {
   id: string;
@@ -25,13 +26,33 @@ interface ArticleRow {
 export default function CodingPage() {
   const router = useRouter();
   const canManage = useAuthStore(selectCanManageAssignments);
-  const [tab, setTab] = useState<"solo" | "dual">("solo");
+  const { user } = useAuthStore();
+  const { tasks, isLoading: tasksLoading, loadTasks, createTask } = useTaskStore();
+
+  const [tab, setTab] = useState<"my_tasks" | "manage" | "solo">("my_tasks");
+
+  // Solo coding article list (backward compat)
   const [articles, setArticles] = useState<ArticleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [mediaFilter, setMediaFilter] = useState("");
   const [periodFilter, setPeriodFilter] = useState("");
 
+  // Create task dialog
+  const [showCreate, setShowCreate] = useState(false);
+  const [createArticleId, setCreateArticleId] = useState("");
+  const [createTaskType, setCreateTaskType] = useState<"solo" | "dual">("solo");
+  const [createCoderA, setCreateCoderA] = useState("");
+  const [createCoderB, setCreateCoderB] = useState("");
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  // Load my tasks on mount
+  useEffect(() => {
+    loadTasks({ my: true });
+  }, [loadTasks]);
+
+  // Load solo articles
   const fetchArticles = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -52,47 +73,101 @@ export default function CodingPage() {
   }, [search, mediaFilter, periodFilter]);
 
   useEffect(() => {
-    fetchArticles();
-  }, [fetchArticles]);
+    if (tab === "solo") fetchArticles();
+  }, [fetchArticles, tab]);
+
+  // Create task handler
+  async function handleCreateTask() {
+    setCreateError("");
+    if (!createArticleId || !createCoderA) {
+      setCreateError("请填写文章ID和编码员A");
+      return;
+    }
+    if (createTaskType === "dual" && !createCoderB) {
+      setCreateError("双人编码需指定编码员B");
+      return;
+    }
+    setCreateSubmitting(true);
+    const result = await createTask({
+      article_id: createArticleId,
+      task_type: createTaskType,
+      coder_a_id: createCoderA,
+      coder_b_id: createTaskType === "dual" ? createCoderB : undefined,
+    });
+    setCreateSubmitting(false);
+    if (result) {
+      setShowCreate(false);
+      setCreateArticleId("");
+      setCreateCoderA("");
+      setCreateCoderB("");
+      loadTasks({ my: true });
+    } else {
+      setCreateError("创建失败，请检查参数");
+    }
+  }
 
   return (
     <div className="space-y-4 max-w-5xl">
-      {/* Header with tabs */}
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-[#2D3436]">编码实验室</h1>
           <p className="mt-0.5 text-sm text-[#7F8A93]">
-            {tab === "solo" ? "选择语料开始编码标注" : "双人编码任务管理"}
+            {tab === "my_tasks" ? "我的编码任务" : tab === "manage" ? "任务管理与审核" : "快速单人编码"}
           </p>
         </div>
-        {canManage && (
-          <div className="flex rounded-md overflow-hidden border border-[#E2E5E9]">
+
+        {/* Tab switcher */}
+        <div className="flex rounded-md overflow-hidden border border-[#E2E5E9]">
+          <button
+            type="button"
+            onClick={() => setTab("my_tasks")}
+            className={`px-3 py-1.5 text-xs ${tab === "my_tasks" ? "bg-[#4A90A4] text-white" : "bg-white text-[#7F8A93] hover:bg-[#F0F2F5]"}`}
+          >
+            <Code2 className="h-3.5 w-3.5 inline mr-1" />
+            我的任务
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("solo")}
+            className={`px-3 py-1.5 text-xs ${tab === "solo" ? "bg-[#4A90A4] text-white" : "bg-white text-[#7F8A93] hover:bg-[#F0F2F5]"}`}
+          >
+            <Code2 className="h-3.5 w-3.5 inline mr-1" />
+            单人编码
+          </button>
+          {canManage && (
             <button
               type="button"
-              onClick={() => setTab("solo")}
-              className={`px-3 py-1.5 text-xs ${tab === "solo" ? "bg-[#4A90A4] text-white" : "bg-white text-[#7F8A93] hover:bg-[#F0F2F5]"}`}
-            >
-              <Code2 className="h-3.5 w-3.5 inline mr-1" />
-              单人编码
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab("dual")}
-              className={`px-3 py-1.5 text-xs ${tab === "dual" ? "bg-[#4A90A4] text-white" : "bg-white text-[#7F8A93] hover:bg-[#F0F2F5]"}`}
+              onClick={() => { setTab("manage"); loadTasks(); }}
+              className={`px-3 py-1.5 text-xs ${tab === "manage" ? "bg-[#4A90A4] text-white" : "bg-white text-[#7F8A93] hover:bg-[#F0F2F5]"}`}
             >
               <Users className="h-3.5 w-3.5 inline mr-1" />
-              双编码任务
+              任务管理
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {tab === "dual" && canManage ? (
-        /* Dual Coding Tab */
-        <AssignmentPanel onViewRound={(id) => router.push(`/coding/compare/${id}`)} />
-      ) : (
+      {/* Tab: My Tasks */}
+      {tab === "my_tasks" && (
+        <Card className="border-[#E2E5E9] shadow-card">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Code2 className="h-4 w-4 text-[#4A90A4]" />
+              <h3 className="text-sm font-medium text-[#2D3436]">我的任务</h3>
+            </div>
+            <MyTasksList
+              tasks={tasks}
+              isLoading={tasksLoading}
+              currentUserId={user?.id ?? ""}
+            />
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tab: Solo Coding (backward compat) */}
+      {tab === "solo" && (
         <>
-          {/* Solo Coding - Filters */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[180px] max-w-xs">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[#95A5A6]" />
@@ -125,7 +200,6 @@ export default function CodingPage() {
             </select>
           </div>
 
-          {/* Solo Coding - Article list */}
           <Card className="border-[#E2E5E9] shadow-card">
             <CardContent className="p-0">
               {isLoading ? (
@@ -135,7 +209,7 @@ export default function CodingPage() {
                   <EmptyState
                     icon={Code2}
                     title="暂无可编码语料"
-                    description="语料需先完成清洗和预读后，状态变为「待编码」才会出现在此列表。"
+                    description="语料需先完成清洗和预读后，状态变为「待编码」才会出现在此列表。上传全文后系统会自动处理。"
                   />
                 </div>
               ) : (
@@ -165,6 +239,114 @@ export default function CodingPage() {
             </CardContent>
           </Card>
         </>
+      )}
+
+      {/* Tab: Task Management (admin/lead) */}
+      {tab === "manage" && canManage && (
+        <div className="space-y-4">
+          {/* Create task button */}
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <select
+                value={createTaskType}
+                onChange={(e) => setCreateTaskType(e.target.value as "solo" | "dual")}
+                className="h-8 rounded border border-[#E2E5E9] bg-white px-2 text-xs"
+              >
+                <option value="">全部类型</option>
+                <option value="solo">单人编码</option>
+                <option value="dual">双人编码</option>
+              </select>
+            </div>
+            <Button
+              onClick={() => setShowCreate(!showCreate)}
+              className="h-8 text-xs gap-1 bg-[#4A90A4] hover:bg-[#3D7D8F] text-white"
+            >
+              <UserPlus className="h-3.5 w-3.5" />
+              创建任务
+            </Button>
+          </div>
+
+          {/* Create task dialog */}
+          {showCreate && (
+            <Card className="border-[#4A90A4]/30 bg-[#4A90A4]/5">
+              <CardContent className="p-4 space-y-3">
+                <h3 className="text-sm font-medium text-[#2D3436]">创建编码任务</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-[#7F8A93] block mb-1">文章ID</label>
+                    <Input
+                      value={createArticleId}
+                      onChange={(e) => setCreateArticleId(e.target.value)}
+                      placeholder="uuid"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#7F8A93] block mb-1">任务类型</label>
+                    <select
+                      value={createTaskType}
+                      onChange={(e) => setCreateTaskType(e.target.value as "solo" | "dual")}
+                      className="h-8 rounded border border-[#E2E5E9] bg-white px-2 text-xs w-full"
+                    >
+                      <option value="solo">单人编码</option>
+                      <option value="dual">双人编码</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-[#7F8A93] block mb-1">编码员A ID</label>
+                    <Input
+                      value={createCoderA}
+                      onChange={(e) => setCreateCoderA(e.target.value)}
+                      placeholder="uuid"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                  {createTaskType === "dual" && (
+                    <div>
+                      <label className="text-xs text-[#7F8A93] block mb-1">编码员B ID</label>
+                      <Input
+                        value={createCoderB}
+                        onChange={(e) => setCreateCoderB(e.target.value)}
+                        placeholder="uuid"
+                        className="h-8 text-xs"
+                      />
+                    </div>
+                  )}
+                </div>
+                {createError && (
+                  <p className="text-xs text-[#E67E22]">{createError}</p>
+                )}
+                <div className="flex gap-2 justify-end">
+                  <Button onClick={() => setShowCreate(false)} variant="outline" className="h-8 text-xs">
+                    取消
+                  </Button>
+                  <Button
+                    onClick={handleCreateTask}
+                    disabled={createSubmitting}
+                    className="h-8 text-xs bg-[#4A90A4] hover:bg-[#3D7D8F] text-white"
+                  >
+                    {createSubmitting ? "创建中..." : "确认创建"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* All tasks list */}
+          <Card className="border-[#E2E5E9] shadow-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Users className="h-4 w-4 text-[#4A90A4]" />
+                <h3 className="text-sm font-medium text-[#2D3436]">全部任务</h3>
+              </div>
+              <MyTasksList
+                tasks={tasks}
+                isLoading={tasksLoading}
+                currentUserId={user?.id ?? ""}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
