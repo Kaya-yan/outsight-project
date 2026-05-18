@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createArticle, updateArticle } from "@/lib/data-access/articles";
 import { isWithinResearchPeriod, autoPeriod } from "@/lib/time-filter";
 import { normalizeUrl, hashUrl } from "@/lib/dedup";
+import { parseFile, getSupportedLabel } from "@/lib/parsers/adapter";
 import {
   summarize,
   summarizeZh,
@@ -34,25 +35,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "请上传文件" }, { status: 400 });
     }
 
-    const fileName = file.name;
-    const ext = fileName.split(".").pop()?.toLowerCase();
-    if (!ext || !["txt", "html", "htm", "md"].includes(ext)) {
-      return NextResponse.json({ error: "仅支持 .txt / .html / .md 格式" }, { status: 400 });
+    // Unified parser adapter — handles pdf, docx, txt, md, html
+    let content: string;
+    let wordCount: number;
+    let parserWarnings: string[] = [];
+    try {
+      const parsed = await parseFile(file);
+      content = parsed.plainText;
+      wordCount = parsed.wordCount;
+      parserWarnings = parsed.warnings;
+      // Use parser-detected metadata as fallbacks
+      if (!title && parsed.metadata.title) {
+        // title will be used below
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "未知解析错误";
+      return NextResponse.json({ error: `文件解析失败: ${msg}` }, { status: 400 });
     }
 
-    const rawText = await file.text();
-
-    // Simple HTML tag stripping
-    const content = ext === "html" || ext === "htm"
-      ? rawText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()
-      : rawText.trim();
-
-    if (!content) {
-      return NextResponse.json({ error: "文件内容为空" }, { status: 400 });
+    if (!content || content.length < 10) {
+      return NextResponse.json({ error: "文件内容为空或过短" }, { status: 400 });
     }
-
-    // Guess word count (English)
-    const wordCount = content.split(/\s+/).filter(Boolean).length;
 
     // Time filter
     if (publishDate) {
@@ -70,7 +73,7 @@ export async function POST(request: Request) {
     const urlHash = hashUrl(normalized);
 
     const input: CreateArticleInput = {
-      title: title ?? fileName.replace(/\.[^.]+$/, ""),
+      title: title ?? file.name.replace(/\.[^.]+$/, ""),
       url: url ?? "",
       media: media ?? undefined,
       period: period ?? autoPeriod(publishDate) ?? undefined,
@@ -101,6 +104,8 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       data: article,
+      wordCount,
+      parserWarnings: parserWarnings.length > 0 ? parserWarnings : undefined,
       message: `语料已入库，共 ${wordCount} 词。后台正在执行 AI 预读分析...`,
     }, { status: 201 });
   } catch {

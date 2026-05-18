@@ -14,7 +14,8 @@ export interface TaskListFilters {
   status?: string;
   taskType?: string;
   reviewerId?: string;
-  my?: boolean;        // shorthand: tasks assigned to current user
+  pool?: boolean;       // tasks in the pool (coder_a_id IS NULL, status = 'open')
+  my?: boolean;         // shorthand: tasks assigned to current user
 }
 
 export async function listTasks(
@@ -28,6 +29,7 @@ export async function listTasks(
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.taskType) query = query.eq("task_type", opts.taskType);
   if (opts?.reviewerId) query = query.eq("reviewer_id", opts.reviewerId);
+  if (opts?.pool) query = query.is("coder_a_id", null).eq("status", "open");
 
   if (opts?.coderId) {
     query = query.or(`coder_a_id.eq.${opts.coderId},coder_b_id.eq.${opts.coderId}`);
@@ -45,7 +47,7 @@ export async function listTasks(
 export interface CreateTaskInput {
   article_id: string;
   task_type: "solo" | "dual";
-  coder_a_id: string;
+  coder_a_id?: string | null;  // nullable = task goes to pool
   coder_b_id?: string | null;
   framework_id?: string | null;
   reviewer_id?: string | null;
@@ -112,6 +114,32 @@ export async function submitCoderDone(
   }
 
   const { data, error } = await typedUpdate(client, "coding_tasks", update as never)
+    .eq("id", taskId)
+    .select()
+    .single();
+
+  return { data, error };
+}
+
+/**
+ * Claim an unassigned task from the pool.
+ * Sets coder_a_id to the claiming user and advances status to in_progress.
+ */
+export async function claimTask(
+  client: Client,
+  taskId: string,
+  coderId: string,
+): Promise<QueryResult<CodingTask>> {
+  // Verify task is claimable
+  const { data: task } = await getTaskById(client, taskId);
+  if (!task) return { data: null, error: "Task not found" };
+  if (task.coder_a_id !== null) return { data: null, error: "任务已被认领" };
+  if (task.status !== "open") return { data: null, error: "任务不在可认领状态" };
+
+  const { data, error } = await typedUpdate(client, "coding_tasks", {
+    coder_a_id: coderId,
+    status: "in_progress",
+  } as never)
     .eq("id", taskId)
     .select()
     .single();

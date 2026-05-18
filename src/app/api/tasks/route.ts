@@ -10,6 +10,7 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const my = searchParams.get("my") === "1";
+  const pool = searchParams.get("pool") === "1";
   const status = searchParams.get("status") ?? undefined;
   const taskType = searchParams.get("task_type") ?? undefined;
   const page = parseInt(searchParams.get("page") ?? "1", 10);
@@ -18,6 +19,7 @@ export async function GET(request: Request) {
   const filters: Parameters<typeof listTasks>[1] = { page, pageSize };
   if (status) filters.status = status;
   if (taskType) filters.taskType = taskType;
+  if (pool) filters.pool = true;
   if (my) filters.coderId = user.id;
 
   const { data, error, count } = await listTasks(supabase, filters);
@@ -39,8 +41,8 @@ export async function POST(request: Request) {
   const body = await request.json();
   const { article_id, task_type, coder_a_id, coder_b_id, framework_id, reviewer_id, priority, due_date, notes } = body;
 
-  if (!article_id || !task_type || !coder_a_id) {
-    return NextResponse.json({ error: "article_id, task_type, coder_a_id 为必填项" }, { status: 400 });
+  if (!article_id || !task_type) {
+    return NextResponse.json({ error: "article_id, task_type 为必填项" }, { status: 400 });
   }
 
   if (!["solo", "dual"].includes(task_type)) {

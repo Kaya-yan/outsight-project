@@ -1,11 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
-import type { CodingTask } from "@/types/database";
-import { Code2, ChevronRight, Users } from "lucide-react";
+import { Code2, ChevronRight, Users, Inbox } from "lucide-react";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   open: { label: "待开始", className: "bg-[#7F8A93]/10 text-[#7F8A93]" },
@@ -21,6 +21,7 @@ interface TaskRow {
   status: string;
   coder_a_done: boolean;
   coder_b_done: boolean;
+  coder_a_id: string | null;
   agreement_rate: number | null;
   articles?: {
     title: string;
@@ -35,10 +36,13 @@ interface MyTasksListProps {
   tasks: TaskRow[];
   isLoading: boolean;
   currentUserId: string;
+  mode?: "my" | "pool";
+  onClaim?: (taskId: string) => Promise<void>;
 }
 
-export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProps) {
+export function MyTasksList({ tasks, isLoading, currentUserId, mode = "my", onClaim }: MyTasksListProps) {
   const router = useRouter();
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   if (isLoading) {
     return <p className="p-6 text-center text-sm text-[#7F8A93]">加载中...</p>;
@@ -48,12 +52,20 @@ export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProp
     return (
       <div className="p-12">
         <EmptyState
-          icon={Code2}
-          title="暂无编码任务"
-          description="当管理员为你分配编码任务后，任务会显示在这里。"
+          icon={mode === "pool" ? Inbox : Code2}
+          title={mode === "pool" ? "任务池为空" : "暂无编码任务"}
+          description={mode === "pool"
+            ? "管理员创建任务时不留编码员，任务就会进入池子供全员认领。"
+            : "当管理员为你分配编码任务后，任务会显示在这里。"}
         />
       </div>
     );
+  }
+
+  async function handleClaim(taskId: string) {
+    setClaimingId(taskId);
+    if (onClaim) await onClaim(taskId);
+    setClaimingId(null);
   }
 
   return (
@@ -61,14 +73,17 @@ export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProp
       {tasks.map((t) => {
         const cfg = STATUS_CONFIG[t.status] ?? STATUS_CONFIG.open;
         const isSolo = t.task_type === "solo";
-        const myDone = t.coder_a_done; // simplified: current user is always coder_a for solo
+        const isPool = mode === "pool" && t.coder_a_id === null;
+        const myDone = t.coder_a_done;
         const otherDone = t.coder_b_done;
 
         return (
           <div
             key={t.id}
-            className="flex items-center gap-3 p-3 rounded border border-[#F0F2F5] hover:bg-[#F0F2F5]/50 cursor-pointer transition-colors"
-            onClick={() => router.push(`/coding/${t.article_id}?task_id=${t.id}`)}
+            className={`flex items-center gap-3 p-3 rounded border border-[#F0F2F5] transition-colors ${
+              isPool ? "" : "hover:bg-[#F0F2F5]/50 cursor-pointer"
+            }`}
+            onClick={() => { if (!isPool) router.push(`/coding/${t.article_id}?task_id=${t.id}`); }}
           >
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-[#2D3436] truncate">
@@ -82,15 +97,10 @@ export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProp
                   <span className="text-xs text-[#7F8A93]">{t.articles.period}</span>
                 )}
                 <span className="text-xs text-[#7F8A93]">
-                  {isSolo ? (
-                    <Users className="h-3 w-3 inline mr-0.5" />
-                  ) : (
-                    <Users className="h-3 w-3 inline mr-0.5" />
-                  )}
+                  <Users className="h-3 w-3 inline mr-0.5" />
                   {isSolo ? "单人编码" : "双人编码"}
                 </span>
               </div>
-              {/* Progress for dual tasks */}
               {!isSolo && t.status === "in_progress" && (
                 <div className="flex items-center gap-1 mt-1.5">
                   <span className={`h-2 w-2 rounded-full ${myDone ? "bg-[#5DAD93]" : "bg-[#E2E5E9]"}`} />
@@ -102,7 +112,7 @@ export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProp
             </div>
 
             <Badge className={`text-[10px] shrink-0 ${cfg.className}`}>
-              {cfg.label}
+              {isPool ? "待认领" : cfg.label}
             </Badge>
 
             {t.agreement_rate != null && (
@@ -111,7 +121,17 @@ export function MyTasksList({ tasks, isLoading, currentUserId }: MyTasksListProp
               </span>
             )}
 
-            <ChevronRight className="h-4 w-4 text-[#95A5A6] shrink-0" />
+            {isPool ? (
+              <Button
+                onClick={(e) => { e.stopPropagation(); handleClaim(t.id); }}
+                disabled={claimingId === t.id}
+                className="h-7 text-xs bg-[#4A90A4] hover:bg-[#3D7D8F] text-white shrink-0"
+              >
+                {claimingId === t.id ? "认领中..." : "认领"}
+              </Button>
+            ) : (
+              <ChevronRight className="h-4 w-4 text-[#95A5A6] shrink-0" />
+            )}
           </div>
         );
       })}

@@ -8,10 +8,30 @@ import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StatusBadge } from "@/components/articles/status-badge";
 import { MyTasksList } from "@/components/coding/my-tasks-list";
+import { ArticleSelector } from "@/components/shared/article-selector";
+import { MemberSelector } from "@/components/shared/member-selector";
 import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
 import { useTaskStore } from "@/stores/task-store";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
-import { Code2, Search, ArrowRight, Users, UserPlus } from "lucide-react";
+import { Code2, Search, ArrowRight, Users, UserPlus, Inbox } from "lucide-react";
+
+interface TaskRow {
+  id: string;
+  article_id: string;
+  task_type: string;
+  status: string;
+  coder_a_done: boolean;
+  coder_b_done: boolean;
+  coder_a_id: string | null;
+  agreement_rate: number | null;
+  articles?: {
+    title: string;
+    media: string;
+    period: string | null;
+    status: string;
+    word_count: number | null;
+  } | null;
+}
 
 interface ArticleRow {
   id: string;
@@ -31,6 +51,10 @@ export default function CodingPage() {
 
   const [tab, setTab] = useState<"my_tasks" | "manage" | "solo">("my_tasks");
 
+  // Task pool
+  const [poolTasks, setPoolTasks] = useState<TaskRow[]>([]);
+  const [poolLoading, setPoolLoading] = useState(false);
+
   // Solo coding article list (backward compat)
   const [articles, setArticles] = useState<ArticleRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,10 +71,37 @@ export default function CodingPage() {
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState("");
 
-  // Load my tasks on mount
+  // Load my tasks + pool on mount
   useEffect(() => {
     loadTasks({ my: true });
+    loadPoolTasks();
   }, [loadTasks]);
+
+  async function loadPoolTasks() {
+    setPoolLoading(true);
+    try {
+      const res = await fetch("/api/tasks?pool=1&pageSize=50");
+      if (res.ok) {
+        const json = await res.json();
+        setPoolTasks((json.data ?? []) as TaskRow[]);
+      }
+    } catch {
+      // silent
+    }
+    setPoolLoading(false);
+  }
+
+  async function handleClaimTask(taskId: string) {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/claim`, { method: "POST" });
+      if (res.ok) {
+        loadPoolTasks();
+        loadTasks({ my: true });
+      }
+    } catch {
+      // silent
+    }
+  }
 
   // Load solo articles
   const fetchArticles = useCallback(async () => {
@@ -79,19 +130,23 @@ export default function CodingPage() {
   // Create task handler
   async function handleCreateTask() {
     setCreateError("");
-    if (!createArticleId || !createCoderA) {
-      setCreateError("请填写文章ID和编码员A");
+    if (!createArticleId) {
+      setCreateError("请选择一篇文章");
       return;
     }
     if (createTaskType === "dual" && !createCoderB) {
       setCreateError("双人编码需指定编码员B");
       return;
     }
+    if (createTaskType === "dual" && createCoderA === createCoderB) {
+      setCreateError("两个编码员不能相同");
+      return;
+    }
     setCreateSubmitting(true);
     const result = await createTask({
       article_id: createArticleId,
       task_type: createTaskType,
-      coder_a_id: createCoderA,
+      coder_a_id: createCoderA || undefined,  // empty string = pool
       coder_b_id: createTaskType === "dual" ? createCoderB : undefined,
     });
     setCreateSubmitting(false);
@@ -150,19 +205,40 @@ export default function CodingPage() {
 
       {/* Tab: My Tasks */}
       {tab === "my_tasks" && (
-        <Card className="border-[#E2E5E9] shadow-card">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Code2 className="h-4 w-4 text-[#4A90A4]" />
-              <h3 className="text-sm font-medium text-[#2D3436]">我的任务</h3>
-            </div>
-            <MyTasksList
-              tasks={tasks}
-              isLoading={tasksLoading}
-              currentUserId={user?.id ?? ""}
-            />
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {/* My active tasks */}
+          <Card className="border-[#E2E5E9] shadow-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Code2 className="h-4 w-4 text-[#4A90A4]" />
+                <h3 className="text-sm font-medium text-[#2D3436]">我的任务</h3>
+              </div>
+              <MyTasksList
+                tasks={tasks as TaskRow[]}
+                isLoading={tasksLoading}
+                currentUserId={user?.id ?? ""}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Task Pool */}
+          <Card className="border-[#E2E5E9] shadow-card">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Inbox className="h-4 w-4 text-[#E67E22]" />
+                <h3 className="text-sm font-medium text-[#2D3436]">任务池</h3>
+                <span className="text-[10px] text-[#95A5A6]">可自由认领的开放任务</span>
+              </div>
+              <MyTasksList
+                tasks={poolTasks}
+                isLoading={poolLoading}
+                currentUserId={user?.id ?? ""}
+                mode="pool"
+                onClaim={handleClaimTask}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {/* Tab: Solo Coding (backward compat) */}
@@ -272,13 +348,12 @@ export default function CodingPage() {
               <CardContent className="p-4 space-y-3">
                 <h3 className="text-sm font-medium text-[#2D3436]">创建编码任务</h3>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-[#7F8A93] block mb-1">文章ID</label>
-                    <Input
+                  <div className="col-span-2">
+                    <label className="text-xs text-[#7F8A93] block mb-1">选择文章</label>
+                    <ArticleSelector
                       value={createArticleId}
-                      onChange={(e) => setCreateArticleId(e.target.value)}
-                      placeholder="uuid"
-                      className="h-8 text-xs"
+                      onChange={setCreateArticleId}
+                      placeholder="搜索待编码文章..."
                     />
                   </div>
                   <div>
@@ -286,29 +361,28 @@ export default function CodingPage() {
                     <select
                       value={createTaskType}
                       onChange={(e) => setCreateTaskType(e.target.value as "solo" | "dual")}
-                      className="h-8 rounded border border-[#E2E5E9] bg-white px-2 text-xs w-full"
+                      className="h-9 rounded border border-[#E2E5E9] bg-white px-2 text-xs w-full"
                     >
                       <option value="solo">单人编码</option>
                       <option value="dual">双人编码</option>
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-[#7F8A93] block mb-1">编码员A ID</label>
-                    <Input
+                    <label className="text-xs text-[#7F8A93] block mb-1">编码员A <span className="text-[#95A5A6]">(留空=放入任务池)</span></label>
+                    <MemberSelector
                       value={createCoderA}
-                      onChange={(e) => setCreateCoderA(e.target.value)}
-                      placeholder="uuid"
-                      className="h-8 text-xs"
+                      onChange={setCreateCoderA}
+                      placeholder="选择或留空放入池..."
                     />
                   </div>
                   {createTaskType === "dual" && (
-                    <div>
-                      <label className="text-xs text-[#7F8A93] block mb-1">编码员B ID</label>
-                      <Input
+                    <div className="col-span-2">
+                      <label className="text-xs text-[#7F8A93] block mb-1">编码员B</label>
+                      <MemberSelector
                         value={createCoderB}
-                        onChange={(e) => setCreateCoderB(e.target.value)}
-                        placeholder="uuid"
-                        className="h-8 text-xs"
+                        onChange={setCreateCoderB}
+                        excludeId={createCoderA || undefined}
+                        placeholder="选择编码员B..."
                       />
                     </div>
                   )}
@@ -340,7 +414,7 @@ export default function CodingPage() {
                 <h3 className="text-sm font-medium text-[#2D3436]">全部任务</h3>
               </div>
               <MyTasksList
-                tasks={tasks}
+                tasks={tasks as TaskRow[]}
                 isLoading={tasksLoading}
                 currentUserId={user?.id ?? ""}
               />

@@ -506,7 +506,7 @@ export interface Database {
           article_id: string;
           task_type: "solo" | "dual";
           framework_id: string | null;
-          coder_a_id: string;
+          coder_a_id: string | null;
           coder_b_id: string | null;
           reviewer_id: string | null;
           status: "open" | "in_progress" | "completed" | "reviewed";
@@ -528,7 +528,7 @@ export interface Database {
           article_id: string;
           task_type?: "solo" | "dual";
           framework_id?: string | null;
-          coder_a_id: string;
+          coder_a_id?: string | null;
           coder_b_id?: string | null;
           reviewer_id?: string | null;
           status?: "open" | "in_progress" | "completed" | "reviewed";

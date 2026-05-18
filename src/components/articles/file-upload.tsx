@@ -31,9 +31,11 @@ export function FileUpload({ onUpload, isUploading }: FileUploadProps) {
     if (file) validateAndSet(file);
   }
 
+  const ALLOWED_EXTS = ["txt", "html", "htm", "md", "pdf", "docx"];
+
   function validateAndSet(file: File) {
     const ext = file.name.split(".").pop()?.toLowerCase();
-    if (!ext || !["txt", "html", "htm", "md"].includes(ext)) {
+    if (!ext || !ALLOWED_EXTS.includes(ext)) {
       return;
     }
     setSelectedFile(file);
@@ -72,7 +74,7 @@ export function FileUpload({ onUpload, isUploading }: FileUploadProps) {
         <input
           ref={inputRef}
           type="file"
-          accept=".txt,.html,.htm,.md"
+          accept=".txt,.html,.htm,.md,.pdf,.docx"
           onChange={handleFileChange}
           className="hidden"
           id="file-upload-input"
@@ -103,7 +105,7 @@ export function FileUpload({ onUpload, isUploading }: FileUploadProps) {
               拖拽文件到此处，或点击选择
             </span>
             <span className="text-xs text-[#95A5A6]">
-              支持 .txt / .html / .md 格式
+              支持 PDF / DOCX / TXT / MD / HTML 格式
             </span>
           </label>
         )}
