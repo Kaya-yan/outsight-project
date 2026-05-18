@@ -3,18 +3,19 @@
 import { useState, useEffect, useRef } from "react";
 import { useCodingStore } from "@/stores/coding-store";
 import { Card, CardContent } from "@/components/ui/card";
-import { Languages, BookOpen, AlertCircle, Loader2 } from "lucide-react";
+import { Languages, BookOpen, AlertCircle, Loader2, Copy, Check } from "lucide-react";
 
-// ── Word lookup: Free Dictionary API ──
-const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
-
-interface DictEntry {
+// ── types ──
+interface WordDetail {
   word: string;
-  phonetic?: string;
+  phonetics: { uk?: string; us?: string };
   meanings: Array<{
     partOfSpeech: string;
-    definitions: Array<{ definition: string; example?: string }>;
+    definitionsEn: string[];
+    definitionsZh: string[];
   }>;
+  examples: Array<{ en: string; zh: string }>;
+  hasChinese: boolean;
 }
 
 type Status = "idle" | "loading" | "paragraph" | "word" | "error" | "invalid";
@@ -28,6 +29,20 @@ function isParagraphLike(text: string): boolean {
   return text.length > 45 || /\s/.test(text) || /[.,!?;:"]/.test(text);
 }
 
+const POS_LABELS: Record<string, string> = {
+  noun: "名词",
+  verb: "动词",
+  adjective: "形容词",
+  adverb: "副词",
+  preposition: "介词",
+  conjunction: "连词",
+  interjection: "感叹词",
+  pronoun: "代词",
+  determiner: "限定词",
+  numeral: "数词",
+  article: "冠词",
+};
+
 export function TranslationAssistant() {
   const selectedText = useCodingStore((s) => s.selectedText);
   const [status, setStatus] = useState<Status>("idle");
@@ -35,7 +50,9 @@ export function TranslationAssistant() {
 
   const [sourceText, setSourceText] = useState("");
   const [translated, setTranslated] = useState("");
-  const [entries, setEntries] = useState<DictEntry[]>([]);
+  const [wordDetail, setWordDetail] = useState<WordDetail | null>(null);
+
+  const [copiedField, setCopiedField] = useState<string>("");
 
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const lastTextRef = useRef("");
@@ -51,7 +68,7 @@ export function TranslationAssistant() {
       setErrorMsg("");
       setSourceText("");
       setTranslated("");
-      setEntries([]);
+      setWordDetail(null);
 
       if (isWordLike(text)) {
         await lookupWord(text);
@@ -65,6 +82,17 @@ export function TranslationAssistant() {
 
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [selectedText]);
+
+  // ── copy helper ──
+  async function copyText(text: string, field: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(""), 1500);
+    } catch {
+      // clipboard not available — silently ignore
+    }
+  }
 
   // ── Paragraph: DeepSeek academic translator ──
   async function translateWithDeepSeek(text: string) {
@@ -90,23 +118,148 @@ export function TranslationAssistant() {
     }
   }
 
-  // ── Word: Free Dictionary API ──
+  // ── Word: Free Dictionary + DeepSeek definitions ──
   async function lookupWord(word: string) {
     try {
-      const res = await fetch(`${DICT_URL}/${encodeURIComponent(word)}`);
-      if (!res.ok) throw new Error("not found");
+      const res = await fetch("/api/ai/word-detail", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ word }),
+        signal: AbortSignal.timeout(25000),
+      });
+      if (!res.ok) {
+        if (res.status === 404) {
+          setStatus("error");
+          setErrorMsg(`未找到 "${word}" 的词典释义`);
+          return;
+        }
+        throw new Error("upstream");
+      }
       const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setEntries(data as DictEntry[]);
+      if (data.word) {
+        setWordDetail(data as WordDetail);
         setStatus("word");
       } else {
-        setStatus("error");
-        setErrorMsg(`未找到 "${word}" 的词典释义`);
+        throw new Error("empty");
       }
     } catch {
       setStatus("error");
       setErrorMsg("词典服务暂不可用，请稍后重试");
     }
+  }
+
+  // ── render phonetics row ──
+  function renderPhonetics(phonetics: { uk?: string; us?: string }) {
+    const hasUk = !!phonetics.uk;
+    const hasUs = !!phonetics.us;
+    if (!hasUk && !hasUs) return null;
+
+    return (
+      <div className="flex items-center gap-4 py-2.5">
+        {hasUk && (
+          <button
+            type="button"
+            onClick={() => copyText(phonetics.uk!, "uk")}
+            className="flex items-center gap-1.5 group hover:bg-[#F0F2F5] rounded px-1.5 py-0.5 -ml-1.5 transition-colors"
+            title="点击复制"
+          >
+            <span className="text-[10px] font-medium text-[#7F8A93] bg-[#F0F2F5] px-1 rounded select-none">
+              UK
+            </span>
+            <span className="text-xs font-mono text-[#2D3436] select-all">
+              {phonetics.uk}
+            </span>
+            {copiedField === "uk" ? (
+              <Check className="h-3 w-3 text-[#5DAD93]" />
+            ) : (
+              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+            )}
+          </button>
+        )}
+        {hasUs && (
+          <button
+            type="button"
+            onClick={() => copyText(phonetics.us!, "us")}
+            className="flex items-center gap-1.5 group hover:bg-[#F0F2F5] rounded px-1.5 py-0.5 -ml-1.5 transition-colors"
+            title="点击复制"
+          >
+            <span className="text-[10px] font-medium text-[#7F8A93] bg-[#F0F2F5] px-1 rounded select-none">
+              US
+            </span>
+            <span className="text-xs font-mono text-[#2D3436] select-all">
+              {phonetics.us}
+            </span>
+            {copiedField === "us" ? (
+              <Check className="h-3 w-3 text-[#5DAD93]" />
+            ) : (
+              <Copy className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity" />
+            )}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // ── render POS groups ──
+  function renderMeanings(
+    meanings: WordDetail["meanings"],
+    hasChinese: boolean,
+  ) {
+    if (!meanings || meanings.length === 0) return null;
+
+    const groups: Array<{ pos: string; defs: string[] }> = [];
+    for (const m of meanings) {
+      const defsToShow = hasChinese && m.definitionsZh.length > 0
+        ? m.definitionsZh.slice(0, 3)
+        : m.definitionsEn.slice(0, 3);
+      if (defsToShow.length === 0) continue;
+      groups.push({ pos: m.partOfSpeech, defs: defsToShow });
+    }
+
+    if (groups.length === 0) return null;
+
+    return (
+      <div className="space-y-2.5 py-2.5">
+        {groups.map((g, gi) => (
+          <div key={gi}>
+            <span className="inline-block text-[10px] font-medium text-[#4A90A4] bg-[#4A90A4]/8 px-1.5 py-0.5 rounded mb-1.5">
+              {POS_LABELS[g.pos] ?? g.pos}
+            </span>
+            <ol className="list-decimal list-inside space-y-0.5">
+              {g.defs.map((def, di) => (
+                <li
+                  key={di}
+                  className="text-xs text-[#2D3436] leading-relaxed"
+                >
+                  {def}
+                </li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  // ── render example ──
+  function renderExample(examples: WordDetail["examples"]) {
+    if (!examples || examples.length === 0) return null;
+    const ex = examples[0];
+    if (!ex.en) return null;
+
+    return (
+      <div className="py-2.5 space-y-1.5">
+        <p className="text-[10px] text-[#7F8A93] uppercase tracking-wide">
+          例句
+        </p>
+        <p className="text-xs text-[#2D3436] italic leading-relaxed">
+          &ldquo;{ex.en}&rdquo;
+        </p>
+        {ex.zh && (
+          <p className="text-xs text-[#7F8A93] leading-relaxed">{ex.zh}</p>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -145,34 +298,45 @@ export function TranslationAssistant() {
           </div>
         )}
 
-        {/* Word lookup result */}
-        {status === "word" && entries.length > 0 && (
-          <div className="space-y-2 max-h-[300px] overflow-y-auto">
-            <div className="flex items-baseline gap-2">
-              <span className="text-sm font-semibold text-[#2D3436]">{entries[0].word}</span>
-              {entries[0].phonetic && (
-                <span className="text-xs text-[#95A5A6] font-mono">{entries[0].phonetic}</span>
+        {/* Word detail */}
+        {status === "word" && wordDetail && (() => {
+          const phoneticsContent = renderPhonetics(wordDetail.phonetics);
+          const meaningsContent = renderMeanings(wordDetail.meanings, wordDetail.hasChinese);
+          const exampleContent = renderExample(wordDetail.examples);
+
+          return (
+            <div className="max-h-[400px] overflow-y-auto">
+              {/* Word title */}
+              <h4 className="text-base font-semibold text-[#4A90A4]">
+                {wordDetail.word}
+              </h4>
+
+              {/* Phonetics row */}
+              {phoneticsContent && (
+                <>
+                  <hr className="border-[#F0F2F5]" />
+                  {phoneticsContent}
+                </>
+              )}
+
+              {/* POS groups */}
+              {meaningsContent && (
+                <>
+                  <hr className="border-[#F0F2F5]" />
+                  {meaningsContent}
+                </>
+              )}
+
+              {/* Example */}
+              {exampleContent && (
+                <>
+                  <hr className="border-[#F0F2F5]" />
+                  {exampleContent}
+                </>
               )}
             </div>
-            {entries[0].meanings?.slice(0, 3).map((m, mi) => (
-              <div key={mi} className="bg-[#FAFBFC] rounded p-2 border border-[#F0F2F5]">
-                <span className="text-[10px] text-[#4A90A4] font-medium bg-[#4A90A4]/8 px-1.5 py-0.5 rounded">
-                  {m.partOfSpeech}
-                </span>
-                {m.definitions?.slice(0, 2).map((d, di) => (
-                  <div key={di} className="mt-1.5">
-                    <p className="text-xs text-[#2D3436]">{d.definition}</p>
-                    {d.example && (
-                      <p className="text-[11px] text-[#95A5A6] italic mt-0.5">
-                        &ldquo;{d.example}&rdquo;
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+          );
+        })()}
 
         {status === "idle" && (
           <p className="text-xs text-[#95A5A6] py-2">
