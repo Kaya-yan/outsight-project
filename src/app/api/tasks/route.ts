@@ -67,7 +67,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "两个编码员不能相同" }, { status: 400 });
   }
 
-  const { data, error } = await createTask(supabase, {
+  const payload = {
     article_id,
     task_type,
     coder_a_id: normalizedCoderA,
@@ -78,14 +78,30 @@ export async function POST(request: Request) {
     due_date: due_date || null,
     notes: notes || null,
     created_by: user.id,
-  });
+  };
+
+  console.log("[POST /api/tasks] Creating task:", JSON.stringify({
+    auth_uid: user.id,
+    research_roles: profile.research_roles,
+    payload,
+  }));
+
+  const { data, error } = await createTask(supabase, payload);
 
   if (error) {
-    const msg = typeof error === "object" && error !== null
-      ? ((error as Record<string, unknown>).message || (error as Record<string, unknown>).details || JSON.stringify(error))
-      : String(error);
-    console.error("[POST /api/tasks] createTask error:", msg);
-    return NextResponse.json({ error: `创建失败: ${msg}` }, { status: 500 });
+    const errObj = error as Record<string, unknown>;
+    console.error("[POST /api/tasks] CREATE FAILED", JSON.stringify({
+      auth_uid: user.id,
+      code: errObj.code,
+      message: errObj.message,
+      details: errObj.details,
+      hint: errObj.hint,
+      payload,
+    }, null, 2));
+    const detail = errObj.details ? ` (${errObj.details})` : "";
+    const hint = errObj.hint ? ` 提示: ${errObj.hint}` : "";
+    const msg = `${errObj.message ?? "未知错误"}${detail}${hint}`;
+    return NextResponse.json({ error: msg, code: errObj.code ?? "UNKNOWN" }, { status: 500 });
   }
 
   return NextResponse.json({ success: true, data }, { status: 201 });

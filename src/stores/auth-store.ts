@@ -97,12 +97,23 @@ export const selectCanManageAssignments = (state: AuthState) =>
 // Research role helpers — decoupled from system role
 export type ResearchRole = "coder" | "reviewer" | "team_lead";
 
+/** Fallback: infer research roles from system role when research_roles is empty */
+function effectiveRoles(state: AuthState): string[] {
+  const roles = state.profile?.research_roles ?? [];
+  if (roles.length > 0) return roles;
+  const sysRole = state.profile?.role;
+  if (sysRole === "admin" || sysRole === "lead_researcher") return ["coder", "reviewer", "team_lead"];
+  if (sysRole === "researcher" || sysRole === "coder") return ["coder"];
+  return [];
+}
+
 export function hasResearchRole(state: AuthState, role: ResearchRole): boolean {
-  return state.profile?.research_roles?.includes(role) ?? false;
+  return effectiveRoles(state).includes(role);
 }
 
 export function hasAnyResearchRole(state: AuthState, roles: ResearchRole[]): boolean {
-  return roles.some((r) => hasResearchRole(state, r));
+  const eff = effectiveRoles(state);
+  return roles.some((r) => eff.includes(r));
 }
 
 export const selectIsTeamLead = (state: AuthState) => hasResearchRole(state, "team_lead");
