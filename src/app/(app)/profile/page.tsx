@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X, Zap } from "lucide-react";
+import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X, Zap, Info, ExternalLink } from "lucide-react";
 import { ConfettiBurst } from "@/components/shared/confetti-burst";
 
 // Earth image import
@@ -303,6 +303,25 @@ export default function ProfilePage() {
           </Card>
         </div>
       </div>
+
+      {/* ═══ About Us ═══ */}
+      <a
+        href="https://pa4q52qfrqa5q.ok.kimi.link"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block"
+      >
+        <Card className="border-[#E2E5E9] shadow-sm cursor-pointer hover:border-[#4A90A4]/30 hover:bg-[#4A90A4]/3 transition-colors">
+          <CardContent className="p-4 flex items-center gap-3">
+            <Info className="h-4 w-4 text-[#4A90A4]" />
+            <div className="flex-1">
+              <p className="text-sm text-[#2D3436]">关于我们</p>
+              <p className="text-xs text-[#7F8A93]">了解 OutEye 研究团队与项目背景</p>
+            </div>
+            <ExternalLink className="h-3.5 w-3.5 text-[#95A5A6]" />
+          </CardContent>
+        </Card>
+      </a>
 
       {/* ═══ Terms of Service ═══ */}
       <Card className="border-[#E2E5E9] shadow-sm cursor-pointer hover:border-[#4A90A4]/30 transition-colors" onClick={() => setShowTerms(true)}>
