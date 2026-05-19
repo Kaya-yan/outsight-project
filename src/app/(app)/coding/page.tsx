@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/articles/status-badge";
 import { MyTasksList } from "@/components/coding/my-tasks-list";
 import { ArticleSelector } from "@/components/shared/article-selector";
 import { MemberSelector } from "@/components/shared/member-selector";
-import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
+import { useAuthStore, selectIsTeamLead, selectCanReview } from "@/stores/auth-store";
 import { useTaskStore } from "@/stores/task-store";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
 import { Code2, Search, ArrowRight, Users, UserPlus, Inbox } from "lucide-react";
@@ -45,7 +45,7 @@ interface ArticleRow {
 
 export default function CodingPage() {
   const router = useRouter();
-  const canManage = useAuthStore(selectCanManageAssignments);
+  const isTeamLead = useAuthStore(selectIsTeamLead);
   const { user } = useAuthStore();
   const { tasks, isLoading: tasksLoading, loadTasks, createTask } = useTaskStore();
 
@@ -143,22 +143,23 @@ export default function CodingPage() {
       return;
     }
     setCreateSubmitting(true);
-    const result = await createTask({
-      article_id: createArticleId,
-      task_type: createTaskType,
-      coder_a_id: createCoderA || undefined,  // empty string = pool
-      coder_b_id: createTaskType === "dual" ? createCoderB : undefined,
-    });
-    setCreateSubmitting(false);
-    if (result) {
+    try {
+      await createTask({
+        article_id: createArticleId,
+        task_type: createTaskType,
+        coder_a_id: createCoderA || undefined,
+        coder_b_id: (createTaskType === "dual" && createCoderB) ? createCoderB : undefined,
+      });
       setShowCreate(false);
       setCreateArticleId("");
       setCreateCoderA("");
       setCreateCoderB("");
       loadTasks({ my: true });
-    } else {
-      setCreateError("创建失败，请检查参数");
+      loadPoolTasks();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : "创建失败");
     }
+    setCreateSubmitting(false);
   }
 
   return (
@@ -190,7 +191,7 @@ export default function CodingPage() {
             <Code2 className="h-3.5 w-3.5 inline mr-1" />
             单人编码
           </button>
-          {canManage && (
+          {isTeamLead && (
             <button
               type="button"
               onClick={() => { setTab("manage"); loadTasks(); }}
@@ -318,7 +319,7 @@ export default function CodingPage() {
       )}
 
       {/* Tab: Task Management (admin/lead) */}
-      {tab === "manage" && canManage && (
+      {tab === "manage" && isTeamLead && (
         <div className="space-y-4">
           {/* Create task button */}
           <div className="flex items-center justify-between">

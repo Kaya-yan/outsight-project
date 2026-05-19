@@ -9,6 +9,7 @@ export interface Database {
           email: string;
           avatar_url: string | null;
           role: "admin" | "lead_researcher" | "researcher" | "coder" | "viewer";
+          research_roles: string[];
           institution: string | null;
           is_active: boolean;
           metadata: Record<string, unknown>;
@@ -22,6 +23,7 @@ export interface Database {
           email: string;
           avatar_url?: string | null;
           role?: "admin" | "lead_researcher" | "researcher" | "coder" | "viewer";
+          research_roles?: string[];
           institution?: string | null;
           is_active?: boolean;
           metadata?: Record<string, unknown>;
@@ -31,6 +33,7 @@ export interface Database {
           display_name?: string | null;
           avatar_url?: string | null;
           role?: "admin" | "lead_researcher" | "researcher" | "coder" | "viewer";
+          research_roles?: string[];
           institution?: string | null;
           is_active?: boolean;
           metadata?: Record<string, unknown>;

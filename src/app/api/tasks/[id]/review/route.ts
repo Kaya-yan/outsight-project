@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { reviewTask } from "@/lib/data-access/coding-tasks";
 import { getProfileById } from "@/lib/data-access/profiles";
+import { canReview } from "@/lib/auth/research-role";
 
 export async function POST(
   request: Request,
@@ -12,8 +13,8 @@ export async function POST(
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const { data: profile } = await getProfileById(supabase, user.id);
-  if (!profile || (profile.role !== "admin" && profile.role !== "lead_researcher")) {
-    return NextResponse.json({ error: "仅管理员和组长可执行终审" }, { status: 403 });
+  if (!profile || !canReview(profile)) {
+    return NextResponse.json({ error: "需要 reviewer 或 team_lead 研究角色才能执行终审" }, { status: 403 });
   }
 
   const body = await request.json();

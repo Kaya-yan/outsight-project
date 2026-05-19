@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArbitrationView } from "@/components/coding/arbitration-view";
-import { useAuthStore, selectCanManageAssignments } from "@/stores/auth-store";
+import { useAuthStore, selectCanReview } from "@/stores/auth-store";
 import { ArrowLeft, CheckCircle2, XCircle, Calculator } from "lucide-react";
 import type { CodingTask, Annotation } from "@/types/database";
 
@@ -17,7 +17,7 @@ export default function ComparePage() {
   const params = useParams();
   const router = useRouter();
   const taskId = params.id as string;
-  const canManage = useAuthStore(selectCanManageAssignments);
+  const canReview = useAuthStore(selectCanReview);
 
   const { nodes, loadFrameworkNodes, frameworks, loadFrameworks } = useCodingStore();
   const { loadTaskDetail, reviewTask } = useTaskStore();
@@ -186,7 +186,7 @@ export default function ComparePage() {
           </div>
         </div>
 
-        {canManage && task.status === "completed" && !agreementFromTask && (
+        {canReview && task.status === "completed" && !agreementFromTask && (
           <div className="flex gap-2">
             <Button
               onClick={handleCalculate}
@@ -293,7 +293,7 @@ export default function ComparePage() {
       </div>
 
       {/* Arbitration Section */}
-      {canManage && task.status === "completed" && agreementFromTask && (
+      {canReview && task.status === "completed" && agreementFromTask && (
         <ArbitrationView
           roundId={taskId}
           annotationsA={annotationsA}

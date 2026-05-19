@@ -89,7 +89,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 }));
 
-// Selectors
+// System role selectors (unchanged, for system-level operations)
 export const selectIsAdmin = (state: AuthState) => state.profile?.role === "admin";
 export const selectCanManageAssignments = (state: AuthState) =>
   state.profile?.role === "admin" || state.profile?.role === "lead_researcher";
+
+// Research role helpers — decoupled from system role
+export type ResearchRole = "coder" | "reviewer" | "team_lead";
+
+export function hasResearchRole(state: AuthState, role: ResearchRole): boolean {
+  return state.profile?.research_roles?.includes(role) ?? false;
+}
+
+export function hasAnyResearchRole(state: AuthState, roles: ResearchRole[]): boolean {
+  return roles.some((r) => hasResearchRole(state, r));
+}
+
+export const selectIsTeamLead = (state: AuthState) => hasResearchRole(state, "team_lead");
+export const selectIsReviewer = (state: AuthState) => hasResearchRole(state, "reviewer");
+export const selectIsCoder = (state: AuthState) => hasResearchRole(state, "coder");
+export const selectCanCreateTasks = (state: AuthState) => hasResearchRole(state, "team_lead");
+export const selectCanReview = (state: AuthState) =>
+  hasResearchRole(state, "reviewer") || hasResearchRole(state, "team_lead");
+export const selectCanManageTasks = (state: AuthState) => hasResearchRole(state, "team_lead");

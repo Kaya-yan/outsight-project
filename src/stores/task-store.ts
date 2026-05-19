@@ -78,15 +78,16 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
       });
+      const json = await res.json();
       if (res.ok) {
-        const json = await res.json();
         await get().loadTasks({ my: true });
         return json.data;
       }
-    } catch {
-      // Silent
+      // Propagate server error
+      throw new Error(json.error ?? "创建失败");
+    } catch (err) {
+      throw err;
     }
-    return null;
   },
 
   submitTask: async (id) => {
