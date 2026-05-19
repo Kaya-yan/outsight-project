@@ -144,11 +144,14 @@ export default function CodingPage() {
     }
     setCreateSubmitting(true);
     try {
+      // __pool__ sentinel = put task in pool (no assignee)
+      const actualCoderA = createCoderA === "__pool__" ? "" : createCoderA;
+      const actualCoderB = createCoderB === "__pool__" ? "" : createCoderB;
       await createTask({
         article_id: createArticleId,
         task_type: createTaskType,
-        coder_a_id: createCoderA || undefined,
-        coder_b_id: (createTaskType === "dual" && createCoderB) ? createCoderB : undefined,
+        coder_a_id: actualCoderA || undefined,
+        coder_b_id: (createTaskType === "dual" && actualCoderB) ? actualCoderB : undefined,
       });
       setShowCreate(false);
       setCreateArticleId("");
@@ -369,11 +372,12 @@ export default function CodingPage() {
                     </select>
                   </div>
                   <div>
-                    <label className="text-xs text-[#7F8A93] block mb-1">编码员A <span className="text-[#95A5A6]">(留空=放入任务池)</span></label>
+                    <label className="text-xs text-[#7F8A93] block mb-1">编码员A</label>
                     <MemberSelector
                       value={createCoderA}
                       onChange={setCreateCoderA}
-                      placeholder="选择或留空放入池..."
+                      placeholder="选择成员..."
+                      allowPool
                     />
                   </div>
                   {createTaskType === "dual" && (

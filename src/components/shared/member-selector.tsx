@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useId } from "react";
 import { createPortal } from "react-dom";
-import { Search, X, ChevronDown } from "lucide-react";
+import { Search, X, ChevronDown, Inbox } from "lucide-react";
 
 interface Member {
   id: string;
@@ -36,25 +36,39 @@ interface MemberSelectorProps {
   placeholder?: string;
   excludeId?: string;
   className?: string;
+  allowPool?: boolean;   // show "put in pool" option
 }
 
-export function MemberSelector({ value, onChange, placeholder = "选择成员...", excludeId, className = "" }: MemberSelectorProps) {
+export function MemberSelector({ value, onChange, placeholder = "选择成员...", excludeId, className = "", allowPool = false }: MemberSelectorProps) {
   const [members, setMembers] = useState<Member[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const triggerRef = useRef<HTMLButtonElement>(null);
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; left: number; width: number }>({ top: 0, left: 0, width: 0 });
+  const [dropdownPos, setDropdownPos] = useState({ top: 0, left: 0, width: 0 });
+  const portalId = useId().replace(/[:\s]/g, ""); // unique per instance
 
   useEffect(() => {
     async function load() {
+      setIsLoading(true);
+      setLoadError("");
       try {
         const res = await fetch("/api/profiles/list");
         if (res.ok) {
           const json = await res.json();
-          setMembers((json.data ?? []) as Member[]);
+          const list = (json.data ?? []) as Member[];
+          console.log(`[MemberSelector] Loaded ${list.length} members from API`);
+          setMembers(list);
+        } else {
+          const errJson = await res.json().catch(() => ({}));
+          setLoadError(errJson.error ?? `HTTP ${res.status}`);
+          console.error("[MemberSelector] API error:", res.status, errJson);
         }
-      } catch { /* silent */ }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : "网络错误");
+        console.error("[MemberSelector] Fetch failed:", err);
+      }
       setIsLoading(false);
     }
     load();
@@ -65,27 +79,31 @@ export function MemberSelector({ value, onChange, placeholder = "选择成员...
     if (!isOpen) return;
     function onClick(e: MouseEvent) {
       if (triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
-        // Don't close if clicking inside portal dropdown
-        const portal = document.getElementById("member-selector-portal");
+        const portal = document.getElementById(`member-portal-${portalId}`);
         if (portal && portal.contains(e.target as Node)) return;
         setIsOpen(false);
       }
     }
     document.addEventListener("mousedown", onClick);
     return () => document.removeEventListener("mousedown", onClick);
-  }, [isOpen]);
+  }, [isOpen, portalId]);
 
-  // Calculate dropdown position
   function updatePosition() {
     if (triggerRef.current) {
       const rect = triggerRef.current.getBoundingClientRect();
-      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      setDropdownPos({ top: rect.bottom + 4, left: rect.left, width: Math.max(rect.width, 280) });
     }
   }
 
   function handleOpen() {
     updatePosition();
     setIsOpen(true);
+  }
+
+  function handleSelect(id: string) {
+    onChange(id);
+    setIsOpen(false);
+    setSearch("");
   }
 
   const filtered = members.filter((m) => {
@@ -102,12 +120,13 @@ export function MemberSelector({ value, onChange, placeholder = "选择成员...
 
   const selected = members.find((m) => m.id === value);
   const selectedResearchRoles = (selected?.research_roles ?? []);
+  const isPoolSelected = allowPool && value === "__pool__";
 
   const dropdown = isOpen && (
     <div
-      id="member-selector-portal"
+      id={`member-portal-${portalId}`}
       className="fixed z-[9999] rounded border border-[#E2E5E9] bg-white shadow-xl max-h-56 overflow-hidden flex flex-col"
-      style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, minWidth: 260 }}
+      style={{ top: dropdownPos.top, left: dropdownPos.left, width: dropdownPos.width, minWidth: 280 }}
     >
       <div className="flex items-center gap-1.5 px-2.5 py-1.5 border-b border-[#F0F2F5]">
         <Search className="h-3 w-3 text-[#95A5A6] shrink-0" />
@@ -121,10 +140,31 @@ export function MemberSelector({ value, onChange, placeholder = "选择成员...
         />
       </div>
       <div className="overflow-y-auto">
+        {/* Pool option — shown when allowPool=true and no search active */}
+        {allowPool && !search && (
+          <button
+            type="button"
+            onClick={() => handleSelect("__pool__")}
+            className={`flex items-center gap-2 w-full px-2.5 py-2 text-xs hover:bg-[#F0F2F5] transition-colors border-b border-[#F0F2F5] ${
+              isPoolSelected ? "bg-[#E67E22]/5" : ""
+            }`}
+          >
+            <Inbox className="h-4 w-4 text-[#E67E22] shrink-0" />
+            <div className="text-left">
+              <p className="text-[#E67E22] font-medium">放入任务池</p>
+              <p className="text-[10px] text-[#95A5A6]">暂不指定，任何人可认领</p>
+            </div>
+          </button>
+        )}
+
         {isLoading ? (
           <p className="text-xs text-[#95A5A6] p-3 text-center">加载中...</p>
+        ) : loadError ? (
+          <p className="text-xs text-[#E67E22] p-3 text-center">加载失败: {loadError}</p>
         ) : filtered.length === 0 ? (
-          <p className="text-xs text-[#95A5A6] p-3 text-center">无匹配成员</p>
+          <p className="text-xs text-[#95A5A6] p-3 text-center">
+            {search ? "无匹配成员" : `共 ${members.length} 位成员可用`}
+          </p>
         ) : (
           filtered.map((m) => {
             const rRoles = (m.research_roles ?? []);
@@ -132,7 +172,7 @@ export function MemberSelector({ value, onChange, placeholder = "选择成员...
               <button
                 key={m.id}
                 type="button"
-                onClick={() => { onChange(m.id); setIsOpen(false); setSearch(""); }}
+                onClick={() => handleSelect(m.id)}
                 className={`flex items-center gap-2 w-full px-2.5 py-1.5 text-xs hover:bg-[#F0F2F5] transition-colors ${
                   m.id === value ? "bg-[#4A90A4]/5" : ""
                 }`}
@@ -170,7 +210,12 @@ export function MemberSelector({ value, onChange, placeholder = "选择成员...
         onClick={() => isOpen ? setIsOpen(false) : handleOpen()}
         className="flex items-center justify-between w-full h-9 rounded border border-[#E2E5E9] bg-white px-2.5 text-xs hover:border-[#4A90A4]/50 transition-colors"
       >
-        {selected ? (
+        {isPoolSelected ? (
+          <span className="flex items-center gap-1.5 text-[#E67E22]">
+            <Inbox className="h-4 w-4" />
+            <span>放入任务池</span>
+          </span>
+        ) : selected ? (
           <span className="flex items-center gap-1.5 min-w-0">
             <span className="flex items-center justify-center w-5 h-5 rounded-full bg-[#4A90A4]/10 text-[#4A90A4] text-[10px] font-medium shrink-0">
               {(selected.display_name || selected.username).charAt(0).toUpperCase()}
