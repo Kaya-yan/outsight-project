@@ -23,7 +23,9 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bucketName = "literature-attachments";
-    const filePath = `${params.id}/${Date.now()}_${file.name}`;
+    // Sanitize filename: Supabase Storage rejects non-ASCII keys
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_");
+    const filePath = `${params.id}/${Date.now()}_${safeName}`;
 
     const { error: uploadError } = await supabase.storage
       .from(bucketName)
