@@ -38,16 +38,25 @@ export default function LiteratureDetailPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [myReactions, setMyReactions] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   async function handleUpload(file: File) {
     setUploading(true);
+    setUploadError("");
     const formData = new FormData();
     formData.append("file", file);
     try {
       const res = await fetch(`/api/literature/${id}/upload`, { method: "POST", body: formData });
-      if (res.ok) load();
-    } catch { /* silent */ }
+      if (res.ok) {
+        load();
+      } else {
+        const json = await res.json().catch(() => ({}));
+        setUploadError(json.error ?? "上传失败");
+      }
+    } catch {
+      setUploadError("网络连接失败");
+    }
     setUploading(false);
   }
 
@@ -189,6 +198,9 @@ export default function LiteratureDetailPage() {
                       {uploading ? "上传中..." : note.attachment_path ? "上传新附件" : "上传附件"}
                     </button>
                   </div>
+                  {uploadError && (
+                    <p className="text-xs text-[#E67E22] bg-[#E67E22]/5 rounded px-2 py-1 mb-2">{uploadError}</p>
+                  )}
                   {note.attachment_path ? (
                     note.attachment_name?.endsWith(".pdf") ? (
                       <iframe src={note.attachment_path} className="w-full h-[500px] rounded border" title="PDF preview" />

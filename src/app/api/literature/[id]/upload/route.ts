@@ -23,30 +23,49 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    const bucketName = "literature-attachments";
+
+    // Ensure bucket exists (idempotent — errors if already exists, ignore)
+    try {
+      await supabase.storage.createBucket(bucketName, { public: true });
+      console.log(`[literature/upload] Created bucket: ${bucketName}`);
+    } catch {
+      // Bucket already exists — this is expected
+    }
+
     // Upload to Supabase Storage
     const filePath = `${params.id}/${Date.now()}_${file.name}`;
     const { error: uploadError } = await supabase.storage
-      .from("literature-attachments")
+      .from(bucketName)
       .upload(filePath, buffer, {
         contentType: ext === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         upsert: false,
       });
 
     if (uploadError) {
-      return NextResponse.json({ error: `文件上传失败: ${uploadError.message}` }, { status: 500 });
+      console.error("[literature/upload] Storage upload failed:", JSON.stringify(uploadError));
+      return NextResponse.json({
+        error: `文件上传失败: ${uploadError.message}`,
+        detail: (uploadError as Record<string, unknown>).error ?? "",
+      }, { status: 500 });
     }
 
     // Get public URL
     const { data: urlData } = supabase.storage
-      .from("literature-attachments")
+      .from(bucketName)
       .getPublicUrl(filePath);
 
     // Update literature note
-    await updateLit(supabase, params.id, {
+    const { error: updateError } = await updateLit(supabase, params.id, {
       attachment_path: urlData.publicUrl,
       attachment_name: file.name,
       updated_by: user.id,
     });
+
+    if (updateError) {
+      console.error("[literature/upload] DB update failed:", JSON.stringify(updateError));
+      return NextResponse.json({ error: "附件上传成功但数据库更新失败，请重试" }, { status: 500 });
+    }
 
     return NextResponse.json({
       success: true,
