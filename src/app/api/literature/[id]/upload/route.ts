@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { updateLit } from "@/lib/data-access/literature";
 
 export async function POST(
@@ -22,40 +23,40 @@ export async function POST(
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
     const bucketName = "literature-attachments";
 
-    // Ensure bucket exists (idempotent — errors if already exists, ignore)
+    // Use admin client for storage (server client lacks service_role for bucket ops)
+    const admin = createAdminClient();
+
+    // Ensure bucket exists
     try {
-      await supabase.storage.createBucket(bucketName, { public: true });
-      console.log(`[literature/upload] Created bucket: ${bucketName}`);
+      await admin.storage.createBucket(bucketName, { public: true, fileSizeLimit: 52428800 });
     } catch {
-      // Bucket already exists — this is expected
+      // Already exists
     }
 
-    // Upload to Supabase Storage
+    // Upload
     const filePath = `${params.id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await supabase.storage
+    const { error: uploadError } = await admin.storage
       .from(bucketName)
       .upload(filePath, buffer, {
         contentType: ext === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        upsert: false,
+        upsert: true,
       });
 
     if (uploadError) {
-      console.error("[literature/upload] Storage upload failed:", JSON.stringify(uploadError));
+      console.error("[literature/upload] Failed:", JSON.stringify(uploadError));
       return NextResponse.json({
         error: `文件上传失败: ${uploadError.message}`,
-        detail: (uploadError as Record<string, unknown>).error ?? "",
       }, { status: 500 });
     }
 
-    // Get public URL
+    // Get public URL via server client
     const { data: urlData } = supabase.storage
       .from(bucketName)
       .getPublicUrl(filePath);
 
-    // Update literature note
+    // Update DB
     const { error: updateError } = await updateLit(supabase, params.id, {
       attachment_path: urlData.publicUrl,
       attachment_name: file.name,
@@ -73,6 +74,7 @@ export async function POST(
       fileName: file.name,
     });
   } catch (err) {
+    console.error("[literature/upload] Exception:", err);
     return NextResponse.json({ error: `上传处理失败: ${err instanceof Error ? err.message : "未知"}` }, { status: 500 });
   }
 }
