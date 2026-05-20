@@ -4,7 +4,7 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MemberSelector } from "@/components/shared/member-selector";
-import { Upload, FileText } from "lucide-react";
+import { Upload, FileText, Wand2 } from "lucide-react";
 
 interface LitFormProps {
   initial?: Record<string, unknown>;
@@ -14,6 +14,11 @@ interface LitFormProps {
 }
 
 export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: LitFormProps) {
+  // AI recognition
+  const [rawText, setRawText] = useState("");
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognizeError, setRecognizeError] = useState("");
+  const [showRecognizer, setShowRecognizer] = useState(false);
   const [title, setTitle] = useState((initial?.title as string) ?? "");
   const [author, setAuthor] = useState((initial?.author as string) ?? "");
   const [publishDate, setPublishDate] = useState((initial?.publish_date as string) ?? "");
@@ -52,6 +57,46 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
     return false;
   }
 
+  async function handleRecognize() {
+    if (!rawText.trim() || rawText.trim().length < 20) {
+      setRecognizeError("请粘贴至少20字的笔记内容");
+      return;
+    }
+    setRecognizing(true);
+    setRecognizeError("");
+    try {
+      const res = await fetch("/api/literature/recognize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: rawText.trim() }),
+      });
+      const json = await res.json();
+      if (res.ok && json.data) {
+        const d = json.data;
+        if (d.title) setTitle(d.title);
+        if (d.author) setAuthor(d.author);
+        if (d.publish_date) setPublishDate(d.publish_date);
+        if (d.journal) setJournal(d.journal);
+        if (d.url) setUrl(d.url);
+        if (d.summary) setSummary(d.summary);
+        if (d.abstract) setAbstract(d.abstract);
+        if (d.research_method) setResearchMethod(d.research_method);
+        if (d.key_points?.length) setKeyPoints(d.key_points.join("\n"));
+        if (d.inspiration) setInspiration(d.inspiration);
+        if (d.notes) setNotes(d.notes);
+        if (d.rating) setRating(d.rating);
+        if (d.tags?.length) setTagsInput(d.tags.join(", "));
+        if (typeof d.for_review === "boolean") setForReview(d.for_review);
+        setRecognizeError("");
+      } else {
+        setRecognizeError(json.error || "识别失败，请重试");
+      }
+    } catch {
+      setRecognizeError("网络错误，请重试");
+    }
+    setRecognizing(false);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
@@ -82,6 +127,43 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3 max-h-[65vh] overflow-y-auto px-1">
+      {/* ═══ AI Recognition ═══ */}
+      {!initial?.id && (
+        <div className="bg-[#4A90A4]/3 rounded-lg border border-[#4A90A4]/15 p-3 space-y-2">
+          <button
+            type="button"
+            onClick={() => setShowRecognizer(!showRecognizer)}
+            className="flex items-center gap-1.5 text-xs text-[#4A90A4] hover:underline"
+          >
+            <Wand2 className="h-3.5 w-3.5" />
+            一键识别 {showRecognizer ? "▲" : "▼"}
+          </button>
+          {showRecognizer && (
+            <>
+              <textarea
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder="粘贴你的文献笔记原文...&#10;&#10;例如：这篇《Media Framing of Climate Change》是John Smith在2023年发表的，刊在Journal of Communication。主要讲的是媒体如何通过框架理论来研究气候变化报道。研究方法用的是内容分析和框架分析。我觉得对我们的项目很有启发，特别是编码框架设计部分。评分4星。标签：气候变化、框架理论、内容分析。适合放入文献综述。"
+                rows={6}
+                className="flex w-full rounded-md border border-[#E2E5E9] bg-white px-3 py-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90A4] resize-none font-sans"
+              />
+              {recognizeError && (
+                <p className="text-xs text-[#E67E22]">{recognizeError}</p>
+              )}
+              <Button
+                type="button"
+                onClick={handleRecognize}
+                disabled={recognizing || !rawText.trim()}
+                className="h-8 text-xs gap-1 bg-[#4A90A4] hover:bg-[#3D7D8F] text-white"
+              >
+                <Wand2 className="h-3.5 w-3.5" />
+                {recognizing ? "识别中..." : "一键识别填充"}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2 space-y-1">
           <label className="text-xs text-[#7F8A93]">标题 *</label>

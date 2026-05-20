@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { updateLit } from "@/lib/data-access/literature";
 
 export async function POST(
@@ -24,20 +23,9 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const bucketName = "literature-attachments";
-
-    // Use admin client for storage (server client lacks service_role for bucket ops)
-    const admin = createAdminClient();
-
-    // Ensure bucket exists
-    try {
-      await admin.storage.createBucket(bucketName, { public: true, fileSizeLimit: 52428800 });
-    } catch {
-      // Already exists
-    }
-
-    // Upload
     const filePath = `${params.id}/${Date.now()}_${file.name}`;
-    const { error: uploadError } = await admin.storage
+
+    const { error: uploadError } = await supabase.storage
       .from(bucketName)
       .upload(filePath, buffer, {
         contentType: ext === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -46,17 +34,18 @@ export async function POST(
 
     if (uploadError) {
       console.error("[literature/upload] Failed:", JSON.stringify(uploadError));
+      const hint = (uploadError as Record<string, unknown>).message === "Bucket not found"
+        ? " 请先在 Supabase Dashboard → Storage 中创建名为 'literature-attachments' 的公开 bucket"
+        : "";
       return NextResponse.json({
-        error: `文件上传失败: ${uploadError.message}`,
+        error: `文件上传失败: ${uploadError.message}${hint}`,
       }, { status: 500 });
     }
 
-    // Get public URL via server client
     const { data: urlData } = supabase.storage
       .from(bucketName)
       .getPublicUrl(filePath);
 
-    // Update DB
     const { error: updateError } = await updateLit(supabase, params.id, {
       attachment_path: urlData.publicUrl,
       attachment_name: file.name,
@@ -64,15 +53,10 @@ export async function POST(
     });
 
     if (updateError) {
-      console.error("[literature/upload] DB update failed:", JSON.stringify(updateError));
-      return NextResponse.json({ error: "附件上传成功但数据库更新失败，请重试" }, { status: 500 });
+      return NextResponse.json({ error: "附件已上传但记录更新失败，请刷新后重试" }, { status: 500 });
     }
 
-    return NextResponse.json({
-      success: true,
-      url: urlData.publicUrl,
-      fileName: file.name,
-    });
+    return NextResponse.json({ success: true, url: urlData.publicUrl, fileName: file.name });
   } catch (err) {
     console.error("[literature/upload] Exception:", err);
     return NextResponse.json({ error: `上传处理失败: ${err instanceof Error ? err.message : "未知"}` }, { status: 500 });
