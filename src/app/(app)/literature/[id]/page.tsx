@@ -166,24 +166,13 @@ export default function LiteratureDetailPage() {
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             {/* Left: Attachment / URL */}
             <div className="lg:col-span-3 space-y-4">
-              {note.attachment_path ? (
-                <Card className="border-[#E2E5E9]">
-                  <CardContent className="p-4">
-                    <h3 className="text-xs font-medium text-[#7F8A93] mb-2 flex items-center gap-1.5">
+              {/* Attachment card */}
+              <Card className={`border-[#E2E5E9] ${!note.attachment_path ? "border-dashed" : ""}`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xs font-medium text-[#7F8A93] flex items-center gap-1.5">
                       <FileText className="h-3.5 w-3.5 text-[#4A90A4]" />附件
                     </h3>
-                    {note.attachment_name?.endsWith(".pdf") ? (
-                      <iframe src={note.attachment_path} className="w-full h-[500px] rounded border" title="PDF preview" />
-                    ) : (
-                      <a href={note.attachment_path} target="_blank" rel="noopener noreferrer" className="text-sm text-[#4A90A4] hover:underline flex items-center gap-1">
-                        <ExternalLink className="h-3.5 w-3.5" />下载 {note.attachment_name}
-                      </a>
-                    )}
-                  </CardContent>
-                </Card>
-              ) : (
-                <Card className="border-[#E2E5E9] border-dashed">
-                  <CardContent className="p-4 text-center">
                     <input
                       ref={fileInputRef}
                       type="file"
@@ -194,14 +183,25 @@ export default function LiteratureDetailPage() {
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploading}
-                      className="flex items-center gap-2 mx-auto text-xs text-[#7F8A93] hover:text-[#4A90A4] transition-colors"
+                      className="text-[10px] text-[#4A90A4] hover:underline flex items-center gap-1"
                     >
-                      <Upload className="h-4 w-4" />
-                      {uploading ? "上传中..." : "上传 PDF 或 DOCX 附件"}
+                      <Upload className="h-3 w-3" />
+                      {uploading ? "上传中..." : note.attachment_path ? "上传新附件" : "上传附件"}
                     </button>
-                  </CardContent>
-                </Card>
-              )}
+                  </div>
+                  {note.attachment_path ? (
+                    note.attachment_name?.endsWith(".pdf") ? (
+                      <iframe src={note.attachment_path} className="w-full h-[500px] rounded border" title="PDF preview" />
+                    ) : (
+                      <a href={note.attachment_path} target="_blank" rel="noopener noreferrer" className="text-sm text-[#4A90A4] hover:underline flex items-center gap-1">
+                        <ExternalLink className="h-3.5 w-3.5" />下载 {note.attachment_name}
+                      </a>
+                    )
+                  ) : (
+                    <p className="text-xs text-[#95A5A6] text-center py-4">暂无附件</p>
+                  )}
+                </CardContent>
+              </Card>
               {note.url ? (
                 <Card className="border-[#E2E5E9]">
                   <CardContent className="p-4">
