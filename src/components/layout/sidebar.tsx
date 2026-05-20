@@ -8,6 +8,7 @@ import {
   BarChart3,
   Settings,
   Eye,
+  BookOpen,
 } from "lucide-react";
 import { SidebarItem } from "./sidebar-item";
 import { APP_VERSION } from "@/lib/constants";
@@ -16,6 +17,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "控制台", href: "/dashboard" },
   { icon: FolderOpen, label: "语料", href: "/projects" },
   { icon: Code2, label: "编码", href: "/coding" },
+  { icon: BookOpen, label: "文献", href: "/literature" },
   { icon: BarChart3, label: "统计", href: "/analytics" },
   { icon: Settings, label: "设置", href: "/settings" },
 ];
