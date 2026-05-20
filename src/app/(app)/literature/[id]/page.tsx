@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LiteratureForm } from "@/components/literature/literature-form";
 import { LiteratureComments } from "@/components/literature/literature-comments";
+import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { ArrowLeft, Edit3, Trash2, ExternalLink, FileText, Eye, ThumbsUp, Upload, User } from "lucide-react";
 
@@ -44,15 +45,44 @@ export default function LiteratureDetailPage() {
   async function handleUpload(file: File) {
     setUploading(true);
     setUploadError("");
-    const formData = new FormData();
-    formData.append("file", file);
     try {
-      const res = await fetch(`/api/literature/${id}/upload`, { method: "POST", body: formData });
-      if (res.ok) {
-        load();
+      const supabase = createBrowserClient();
+      // Sanitize filename for storage (ASCII only)
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_").replace(/_+/g, "_");
+      const filePath = `${id}/${Date.now()}_${safeName}`;
+      const ext = file.name.split(".").pop()?.toLowerCase();
+
+      const { error: uploadErr } = await supabase.storage
+        .from("literature-attachments")
+        .upload(filePath, file, {
+          contentType: ext === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          upsert: true,
+        });
+
+      if (uploadErr) {
+        const hint = (uploadErr as Record<string, unknown>).message === "Bucket not found"
+          ? " 请先在 Supabase Dashboard → Storage 中创建公开 bucket 'literature-attachments'"
+          : "";
+        setUploadError(`上传失败: ${uploadErr.message}${hint}`);
+        setUploading(false);
+        return;
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("literature-attachments")
+        .getPublicUrl(filePath);
+
+      // Update DB via lightweight API
+      const res = await fetch(`/api/literature/${id}/upload`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: urlData.publicUrl, name: file.name }),
+      });
+      if (!res.ok) {
+        setUploadError("文件已上传但记录更新失败，请刷新重试");
       } else {
-        const json = await res.json().catch(() => ({}));
-        setUploadError(json.error ?? "上传失败");
+        load();
       }
     } catch {
       setUploadError("网络连接失败");
