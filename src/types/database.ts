@@ -571,6 +571,8 @@ export interface Database {
         abstract: string | null;
         key_points: string[];
         inspiration: string | null;
+        research_method: string | null;
+        reader_name: string | null;
         notes: string | null;
         for_review: boolean;
         rating: number | null;
@@ -594,6 +596,8 @@ export interface Database {
         summary?: string | null;
         abstract?: string | null;
         key_points?: string[];
+        research_method?: string | null;
+        reader_name?: string | null;
         inspiration?: string | null;
         notes?: string | null;
         for_review?: boolean;
@@ -613,6 +617,8 @@ export interface Database {
         summary?: string | null;
         abstract?: string | null;
         key_points?: string[];
+        research_method?: string | null;
+        reader_name?: string | null;
         inspiration?: string | null;
         notes?: string | null;
         for_review?: boolean;

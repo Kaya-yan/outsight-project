@@ -17,7 +17,7 @@ export async function listLiterature(
   opts?: LitListFilters & PaginationParams,
 ) {
   const { from, to } = normalizePagination(opts);
-  let query = client.from("literature_notes").select("*", { count: "exact" });
+  let query = client.from("literature_notes").select("*, profiles:created_by(username, display_name)", { count: "exact" });
 
   if (opts?.search) {
     const like = `%${opts.search}%`;
@@ -54,6 +54,8 @@ export async function createLit(
     summary?: string | null;
     abstract?: string | null;
     key_points?: string[];
+    research_method?: string | null;
+    reader_name?: string | null;
     inspiration?: string | null;
     notes?: string | null;
     for_review?: boolean;

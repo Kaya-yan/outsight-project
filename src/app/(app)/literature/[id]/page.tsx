@@ -1,19 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { LiteratureForm } from "@/components/literature/literature-form";
 import { LiteratureComments } from "@/components/literature/literature-comments";
 import { useAuthStore } from "@/stores/auth-store";
-import { ArrowLeft, Edit3, Trash2, ExternalLink, FileText, Eye, ThumbsUp, Star } from "lucide-react";
+import { ArrowLeft, Edit3, Trash2, ExternalLink, FileText, Eye, ThumbsUp, Upload, User } from "lucide-react";
 
 interface NoteDetail {
   note: {
     id: string; title: string; author: string | null; publish_date: string | null;
     journal: string | null; url: string | null; summary: string | null;
-    abstract: string | null; key_points: string[]; inspiration: string | null;
+    abstract: string | null; key_points: string[]; research_method: string | null;
+    reader_name: string | null; inspiration: string | null;
     notes: string | null; for_review: boolean; rating: number | null;
     tags: string[]; attachment_path: string | null; attachment_name: string | null;
     read_count: number; like_count: number; created_by: string;
@@ -36,6 +37,19 @@ export default function LiteratureDetailPage() {
   const [editing, setEditing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [myReactions, setMyReactions] = useState<string[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      const res = await fetch(`/api/literature/${id}/upload`, { method: "POST", body: formData });
+      if (res.ok) load();
+    } catch { /* silent */ }
+    setUploading(false);
+  }
 
   async function load() {
     setIsLoading(true);
@@ -167,7 +181,28 @@ export default function LiteratureDetailPage() {
                     )}
                   </CardContent>
                 </Card>
-              ) : note.url ? (
+              ) : (
+                <Card className="border-[#E2E5E9] border-dashed">
+                  <CardContent className="p-4 text-center">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,.docx,.doc"
+                      onChange={(e) => { if (e.target.files?.[0]) handleUpload(e.target.files[0]); }}
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      className="flex items-center gap-2 mx-auto text-xs text-[#7F8A93] hover:text-[#4A90A4] transition-colors"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {uploading ? "上传中..." : "上传 PDF 或 DOCX 附件"}
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
+              {note.url ? (
                 <Card className="border-[#E2E5E9]">
                   <CardContent className="p-4">
                     <h3 className="text-xs font-medium text-[#7F8A93] mb-2 flex items-center gap-1.5">
@@ -195,10 +230,25 @@ export default function LiteratureDetailPage() {
             <div className="lg:col-span-2 space-y-4">
               <Card className="border-[#E2E5E9]">
                 <CardContent className="p-4 space-y-3">
+                  {note.reader_name && (
+                    <div>
+                      <p className="text-[10px] text-[#7F8A93] uppercase tracking-wide mb-1">阅读人</p>
+                      <p className="text-sm text-[#4A90A4] flex items-center gap-1">
+                        <User className="h-3.5 w-3.5" />
+                        {note.reader_name}
+                      </p>
+                    </div>
+                  )}
                   {note.summary && (
                     <div>
                       <p className="text-[10px] text-[#7F8A93] uppercase tracking-wide mb-1">一句话总结</p>
                       <p className="text-sm text-[#2D3436] leading-relaxed">{note.summary}</p>
+                    </div>
+                  )}
+                  {note.research_method && (
+                    <div>
+                      <p className="text-[10px] text-[#7F8A93] uppercase tracking-wide mb-1">研究方法</p>
+                      <p className="text-sm text-[#5DAD93]">{note.research_method}</p>
                     </div>
                   )}
                   {note.abstract && (

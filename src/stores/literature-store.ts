@@ -64,7 +64,7 @@ export const useLiteratureStore = create<LitStoreState>((set, get) => ({
         const json = await res.json();
         get().loadNotes();
         get().loadStats();
-        return json.data;
+        return json.data?.id ?? null;
       }
     } catch { /* silent */ }
     return null;

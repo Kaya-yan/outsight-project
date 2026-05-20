@@ -25,9 +25,10 @@ export default function LiteraturePage() {
 
   async function handleCreate(data: Record<string, unknown>) {
     setIsSubmitting(true);
-    await createNote(data);
+    const noteId = await createNote(data);
     setIsSubmitting(false);
-    setShowForm(false);
+    if (noteId) setShowForm(false);
+    return noteId; // for file upload in form
   }
 
   async function handleExport() {
@@ -118,6 +119,8 @@ export default function LiteraturePage() {
               for_review={n.for_review}
               read_count={n.read_count}
               like_count={n.like_count}
+              reader_name={(n as Record<string, unknown>).reader_name as string | null}
+              research_method={(n as Record<string, unknown>).research_method as string | null}
             />
           ))}
         </div>

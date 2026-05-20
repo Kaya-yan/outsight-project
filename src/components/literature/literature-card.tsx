@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { BookOpen, Star, Eye, ThumbsUp } from "lucide-react";
+import { Eye, ThumbsUp, User } from "lucide-react";
 
 interface LitCardProps {
   id: string;
@@ -15,9 +15,11 @@ interface LitCardProps {
   for_review: boolean;
   read_count: number;
   like_count: number;
+  reader_name: string | null;
+  research_method: string | null;
 }
 
-export function LiteratureCard({ id, title, author, journal, publish_date, summary, rating, tags, for_review, read_count, like_count }: LitCardProps) {
+export function LiteratureCard({ id, title, author, journal, publish_date, summary, rating, tags, for_review, read_count, like_count, reader_name, research_method }: LitCardProps) {
   const router = useRouter();
   const stars = rating ? "★".repeat(rating) + "☆".repeat(5 - rating) : null;
 
@@ -45,12 +47,17 @@ export function LiteratureCard({ id, title, author, journal, publish_date, summa
 
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5 flex-wrap">
+          {reader_name && (
+            <span className="text-[10px] text-[#4A90A4] bg-[#4A90A4]/5 px-1.5 py-0.5 rounded flex items-center gap-1">
+              <User className="h-2.5 w-2.5" />{reader_name}
+            </span>
+          )}
+          {research_method && (
+            <span className="text-[10px] bg-[#5DAD93]/10 text-[#5DAD93] px-1.5 py-0.5 rounded">{research_method}</span>
+          )}
           {tags.slice(0, 3).map((t) => (
             <span key={t} className="text-[10px] bg-[#F0F2F5] text-[#7F8A93] px-1.5 py-0.5 rounded">{t}</span>
           ))}
-          {tags.length > 3 && (
-            <span className="text-[10px] text-[#95A5A6]">+{tags.length - 3}</span>
-          )}
         </div>
         <div className="flex items-center gap-3 text-xs text-[#95A5A6]">
           {stars && <span className="text-[#E67E22] text-[11px]">{stars}</span>}
