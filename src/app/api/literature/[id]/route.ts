@@ -37,10 +37,16 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   const body = await request.json();
-  const { data, error } = await updateLit(supabase, params.id, {
-    ...body,
-    updated_by: user.id,
-  });
+
+  // Resolve reader_id → reader_name
+  const updates: Record<string, unknown> = { ...body, updated_by: user.id };
+  if (body.reader_id) {
+    const { data: rp } = await supabase.from("profiles").select("display_name, username").eq("id", body.reader_id).single();
+    updates.reader_name = rp?.display_name || rp?.username || null;
+  }
+  delete updates.reader_id;
+
+  const { data, error } = await updateLit(supabase, params.id, updates);
   if (error) return NextResponse.json({ error: "更新失败" }, { status: 500 });
   return NextResponse.json({ success: true, data });
 }

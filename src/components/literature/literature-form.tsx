@@ -3,11 +3,12 @@
 import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MemberSelector } from "@/components/shared/member-selector";
 import { Upload, FileText } from "lucide-react";
 
 interface LitFormProps {
   initial?: Record<string, unknown>;
-  onSubmit: (data: Record<string, unknown>) => Promise<string | null>; // returns note id on success
+  onSubmit: (data: Record<string, unknown>) => Promise<string | null>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
@@ -18,6 +19,7 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
   const [publishDate, setPublishDate] = useState((initial?.publish_date as string) ?? "");
   const [journal, setJournal] = useState((initial?.journal as string) ?? "");
   const [url, setUrl] = useState((initial?.url as string) ?? "");
+  const [readerId, setReaderId] = useState("");  // selected user id → API resolves to reader_name
   const [summary, setSummary] = useState((initial?.summary as string) ?? "");
   const [abstract, setAbstract] = useState((initial?.abstract as string) ?? "");
   const [researchMethod, setResearchMethod] = useState((initial?.research_method as string) ?? "");
@@ -62,6 +64,7 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
       summary: summary.trim() || null,
       abstract: abstract.trim() || null,
       research_method: researchMethod.trim() || null,
+      reader_id: readerId || null,
       key_points: keyPoints.split("\n").map((k) => k.trim()).filter(Boolean),
       inspiration: inspiration.trim() || null,
       notes: notes.trim() || null,
@@ -99,6 +102,14 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
         <div className="space-y-1">
           <label className="text-xs text-[#7F8A93]">网页链接</label>
           <Input value={url} onChange={(e) => setUrl(e.target.value)} className={fieldClass} placeholder="https://..." />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs text-[#7F8A93]">阅读人</label>
+          <MemberSelector
+            value={readerId}
+            onChange={setReaderId}
+            placeholder="选择阅读人..."
+          />
         </div>
         <div className="space-y-1">
           <label className="text-xs text-[#7F8A93]">研究方法</label>

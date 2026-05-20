@@ -33,9 +33,12 @@ export async function POST(request: Request) {
   const body = await request.json();
   if (!body.title) return NextResponse.json({ error: "标题为必填项" }, { status: 400 });
 
-  // Auto-fill reader_name from profile
-  const { data: creatorProfile } = await supabase.from("profiles").select("display_name, username").eq("id", user.id).single();
-  const readerName = creatorProfile?.display_name || creatorProfile?.username || "未知";
+  // Resolve reader_id to reader_name
+  let readerName: string | null = null;
+  if (body.reader_id) {
+    const { data: rp } = await supabase.from("profiles").select("display_name, username").eq("id", body.reader_id).single();
+    readerName = rp?.display_name || rp?.username || null;
+  }
 
   const { data, error } = await createLit(supabase, {
     title: body.title,
