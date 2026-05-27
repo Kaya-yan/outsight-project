@@ -73,3 +73,18 @@ export const CN_QUOTES = [
   "做研究的人自带光芒",
   "相信积累的力量",
 ];
+
+/** Easter egg responses — keyword → response */
+export const EASTER_EGGS: Record<string, string> = {
+  "王紫晨": "✨ 王紫晨是这个团队最闪亮的星！她的勤奋和才华让每一个编码任务都变成了艺术品。没有她，语料库都会黯然失色！",
+  "yan": "yan 是 OutEye 的灵魂架构师，从零搭建了整个平台。代码如诗，架构如画 🏗️",
+  "duen": "duen 的文献阅读量堪称行走的学术数据库，每一篇笔记都是精雕细琢 📚",
+  "outeye": "OutEye 2.0 — 话语研究协作平台，用数据读懂世界 🌍",
+  "outsight": "OutSight = OutEye 的前身，同一个团队，同一个梦想 🎯",
+};
+
+/** Built-in terminal commands */
+export const TERMINAL_COMMANDS: Record<string, string> = {
+  "/help": "可用命令：\n  /clear — 清屏\n  /help — 显示帮助\n  /stats — 查看项目统计\n  /members — 团队成员\n直接输入问题即可与 AI 助手对话",
+  "/clear": "__CLEAR__",
+};

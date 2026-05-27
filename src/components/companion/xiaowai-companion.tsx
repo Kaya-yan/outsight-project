@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import { XiaoWaiSVG } from "./xiaowai-svg";
 import { XiaoWaiMobile } from "./xiaowai-mobile";
+import { TerminalPanel } from "./terminal-panel";
 import { useBreathing, useBlink, useEyeTracking, useIsMobile, useDockLeft } from "./companion-hooks";
 import { miniBarStyle, panelStyle, orbModalOpacity } from "./companion-styles";
 import type { OrbState } from "./companion-config";
@@ -17,6 +18,7 @@ export function XiaoWaiCompanion() {
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [hasModal, setHasModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [clicked, setClicked] = useState(false); // Click-to-lock state
 
   // Modal detection
   useEffect(() => {
@@ -40,15 +42,45 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel on outside click
+  // Close panel on outside click (only when clicked-open)
   useEffect(() => {
-    if (!expanded) return;
+    if (!clicked) return;
     function onClick(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setExpanded(false);
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setClicked(false);
+        setExpanded(false);
+      }
     }
     const t = setTimeout(() => document.addEventListener("click", onClick), 100);
     return () => { clearTimeout(t); document.removeEventListener("click", onClick); };
-  }, [expanded]);
+  }, [clicked]);
+
+  // Click handler — toggle lock
+  const handleClick = useCallback(() => {
+    if (clicked) {
+      // Already locked, unlock
+      setClicked(false);
+      setExpanded(false);
+    } else {
+      // Lock open
+      setClicked(true);
+      setExpanded(true);
+    }
+  }, [clicked]);
+
+  // Hover handlers — only work when not clicked-locked
+  const handleMouseEnter = useCallback(() => {
+    if (!clicked) setExpanded(true);
+  }, [clicked]);
+
+  const handleMouseLeave = useCallback(() => {
+    if (!clicked) setExpanded(false);
+  }, [clicked]);
+
+  const handleClose = useCallback(() => {
+    setClicked(false);
+    setExpanded(false);
+  }, []);
 
   if (mobile) return <XiaoWaiMobile />;
 
@@ -60,17 +92,22 @@ export function XiaoWaiCompanion() {
     <div
       ref={ref}
       style={{ ...style, opacity: orbModalOpacity(hasModal) }}
-      onMouseEnter={() => setExpanded(true)}
-      onMouseLeave={() => setExpanded(false)}
+      onClick={handleClick}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
       aria-label="Scholarly Terminal"
     >
-      <XiaoWaiSVG
-        breathingScale={breathing}
-        eyeDimmed={eyeDimmed}
-        pupilOffset={pupil}
-        orbState={orbState}
-        expanded={expanded}
-      />
+      {expanded ? (
+        <TerminalPanel orbState={orbState} onClose={handleClose} />
+      ) : (
+        <XiaoWaiSVG
+          breathingScale={breathing}
+          eyeDimmed={eyeDimmed}
+          pupilOffset={pupil}
+          orbState={orbState}
+          expanded={expanded}
+        />
+      )}
     </div>
   );
 }

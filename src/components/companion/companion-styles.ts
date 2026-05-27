@@ -9,7 +9,7 @@ export function miniBarStyle(dockLeft: boolean): React.CSSProperties {
     width: TERMINAL.mini.w,
     height: TERMINAL.mini.h,
     zIndex: Z_INDEX,
-    cursor: "default",
+    cursor: "pointer",
     userSelect: "none",
     background: "rgba(15, 23, 42, 0.88)",
     backdropFilter: "blur(14px)",
@@ -30,23 +30,32 @@ export function miniBarStyle(dockLeft: boolean): React.CSSProperties {
   };
 }
 
-/** Expanded panel (hover state) */
+/** Expanded panel (interactive terminal) */
 export function panelStyle(dockLeft: boolean): React.CSSProperties {
   return {
-    ...miniBarStyle(dockLeft),
+    position: "fixed",
+    [dockLeft ? "left" : "right"]: EDGE_INSET,
+    bottom: EDGE_INSET,
     width: TERMINAL.panel.w,
-    height: TERMINAL.panel.h,
+    height: 420, // Increased for interactive terminal
+    zIndex: Z_INDEX,
+    cursor: "default",
+    userSelect: "none",
+    background: "rgba(15, 23, 42, 0.95)",
+    backdropFilter: "blur(20px)",
+    WebkitBackdropFilter: "blur(20px)",
+    border: "1px solid rgba(56, 189, 248, 0.2)",
     borderRadius: TERMINAL.panelRadius,
-    background: "rgba(15, 23, 42, 0.92)",
-    backdropFilter: "blur(18px)",
-    WebkitBackdropFilter: "blur(18px)",
-    border: "1px solid rgba(56, 189, 248, 0.18)",
-    boxShadow: "0 12px 48px rgba(0, 0, 0, 0.3)",
-    padding: "16px 18px",
+    boxShadow: "0 16px 64px rgba(0, 0, 0, 0.4)",
+    fontFamily: TERMINAL.font,
+    fontSize: TERMINAL.fontSize,
+    lineHeight: TERMINAL.lineHeight,
+    color: "rgba(226, 232, 240, 0.85)",
+    padding: "14px 16px",
+    display: "flex",
     flexDirection: "column",
-    alignItems: "stretch",
-    whiteSpace: "normal",
     overflow: "hidden",
+    transition: `width ${400}ms ease-out, height ${400}ms ease-out, border-radius ${400}ms ease-out`,
   };
 }
 
