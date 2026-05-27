@@ -174,9 +174,10 @@ export async function POST(request: Request) {
 
   const input = message.trim();
 
-  // ── Step 1: Easter egg check ──
+  // ── Step 1: Easter egg check (word boundary matching) ──
   for (const [keyword, response] of Object.entries(EASTER_EGGS)) {
-    if (input.toLowerCase().includes(keyword.toLowerCase())) {
+    const pattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+    if (pattern.test(input)) {
       return NextResponse.json({ response, type: "easter_egg" });
     }
   }
