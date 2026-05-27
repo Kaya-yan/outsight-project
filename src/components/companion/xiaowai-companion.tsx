@@ -19,6 +19,7 @@ export function XiaoWaiCompanion() {
   const [hasModal, setHasModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [clicked, setClicked] = useState(false); // Click-to-lock state
+  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Modal detection
   useEffect(() => {
@@ -52,7 +53,14 @@ export function XiaoWaiCompanion() {
       }
     }
     const t = setTimeout(() => document.addEventListener("click", onClick), 100);
-    return () => { clearTimeout(t); document.removeEventListener("click", onClick); };
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("click", onClick);
+      // Also cleanup leave timer on unmount
+      if (leaveTimerRef.current) {
+        clearTimeout(leaveTimerRef.current);
+      }
+    };
   }, [clicked]);
 
   // Click handler — only toggle when clicking the mini bar (not expanded panel)
@@ -66,11 +74,21 @@ export function XiaoWaiCompanion() {
 
   // Hover handlers — only work when not clicked-locked
   const handleMouseEnter = useCallback(() => {
+    // Cancel any pending leave timer
+    if (leaveTimerRef.current) {
+      clearTimeout(leaveTimerRef.current);
+      leaveTimerRef.current = null;
+    }
     if (!clicked) setExpanded(true);
   }, [clicked]);
 
   const handleMouseLeave = useCallback(() => {
-    if (!clicked) setExpanded(false);
+    // Don't close if clicked-locked
+    if (clicked) return;
+    // Add delay to prevent accidental close during typing
+    leaveTimerRef.current = setTimeout(() => {
+      setExpanded(false);
+    }, 300);
   }, [clicked]);
 
   const handleClose = useCallback(() => {
