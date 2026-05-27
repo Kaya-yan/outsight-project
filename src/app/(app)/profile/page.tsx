@@ -261,7 +261,7 @@ export default function ProfilePage() {
                 <div><span className="text-[#7F8A93] text-xs">用户名</span><p className="text-[#2D3436]">{profile.username}</p></div>
                 <div><span className="text-[#7F8A93] text-xs">邮箱</span><p className="text-[#2D3436] truncate">{profile.email}</p></div>
                 <div><span className="text-[#7F8A93] text-xs">角色</span><p className="text-[#2D3436]">{roleMap[profile.role] ?? profile.role}</p></div>
-                <div><span className="text-[#7F8A93] text-xs">机构</span><p className="text-[#2D3436]">{profile.institution || "未设置"}</p></div>
+                <div><span className="text-[#7F8A93] text-xs">机构</span><p className="text-[#2D3436]">山东大学</p></div>
               </div>
             </CardContent>
           </Card>
