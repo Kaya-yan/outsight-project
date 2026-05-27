@@ -320,7 +320,7 @@ export async function discoverArticles(opts: DiscoverOptions): Promise<{
 
   // Build engine results map
   const engineResults: Record<string, number> = {};
-  for (const eng of enginesUsed) {
+  for (const eng of Array.from(enginesUsed)) {
     engineResults[eng] = engineHits[eng] ?? 0;
   }
 

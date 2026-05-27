@@ -558,115 +558,115 @@ export interface Database {
           notes?: string | null;
         };
       };
-    };
-    literature_notes: {
-      Row: {
-        id: string;
-        title: string;
-        author: string | null;
-        publish_date: string | null;
-        journal: string | null;
-        url: string | null;
-        summary: string | null;
-        abstract: string | null;
-        key_points: string[];
-        inspiration: string | null;
-        research_method: string | null;
-        reader_name: string | null;
-        notes: string | null;
-        for_review: boolean;
-        rating: number | null;
-        tags: string[];
-        attachment_path: string | null;
-        attachment_name: string | null;
-        read_count: number;
-        like_count: number;
-        created_by: string;
-        updated_by: string | null;
-        created_at: string;
-        updated_at: string;
+      literature_notes: {
+        Row: {
+          id: string;
+          title: string;
+          author: string | null;
+          publish_date: string | null;
+          journal: string | null;
+          url: string | null;
+          summary: string | null;
+          abstract: string | null;
+          key_points: string[];
+          inspiration: string | null;
+          research_method: string | null;
+          reader_name: string | null;
+          notes: string | null;
+          for_review: boolean;
+          rating: number | null;
+          tags: string[];
+          attachment_path: string | null;
+          attachment_name: string | null;
+          read_count: number;
+          like_count: number;
+          created_by: string;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          author?: string | null;
+          publish_date?: string | null;
+          journal?: string | null;
+          url?: string | null;
+          summary?: string | null;
+          abstract?: string | null;
+          key_points?: string[];
+          research_method?: string | null;
+          reader_name?: string | null;
+          inspiration?: string | null;
+          notes?: string | null;
+          for_review?: boolean;
+          rating?: number | null;
+          tags?: string[];
+          attachment_path?: string | null;
+          attachment_name?: string | null;
+          created_by: string;
+          updated_by?: string | null;
+        };
+        Update: {
+          title?: string;
+          author?: string | null;
+          publish_date?: string | null;
+          journal?: string | null;
+          url?: string | null;
+          summary?: string | null;
+          abstract?: string | null;
+          key_points?: string[];
+          research_method?: string | null;
+          reader_name?: string | null;
+          inspiration?: string | null;
+          notes?: string | null;
+          for_review?: boolean;
+          rating?: number | null;
+          tags?: string[];
+          attachment_path?: string | null;
+          attachment_name?: string | null;
+          read_count?: number;
+          like_count?: number;
+          updated_by?: string | null;
+        };
       };
-      Insert: {
-        id?: string;
-        title: string;
-        author?: string | null;
-        publish_date?: string | null;
-        journal?: string | null;
-        url?: string | null;
-        summary?: string | null;
-        abstract?: string | null;
-        key_points?: string[];
-        research_method?: string | null;
-        reader_name?: string | null;
-        inspiration?: string | null;
-        notes?: string | null;
-        for_review?: boolean;
-        rating?: number | null;
-        tags?: string[];
-        attachment_path?: string | null;
-        attachment_name?: string | null;
-        created_by: string;
-        updated_by?: string | null;
+      literature_comments: {
+        Row: {
+          id: string;
+          note_id: string;
+          author_id: string;
+          parent_id: string | null;
+          content: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          note_id: string;
+          author_id: string;
+          parent_id?: string | null;
+          content: string;
+        };
+        Update: {
+          content?: string;
+        };
       };
-      Update: {
-        title?: string;
-        author?: string | null;
-        publish_date?: string | null;
-        journal?: string | null;
-        url?: string | null;
-        summary?: string | null;
-        abstract?: string | null;
-        key_points?: string[];
-        research_method?: string | null;
-        reader_name?: string | null;
-        inspiration?: string | null;
-        notes?: string | null;
-        for_review?: boolean;
-        rating?: number | null;
-        tags?: string[];
-        attachment_path?: string | null;
-        attachment_name?: string | null;
-        read_count?: number;
-        like_count?: number;
-        updated_by?: string | null;
+      literature_reactions: {
+        Row: {
+          id: string;
+          note_id: string;
+          user_id: string;
+          reaction_type: "read" | "like";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          note_id: string;
+          user_id: string;
+          reaction_type: "read" | "like";
+        };
+        Update: Record<string, never>;
       };
-    };
-    literature_comments: {
-      Row: {
-        id: string;
-        note_id: string;
-        author_id: string;
-        parent_id: string | null;
-        content: string;
-        created_at: string;
-        updated_at: string;
-      };
-      Insert: {
-        id?: string;
-        note_id: string;
-        author_id: string;
-        parent_id?: string | null;
-        content: string;
-      };
-      Update: {
-        content?: string;
-      };
-    };
-    literature_reactions: {
-      Row: {
-        id: string;
-        note_id: string;
-        user_id: string;
-        reaction_type: "read" | "like";
-        created_at: string;
-      };
-      Insert: {
-        id?: string;
-        note_id: string;
-        user_id: string;
-        reaction_type: "read" | "like";
-      };
-      Update: Record<string, never>;
     };
     Views: Record<string, never>;
     Functions: {

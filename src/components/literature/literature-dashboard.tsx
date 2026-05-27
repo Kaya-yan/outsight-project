@@ -19,10 +19,6 @@ export function LiteratureDashboard({ stats }: { stats: LitStats }) {
     .slice(0, 8)
     .map(([name, count]) => ({ name, count }));
 
-  const contributorData = Object.entries(stats.byContributor)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({ name, count }));
-
   const reviewData = [
     { name: "综述用", value: stats.forReview },
     { name: "非综述", value: stats.total - stats.forReview },

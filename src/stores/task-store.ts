@@ -35,7 +35,7 @@ export const useTaskStore = create<TaskStoreState>((set, get) => ({
   selectedTask: null,
   isLoading: false,
 
-  setFilters: (_filters) => {
+  setFilters: () => {
     // Stored for re-fetch; actual fetching is done via loadTasks
   },
 

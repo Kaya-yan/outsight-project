@@ -1,6 +1,6 @@
 import type { Client, QueryResult, PaginationParams } from "./base";
 import { normalizePagination, typedInsert, typedUpdate } from "./base";
-import type { LiteratureNote, LiteratureComment, LiteratureReaction } from "@/types/database";
+import type { LiteratureNote, LiteratureComment } from "@/types/database";
 
 // ── Literature Notes ──
 

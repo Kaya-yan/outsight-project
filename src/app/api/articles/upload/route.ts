@@ -4,17 +4,7 @@ import { createArticle, updateArticle } from "@/lib/data-access/articles";
 import { isWithinResearchPeriod, autoPeriod } from "@/lib/time-filter";
 import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import { parseFile, getSupportedLabel } from "@/lib/parsers/adapter";
-import {
-  summarize,
-  summarizeZh,
-  analyzeSentiment,
-  suggestFramework,
-  extractTerms,
-  linguisticCheck,
-  analyzeNarrative,
-  analyzeSources,
-  analyzeTone,
-} from "@/lib/ai/ai-client";
+import { runPreReadPipeline } from "@/lib/ai/pre-read-pipeline";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
 export async function POST(request: Request) {
@@ -113,70 +103,3 @@ export async function POST(request: Request) {
   }
 }
 
-/**
- * Background AI pre-read pipeline.
- * Runs all 9 DeepSeek analyses then advances article status to 待编码.
- */
-async function runPreReadPipeline(
-  supabase: Awaited<ReturnType<typeof createClient>>,
-  articleId: string,
-  content: string,
-) {
-  const [
-    summary,
-    summaryZhResult,
-    sentiment,
-    framework,
-    terms,
-    linguistic,
-    narrative,
-    sources,
-    tone,
-  ] = await Promise.all([
-    summarize(content),
-    summarizeZh(content),
-    analyzeSentiment(content),
-    suggestFramework(content),
-    extractTerms(content),
-    linguisticCheck(content),
-    analyzeNarrative(content),
-    analyzeSources(content),
-    analyzeTone(content),
-  ]);
-
-  const updates: Record<string, unknown> = {};
-
-  if (summary) updates.ai_summary = summary;
-  if (sentiment) {
-    updates.ai_sentiment = sentiment.sentiment;
-    updates.ai_confidence = sentiment.confidence;
-  }
-  let frameworkHint = "";
-  if (framework) {
-    frameworkHint = `${framework.framework} (${Math.round(framework.confidence * 100)}%)`;
-  }
-  if (sentiment) {
-    frameworkHint = frameworkHint
-      ? `${frameworkHint} | ${sentiment.sentiment} (${Math.round(sentiment.confidence * 100)}%)`
-      : `${sentiment.sentiment} (${Math.round(sentiment.confidence * 100)}%)`;
-  }
-  updates.ai_framework_hint = frameworkHint || undefined;
-  if (framework) updates.ai_evidence_quotes = framework.evidence;
-
-  // Advance status: 已清洗 → 已预读 → 待编码
-  updates.status = "已预读";
-
-  const meta = {} as Record<string, unknown>;
-  if (terms) meta.ai_terms = terms;
-  if (linguistic) meta.ai_linguistic = linguistic;
-  if (summaryZhResult) meta.ai_summary_zh = summaryZhResult;
-  if (narrative) meta.ai_narrative = narrative;
-  if (sources) meta.ai_sources = sources;
-  if (tone) meta.ai_tone = tone;
-  if (Object.keys(meta).length > 0) updates.metadata = meta;
-
-  await updateArticle(supabase, articleId, updates);
-
-  // Final advance to 待编码
-  await updateArticle(supabase, articleId, { status: "待编码" });
-}

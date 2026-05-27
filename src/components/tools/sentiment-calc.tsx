@@ -103,12 +103,6 @@ export function SentimentCalc() {
             {catList.map((cat) => {
               const count = result.categoryCounts[cat.code] ?? 0;
               const ratio = result.categoryRatios[cat.code] ?? 0;
-              const barColor =
-                cat.code === "posemo" ? "bg-[#5DAD93]" :
-                cat.code === "negemo" ? "bg-[#E67E22]" :
-                cat.code === "anx" ? "bg-[#F0C060]" :
-                cat.code === "anger" ? "bg-[#D44545]" :
-                "bg-[#6B8FC0]";
               const bgColor =
                 cat.code === "posemo" ? "bg-[#5DAD93]/5" :
                 cat.code === "negemo" ? "bg-[#E67E22]/5" :

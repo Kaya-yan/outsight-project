@@ -28,9 +28,9 @@ export function calcAgreement(
   const nodesB = new Set(annotationsB.map((a) => a.node_id));
 
   // Matched: both coders selected the same node
-  const matched = new Set([...nodesA].filter((n) => nodesB.has(n)));
-  const coderAOnly = new Set([...nodesA].filter((n) => !nodesB.has(n)));
-  const coderBOnly = new Set([...nodesB].filter((n) => !nodesA.has(n)));
+  const matched = new Set(Array.from(nodesA).filter((n) => nodesB.has(n)));
+  const coderAOnly = new Set(Array.from(nodesA).filter((n) => !nodesB.has(n)));
+  const coderBOnly = new Set(Array.from(nodesB).filter((n) => !nodesA.has(n)));
 
   const totalPairs = matched.size + coderAOnly.size + coderBOnly.size;
   const matchedCount = matched.size;
@@ -40,35 +40,35 @@ export function calcAgreement(
 
   // Level 1: top-level nodes (parent_id is null)
   const nodesAL1 = new Set(
-    [...nodesA].filter((n) => {
+    Array.from(nodesA).filter((n) => {
       const node = nodeMap.get(n);
       return node && !node.parent_id;
     }),
   );
   const nodesBL1 = new Set(
-    [...nodesB].filter((n) => {
+    Array.from(nodesB).filter((n) => {
       const node = nodeMap.get(n);
       return node && !node.parent_id;
     }),
   );
-  const matchedL1 = new Set([...nodesAL1].filter((n) => nodesBL1.has(n)));
+  const matchedL1 = new Set(Array.from(nodesAL1).filter((n) => nodesBL1.has(n)));
   const totalL1 = nodesAL1.size + nodesBL1.size - matchedL1.size;
   const level1Rate = totalL1 > 0 ? matchedL1.size / totalL1 : 0;
 
   // Level 2: child nodes
   const nodesAL2 = new Set(
-    [...nodesA].filter((n) => {
+    Array.from(nodesA).filter((n) => {
       const node = nodeMap.get(n);
       return node && node.parent_id;
     }),
   );
   const nodesBL2 = new Set(
-    [...nodesB].filter((n) => {
+    Array.from(nodesB).filter((n) => {
       const node = nodeMap.get(n);
       return node && node.parent_id;
     }),
   );
-  const matchedL2 = new Set([...nodesAL2].filter((n) => nodesBL2.has(n)));
+  const matchedL2 = new Set(Array.from(nodesAL2).filter((n) => nodesBL2.has(n)));
   const totalL2 = nodesAL2.size + nodesBL2.size - matchedL2.size;
   const level2Rate = totalL2 > 0 ? matchedL2.size / totalL2 : 0;
 
@@ -119,7 +119,7 @@ function calcCohensKappa(
     ...annotationsA.map((a) => a.node_id),
     ...annotationsB.map((b) => b.node_id),
   ]);
-  for (const nodeId of allNodeIds) {
+  for (const nodeId of Array.from(allNodeIds)) {
     const pA = (countsA.get(nodeId) ?? 0) / totalA;
     const pB = (countsB.get(nodeId) ?? 0) / totalB;
     po += Math.min(pA, pB);
@@ -127,7 +127,7 @@ function calcCohensKappa(
 
   // Expected agreement (Pe): sum of (pA_i * pB_i)
   let pe = 0;
-  for (const nodeId of allNodeIds) {
+  for (const nodeId of Array.from(allNodeIds)) {
     const pA = (countsA.get(nodeId) ?? 0) / totalA;
     const pB = (countsB.get(nodeId) ?? 0) / totalB;
     pe += pA * pB;

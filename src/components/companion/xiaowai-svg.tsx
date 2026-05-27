@@ -17,7 +17,7 @@ interface Props {
 function quoteOfDay() { return QUOTES[new Date().getDate() % QUOTES.length]; }
 function cnQuoteOfDay() { return CN_QUOTES[new Date().getDate() % CN_QUOTES.length]; }
 
-function XiaoWaiSVGInner({ breathingScale, eyeDimmed, orbState, expanded }: Props) {
+function XiaoWaiSVGInner({ breathingScale, orbState, expanded }: Props) {
   const c = STATE_COLOR[orbState];
   const label = STATE_LABEL[orbState];
   const { stats } = useDashboardStore();

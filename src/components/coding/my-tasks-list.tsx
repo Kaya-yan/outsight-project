@@ -40,7 +40,7 @@ interface MyTasksListProps {
   onClaim?: (taskId: string) => Promise<void>;
 }
 
-export function MyTasksList({ tasks, isLoading, currentUserId, mode = "my", onClaim }: MyTasksListProps) {
+export function MyTasksList({ tasks, isLoading, mode = "my", onClaim }: MyTasksListProps) {
   const router = useRouter();
   const [claimingId, setClaimingId] = useState<string | null>(null);
 
