@@ -24,7 +24,7 @@ export function XiaoWaiCompanion() {
 
   // ── DEBUG: Log every render ──
   renderCountRef.current++;
-  console.log(`[Terminal] Render #${renderCountRef.current}: expanded=${expanded}, clicked=${clicked}, hasModal=${hasModal}, orbState=${orbState}`);
+  console.log(`[Terminal] Render #${renderCountRef.current}: expanded=${expanded}, clicked=${clicked}, mobile=${mobile}, hasModal=${hasModal}, orbState=${orbState}`);
 
   // Modal detection
   useEffect(() => {

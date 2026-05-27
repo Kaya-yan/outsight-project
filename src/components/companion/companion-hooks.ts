@@ -100,12 +100,30 @@ export function useHeadTilt(): number {
   return deg;
 }
 
-// ── mobile detect ──
+// ── mobile detect (debounced to avoid IME/keyboard-triggered resize flips) ──
 export function useIsMobile(): boolean {
-  const [m, setM] = useState(false);
+  const [m, setM] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
+  );
   useEffect(() => {
-    const c = () => setM(window.innerWidth < MOBILE_BREAKPOINT);
-    c(); window.addEventListener("resize", c); return () => window.removeEventListener("resize", c);
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const c = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        const next = window.innerWidth < MOBILE_BREAKPOINT;
+        setM((prev) => {
+          if (prev !== next) {
+            console.log(`[Terminal] useIsMobile flipped: ${prev} → ${next} (innerWidth=${window.innerWidth})`);
+          }
+          return next;
+        });
+      }, 300);
+    };
+    window.addEventListener("resize", c);
+    return () => {
+      window.removeEventListener("resize", c);
+      if (timer) clearTimeout(timer);
+    };
   }, []);
   return m;
 }
