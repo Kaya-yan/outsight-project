@@ -28,59 +28,53 @@ export async function GET(request: Request) {
   }
   // "all" = no startDate filter
 
-  // Query reading reactions grouped by user
+  // Query literature_notes with reader_name (the actual "who read this" field)
   let query = supabase
-    .from("literature_reactions")
-    .select("user_id, note_id, created_at")
-    .eq("reaction_type", "read");
+    .from("literature_notes")
+    .select("reader_name, created_by, created_at")
+    .not("reader_name", "is", null);
 
   if (startDate) {
     query = query.gte("created_at", startDate);
   }
 
-  const { data: reactions, error } = await query;
+  const { data: notes, error } = await query;
 
   if (error) {
     return NextResponse.json({ error: "查询失败" }, { status: 500 });
   }
 
-  // Count distinct notes per user (deduplicate)
-  const userNoteSets: Record<string, Set<string>> = {};
-  for (const r of reactions ?? []) {
-    if (!userNoteSets[r.user_id]) userNoteSets[r.user_id] = new Set();
-    userNoteSets[r.user_id].add(r.note_id);
+  // Count notes per reader_name
+  const readerCounts: Record<string, number> = {};
+  for (const n of notes ?? []) {
+    const reader = n.reader_name?.trim();
+    if (reader) {
+      readerCounts[reader] = (readerCounts[reader] ?? 0) + 1;
+    }
   }
 
-  const userCounts: Record<string, number> = {};
-  for (const [uid, noteSet] of Object.entries(userNoteSets)) {
-    userCounts[uid] = noteSet.size;
-  }
-
-  // Get user profiles
-  const userIds = Object.keys(userCounts);
-  if (userIds.length === 0) {
-    return NextResponse.json({ data: [] });
-  }
-
+  // Get all profiles to match reader_name to user info
   const { data: profiles } = await supabase
     .from("profiles")
-    .select("id, username, display_name, avatar_url")
-    .in("id", userIds);
+    .select("id, username, display_name, avatar_url");
 
-  const profileMap = new Map(
-    (profiles ?? []).map((p) => [p.id, p])
-  );
+  // Build lookup maps: display_name -> profile, username -> profile
+  const profileByName = new Map<string, typeof profiles extends (infer U)[] | null ? U : never>();
+  for (const p of profiles ?? []) {
+    if (p.display_name) profileByName.set(p.display_name, p);
+    if (p.username) profileByName.set(p.username, p);
+  }
 
   // Build ranking array
-  const rankings = userIds
-    .map((uid) => {
-      const p = profileMap.get(uid);
+  const rankings = Object.entries(readerCounts)
+    .map(([readerName, count]) => {
+      const p = profileByName.get(readerName);
       return {
-        user_id: uid,
-        username: p?.username ?? "unknown",
-        display_name: p?.display_name ?? null,
+        user_id: p?.id ?? readerName,
+        username: p?.username ?? readerName,
+        display_name: p?.display_name ?? readerName,
         avatar_url: p?.avatar_url ?? null,
-        read_count: userCounts[uid],
+        read_count: count,
       };
     })
     .sort((a, b) => b.read_count - a.read_count)
