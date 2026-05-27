@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { LiteratureCard } from "@/components/literature/literature-card";
 import { LiteratureForm } from "@/components/literature/literature-form";
 import { LiteratureDashboard } from "@/components/literature/literature-dashboard";
+import { ReadingRanking } from "@/components/literature/reading-ranking";
 import { useLiteratureStore } from "@/stores/literature-store";
 import { BookOpen, Plus, Search, Download, X } from "lucide-react";
 
@@ -57,6 +58,9 @@ export default function LiteraturePage() {
 
       {/* Stats Dashboard */}
       {stats && <LiteratureDashboard stats={stats} />}
+
+      {/* Reading Ranking */}
+      <ReadingRanking />
 
       {/* Create form */}
       {showForm && (
