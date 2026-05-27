@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
+const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
 
 const SYSTEM_PROMPT = `You are a research literature parser. Extract structured metadata from raw reading notes text.
 Return ONLY valid JSON with these fields (use null for missing, empty array for no items):
@@ -40,20 +40,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "文本过短，请粘贴至少20字的笔记内容" }, { status: 400 });
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.MIMO_API_KEY;
   if (!apiKey) {
     return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 });
   }
 
   try {
-    const res = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+    const res = await fetch(`${MIMO_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "mimo-v2.5-pro",
         messages: [
           { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: text.slice(0, 4000) },

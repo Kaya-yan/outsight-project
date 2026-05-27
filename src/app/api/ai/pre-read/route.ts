@@ -11,7 +11,7 @@ import {
   analyzeNarrative,
   analyzeSources,
   analyzeTone,
-} from "@/lib/ai/deepseek-client";
+} from "@/lib/ai/ai-client";
 import type { ArticleStatus } from "@/types/database";
 
 export async function POST(request: Request) {

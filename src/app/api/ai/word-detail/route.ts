@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
-const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
+const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
 
 // ── types ──
 interface DictPhonetic {
@@ -66,7 +66,7 @@ function classifyPhonetics(phonetics: DictPhonetic[]): PhoneticsResult {
   return { uk, us };
 }
 
-// ── DeepSeek: translate definitions & examples to Chinese ──
+// ── MiMo: translate definitions & examples to Chinese ──
 async function translateDefinitions(
   definitionsByPos: Record<string, string[]>,
   examples: string[],
@@ -95,14 +95,14 @@ Output format:
 }`;
 
   try {
-    const res = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+    const res = await fetch(`${MIMO_BASE}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "mimo-v2.5-pro",
         messages: [
           {
             role: "system",
@@ -184,8 +184,8 @@ export async function POST(request: Request) {
       }
     }
 
-    // 4. Translate definitions & examples to Chinese via DeepSeek
-    const apiKey = process.env.DEEPSEEK_API_KEY;
+    // 4. Translate definitions & examples to Chinese via MiMo
+    const apiKey = process.env.MIMO_API_KEY;
     let definitionsZh: Record<string, string[]> = {};
     let examplesZh: string[] = [];
 

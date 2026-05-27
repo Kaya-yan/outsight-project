@@ -6,21 +6,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请提供 Prompt 和输入文本" }, { status: 400 });
   }
 
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+  const apiKey = process.env.MIMO_API_KEY;
+  const baseUrl = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
   if (!apiKey) {
-    return NextResponse.json({ error: "未配置 DEEPSEEK_API_KEY" }, { status: 500 });
+    return NextResponse.json({ error: "未配置 MIMO_API_KEY" }, { status: 500 });
   }
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      const res = await fetch(`${baseUrl}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "mimo-v2.5-pro",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userInput },

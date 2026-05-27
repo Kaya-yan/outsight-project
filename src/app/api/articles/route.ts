@@ -6,7 +6,7 @@ import { normalizeUrl, hashUrl } from "@/lib/dedup";
 import {
   summarize, summarizeZh, analyzeSentiment, suggestFramework,
   extractTerms, linguisticCheck, analyzeNarrative, analyzeSources, analyzeTone,
-} from "@/lib/ai/deepseek-client";
+} from "@/lib/ai/ai-client";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 
 export async function GET(request: Request) {

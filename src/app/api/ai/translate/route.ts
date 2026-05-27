@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const DEEPSEEK_BASE = "https://api.deepseek.com/v1";
+const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
 
 const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specializing in discourse analysis and media studies. Translate the given English news text into Chinese with the following requirements:
 
@@ -10,20 +10,20 @@ const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specia
 4. If the text contains specialized terminology (political, economic, academic), use the standard Chinese equivalent.
 5. Output ONLY the Chinese translation, no explanations, no notes, no prefixes.`;
 
-async function callDeepSeekTranslate(text: string): Promise<string | null> {
-  const apiKey = process.env.DEEPSEEK_API_KEY;
+async function callTranslate(text: string): Promise<string | null> {
+  const apiKey = process.env.MIMO_API_KEY;
   if (!apiKey) return null;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
+      const res = await fetch(`${MIMO_BASE}/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: "deepseek-chat",
+          model: "mimo-v2.5-pro",
           messages: [
             { role: "system", content: TRANSLATION_SYSTEM_PROMPT },
             { role: "user", content: text },
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid input" }, { status: 400 });
     }
 
-    const translated = await callDeepSeekTranslate(text);
+    const translated = await callTranslate(text);
     if (!translated) {
       return NextResponse.json({ error: "Translation failed" }, { status: 500 });
     }
