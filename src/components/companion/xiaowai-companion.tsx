@@ -43,20 +43,36 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel on outside click (only when clicked-open)
+  // Close panel on outside mousedown (more reliable than click for input scenarios)
   useEffect(() => {
     if (!clicked) return;
-    function onClick(e: MouseEvent) {
+
+    function onMouseDown(e: MouseEvent) {
+      // Check if the click target is outside the terminal panel
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setClicked(false);
         setExpanded(false);
       }
     }
-    const t = setTimeout(() => document.addEventListener("click", onClick), 100);
+
+    function onKeyDown(e: KeyboardEvent) {
+      // Only Escape key closes the terminal
+      if (e.key === "Escape") {
+        setClicked(false);
+        setExpanded(false);
+      }
+    }
+
+    // Delay adding listener to prevent immediate trigger
+    const t = setTimeout(() => {
+      document.addEventListener("mousedown", onMouseDown);
+      document.addEventListener("keydown", onKeyDown);
+    }, 100);
+
     return () => {
       clearTimeout(t);
-      document.removeEventListener("click", onClick);
-      // Also cleanup leave timer on unmount
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
       if (leaveTimerRef.current) {
         clearTimeout(leaveTimerRef.current);
       }
