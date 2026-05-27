@@ -55,18 +55,14 @@ export function XiaoWaiCompanion() {
     return () => { clearTimeout(t); document.removeEventListener("click", onClick); };
   }, [clicked]);
 
-  // Click handler — toggle lock
-  const handleClick = useCallback(() => {
-    if (clicked) {
-      // Already locked, unlock
-      setClicked(false);
-      setExpanded(false);
-    } else {
-      // Lock open
-      setClicked(true);
-      setExpanded(true);
-    }
-  }, [clicked]);
+  // Click handler — only toggle when clicking the mini bar (not expanded panel)
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    // If expanded, don't toggle on internal clicks
+    if (expanded) return;
+    // Lock open
+    setClicked(true);
+    setExpanded(true);
+  }, [expanded]);
 
   // Hover handlers — only work when not clicked-locked
   const handleMouseEnter = useCallback(() => {

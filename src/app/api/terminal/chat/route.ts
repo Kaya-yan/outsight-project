@@ -230,22 +230,27 @@ ${currentUserLabel}
 - 如果用户问的是平台操作问题，给出具体步骤
 - 如果用户问的是研究方法问题，结合项目实际给出建议`;
 
-  // ── Step 5: Call Mimo API ──
+  // ── Step 5: Call Mimo API (Anthropic Messages API format) ──
+  const endpoint = `${MIMO_BASE_URL}/v1/messages`;
+  console.log("[Terminal] Calling Mimo API:", endpoint);
+  console.log("[Terminal] Model:", MIMO_MODEL);
+
   try {
-    const res = await fetch(`${MIMO_BASE_URL}/chat/completions`, {
+    // Anthropic Messages API format
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${MIMO_API_KEY}`,
+        "x-api-key": MIMO_API_KEY!,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
         model: MIMO_MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
         messages: [
-          { role: "system", content: systemPrompt },
           { role: "user", content: input },
         ],
-        temperature: 0.7,
-        max_tokens: 1024,
         stream: true,
       }),
       signal: AbortSignal.timeout(60000),
@@ -253,14 +258,19 @@ ${currentUserLabel}
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "unknown");
-      console.error("[Terminal] Mimo API error:", res.status, errText);
+      console.error("[Terminal] Mimo API error:", res.status);
+      console.error("[Terminal] Response body (first 200 chars):", errText.slice(0, 200));
+      console.error("[Terminal] Request endpoint:", endpoint);
+      const hint = res.status === 404
+        ? ` (endpoint: ${endpoint})`
+        : "";
       return NextResponse.json({
-        response: `AI 服务暂时不可用（${res.status}），请稍后再试。`,
+        response: `AI 服务暂时不可用（${res.status}）${hint}`,
         type: "error",
       });
     }
 
-    // Stream response
+    // Stream response — Anthropic SSE format
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -287,13 +297,16 @@ ${currentUserLabel}
               if (!trimmed || !trimmed.startsWith("data: ")) continue;
 
               const data = trimmed.slice(6);
-              if (data === "[DONE]") continue;
 
               try {
                 const parsed = JSON.parse(data);
-                const content = parsed.choices?.[0]?.delta?.content;
-                if (content) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content })}\n\n`));
+                // Anthropic format: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}
+                if (parsed.type === "content_block_delta" && parsed.delta?.text) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.delta.text })}\n\n`));
+                }
+                // Handle message_stop
+                if (parsed.type === "message_stop") {
+                  // Stream complete
                 }
               } catch {
                 // Skip malformed chunks
