@@ -316,6 +316,8 @@ export function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onFocus={() => console.log("[Terminal] Input onFocus")}
+          onBlur={() => console.log("[Terminal] Input onBlur")}
           disabled={isStreaming}
           placeholder={isStreaming ? "等待回复中..." : "输入问题或命令..."}
           style={{
