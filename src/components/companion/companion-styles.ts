@@ -26,7 +26,6 @@ export function miniBarStyle(dockLeft: boolean): React.CSSProperties {
     padding: "0 14px",
     overflow: "hidden",
     whiteSpace: "nowrap",
-    transition: `width ${400}ms ease-out, height ${400}ms ease-out, border-radius ${400}ms ease-out`,
   };
 }
 
@@ -37,7 +36,7 @@ export function panelStyle(dockLeft: boolean): React.CSSProperties {
     [dockLeft ? "left" : "right"]: EDGE_INSET,
     bottom: EDGE_INSET,
     width: TERMINAL.panel.w,
-    height: 420, // Increased for interactive terminal
+    height: 420,
     zIndex: Z_INDEX,
     cursor: "default",
     userSelect: "none",
@@ -55,10 +54,5 @@ export function panelStyle(dockLeft: boolean): React.CSSProperties {
     display: "flex",
     flexDirection: "column",
     overflow: "hidden",
-    transition: `width ${400}ms ease-out, height ${400}ms ease-out, border-radius ${400}ms ease-out`,
   };
-}
-
-export function orbModalOpacity(hasModal: boolean): number {
-  return hasModal ? 0.2 : 1;
 }

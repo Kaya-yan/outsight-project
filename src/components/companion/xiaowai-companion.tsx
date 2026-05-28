@@ -5,7 +5,7 @@ import { XiaoWaiSVG } from "./xiaowai-svg";
 import { XiaoWaiMobile } from "./xiaowai-mobile";
 import { TerminalPanel } from "./terminal-panel";
 import { useBreathing, useBlink, useEyeTracking, useIsMobile, useDockLeft } from "./companion-hooks";
-import { miniBarStyle, panelStyle, orbModalOpacity } from "./companion-styles";
+import { miniBarStyle, panelStyle } from "./companion-styles";
 import type { OrbState } from "./companion-config";
 
 export function XiaoWaiCompanion() {
@@ -13,25 +13,14 @@ export function XiaoWaiCompanion() {
   const mobile = useIsMobile();
   const dockLeft = useDockLeft();
   const [orbState, setOrbState] = useState<OrbState>("idle");
-  const [hasModal, setHasModal] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [clicked, setClicked] = useState(false);
-  const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Animation hooks — stop when expanded (TerminalPanel doesn't need them)
   const animActive = !expanded;
   const breathing = useBreathing(animActive);
   const eyeDimmed = useBlink(animActive);
   const pupil = useEyeTracking(ref, animActive);
-
-  // Modal detection
-  useEffect(() => {
-    const check = () => setHasModal(!!document.querySelector('[class*="fixed inset-0 z-50"]'));
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.body, { childList: true, subtree: true });
-    return () => obs.disconnect();
-  }, []);
 
   // System events
   useEffect(() => {
@@ -46,7 +35,7 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel via Escape key only (mousedown removed to avoid IME conflicts)
+  // Close panel via Escape key only
   useEffect(() => {
     if (!clicked) return;
 
@@ -58,36 +47,17 @@ export function XiaoWaiCompanion() {
     }
 
     document.addEventListener("keydown", onKeyDown);
-
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      if (leaveTimerRef.current) {
-        clearTimeout(leaveTimerRef.current);
-      }
-    };
+    return () => document.removeEventListener("keydown", onKeyDown);
   }, [clicked]);
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
+  // Click mini bar to expand
+  const handleClick = useCallback(() => {
     if (expanded) return;
     setClicked(true);
     setExpanded(true);
   }, [expanded]);
 
-  const handleMouseEnter = useCallback(() => {
-    if (leaveTimerRef.current) {
-      clearTimeout(leaveTimerRef.current);
-      leaveTimerRef.current = null;
-    }
-    if (!clicked) setExpanded(true);
-  }, [clicked]);
-
-  const handleMouseLeave = useCallback(() => {
-    if (clicked) return;
-    leaveTimerRef.current = setTimeout(() => {
-      setExpanded(false);
-    }, 300);
-  }, [clicked]);
-
+  // Close button
   const handleClose = useCallback(() => {
     setClicked(false);
     setExpanded(false);
@@ -102,10 +72,8 @@ export function XiaoWaiCompanion() {
   return (
     <div
       ref={ref}
-      style={{ ...style, opacity: orbModalOpacity(hasModal) }}
+      style={style}
       onClick={handleClick}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
       aria-label="Scholarly Terminal"
     >
       {expanded ? (
