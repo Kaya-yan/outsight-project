@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, memo } from "react";
 import { TERMINAL_COMMANDS, type OrbState } from "./companion-config";
 
 interface Message {
@@ -14,7 +14,7 @@ interface TerminalPanelProps {
   onClose?: () => void;
 }
 
-export function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
+export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "system",
@@ -317,7 +317,14 @@ export function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => console.log("[Terminal] Input onFocus")}
-          onBlur={() => console.log("[Terminal] Input onBlur")}
+          onBlur={(e) => {
+            const rt = e.relatedTarget as HTMLElement | null;
+            console.log(`[Terminal] Input onBlur: relatedTarget=${rt ? `<${rt.tagName} class="${rt.className}" id="${rt.id}">` : "null (IME/virtual keyboard?)"}`);
+            // Check if relatedTarget is inside the terminal panel
+            const inputParent = e.currentTarget.closest("[aria-label='Scholarly Terminal']");
+            const isInside = rt && inputParent?.contains(rt);
+            console.log(`[Terminal] onBlur: relatedTarget inside terminal=${isInside}, setExpanded/setClicked NOT called from onBlur`);
+          }}
           disabled={isStreaming}
           placeholder={isStreaming ? "等待回复中..." : "输入问题或命令..."}
           style={{
@@ -338,4 +345,4 @@ export function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
       <style>{`@keyframes cursor-blink{0%,100%{opacity:1}50%{opacity:0}}`}</style>
     </div>
   );
-}
+});
