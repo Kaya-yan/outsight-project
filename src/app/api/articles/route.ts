@@ -18,6 +18,8 @@ export async function GET(request: Request) {
   const period = searchParams.get("period") ?? undefined;
   const status = searchParams.get("status") ?? undefined;
   const search = searchParams.get("search") ?? undefined;
+  const fullTextStatusParam = searchParams.get("fullTextStatus") ?? undefined;
+  const fullTextStatus = fullTextStatusParam ? fullTextStatusParam.split(",") : undefined;
 
   const { data, error, count } = await listArticles(supabase, {
     page,
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
     media,
     period,
     status,
+    fullTextStatus,
     search,
     isArchived: false,
   });

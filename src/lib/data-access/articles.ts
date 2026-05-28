@@ -14,6 +14,7 @@ export interface ArticleListFilters {
   language?: string;
   isArchived?: boolean;
   status?: string;
+  fullTextStatus?: string[];
   period?: string;
   keywordCombo?: string;
   createdBy?: string;
@@ -35,6 +36,10 @@ export async function listArticles(
   if (opts?.status) query = query.eq("status", opts.status);
   if (opts?.period) query = query.eq("period", opts.period);
   if (opts?.createdBy) query = query.eq("created_by", opts.createdBy);
+
+  if (opts?.fullTextStatus && opts.fullTextStatus.length > 0) {
+    query = query.in("full_text_status", opts.fullTextStatus);
+  }
 
   if (opts?.search) {
     const like = `*${opts.search}*`;
@@ -60,7 +65,7 @@ export interface CreateArticleInput {
   author?: string;
   abstract?: string;
   full_text?: string;
-  full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+  full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
   url_hash?: string;
   content?: string;
   word_count?: number;

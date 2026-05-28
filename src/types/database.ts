@@ -133,7 +133,7 @@ export interface Database {
           author: string | null;
           abstract: string | null;
           full_text: string | null;
-          full_text_status: "missing" | "partial" | "complete" | "manual_uploaded";
+          full_text_status: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
           url_hash: string | null;
           content: string | null;
           word_count: number | null;
@@ -153,6 +153,7 @@ export interface Database {
           created_by: string | null;
           created_at: string;
           updated_at: string;
+          content_fetched_at: string | null;
         };
         Insert: {
           id?: string;
@@ -184,6 +185,7 @@ export interface Database {
           ai_framework_hint?: string | null;
           ai_evidence_quotes?: string[];
           created_by?: string | null;
+          content_fetched_at?: string | null;
         };
         Update: {
           title?: string;
@@ -214,6 +216,7 @@ export interface Database {
           ai_confidence?: number | null;
           ai_framework_hint?: string | null;
           ai_evidence_quotes?: string[];
+          content_fetched_at?: string | null;
         };
       };
       annotations: {
@@ -697,7 +700,7 @@ export type LiteratureNote = Tables["literature_notes"]["Row"];
 export type LiteratureComment = Tables["literature_comments"]["Row"];
 export type LiteratureReaction = Tables["literature_reactions"]["Row"];
 
-export type FullTextStatus = "missing" | "partial" | "complete" | "manual_uploaded";
+export type FullTextStatus = "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
 
 export type DualCodingRoundStatus =
   | "in_progress"
