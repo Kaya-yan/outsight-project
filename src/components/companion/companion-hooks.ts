@@ -2,11 +2,12 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { TIMING, MOBILE_BREAKPOINT, LEFT_DOCK_PAGES } from "./companion-config";
 
 // ── breathing: scale 1.0 ↔ 1.03 ──
-export function useBreathing(): number {
+export function useBreathing(active: boolean): number {
   const [s, setS] = useState(1);
   const rf = useRef(0);
 
   useEffect(() => {
+    if (!active) { setS(1); return; }
     let ok = true;
     const t0 = performance.now();
     function tick(now: number) {
@@ -17,13 +18,13 @@ export function useBreathing(): number {
     }
     rf.current = requestAnimationFrame(tick);
     return () => { ok = false; cancelAnimationFrame(rf.current); };
-  }, []);
+  }, [active]);
 
   return s;
 }
 
 // ── blink: random interval, 200ms closed ──
-export function useBlink(): boolean {
+export function useBlink(active: boolean): boolean {
   const [closed, setClosed] = useState(false);
   const t = useRef<ReturnType<typeof setTimeout>>();
 
@@ -36,19 +37,23 @@ export function useBlink(): boolean {
     }, d);
   }, []);
 
-  useEffect(() => { next(); return () => clearTimeout(t.current); }, [next]);
+  useEffect(() => {
+    if (!active) { setClosed(false); return; }
+    next();
+    return () => clearTimeout(t.current);
+  }, [next, active]);
   return closed;
 }
 
 // ── eye tracking: rAF, max 3px, ~300ms delay ──
-export function useEyeTracking(ref: React.RefObject<HTMLElement | null>) {
+export function useEyeTracking(ref: React.RefObject<HTMLElement | null>, active: boolean) {
   const [off, setOff] = useState({ dx: 0, dy: 0 });
   const cur = useRef({ dx: 0, dy: 0 });
   const tgt = useRef({ dx: 0, dy: 0 });
   const mouse = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
-    if (typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
+    if (!active || typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
     let ok = true;
 
     const mv = (e: MouseEvent) => { mouse.current = { x: e.clientX, y: e.clientY }; };
@@ -72,12 +77,14 @@ export function useEyeTracking(ref: React.RefObject<HTMLElement | null>) {
       const e = 0.07;
       cur.current.dx += (tgt.current.dx - cur.current.dx) * e;
       cur.current.dy += (tgt.current.dy - cur.current.dy) * e;
-      setOff({ dx: Math.round(cur.current.dx * 100) / 100, dy: Math.round(cur.current.dy * 100) / 100 });
+      const newDx = Math.round(cur.current.dx * 100) / 100;
+      const newDy = Math.round(cur.current.dy * 100) / 100;
+      setOff((prev) => (prev.dx === newDx && prev.dy === newDy) ? prev : { dx: newDx, dy: newDy });
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
     return () => { ok = false; window.removeEventListener("mousemove", mv); };
-  }, [ref]);
+  }, [ref, active]);
 
   return off;
 }
@@ -111,12 +118,7 @@ export function useIsMobile(): boolean {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         const next = window.innerWidth < MOBILE_BREAKPOINT;
-        setM((prev) => {
-          if (prev !== next) {
-            console.log(`[Terminal] useIsMobile flipped: ${prev} → ${next} (innerWidth=${window.innerWidth})`);
-          }
-          return next;
-        });
+        setM((prev) => (prev === next) ? prev : next);
       }, 300);
     };
     window.addEventListener("resize", c);
