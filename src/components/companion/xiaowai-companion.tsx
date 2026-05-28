@@ -17,6 +17,7 @@ export function XiaoWaiCompanion() {
   const [expanded, setExpanded] = useState(false);
   const [clicked, setClicked] = useState(false);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const imeActiveRef = useRef(false);
 
   // Animation hooks — stop when expanded (TerminalPanel doesn't need them)
   const animActive = !expanded;
@@ -46,11 +47,13 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel on outside mousedown
+  // Close panel on outside mousedown — skip when IME is composing
   useEffect(() => {
     if (!clicked) return;
 
     function onMouseDown(e: MouseEvent) {
+      // Don't collapse when IME candidate window is active
+      if (imeActiveRef.current) return;
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setClicked(false);
         setExpanded(false);
@@ -105,6 +108,10 @@ export function XiaoWaiCompanion() {
     setExpanded(false);
   }, []);
 
+  const handleIMEChange = useCallback((active: boolean) => {
+    imeActiveRef.current = active;
+  }, []);
+
   if (mobile) return <XiaoWaiMobile />;
 
   const style = expanded
@@ -121,7 +128,7 @@ export function XiaoWaiCompanion() {
       aria-label="Scholarly Terminal"
     >
       {expanded ? (
-        <TerminalPanel orbState={orbState} onClose={handleClose} />
+        <TerminalPanel orbState={orbState} onClose={handleClose} onIMEChange={handleIMEChange} />
       ) : (
         <XiaoWaiSVG
           breathingScale={breathing}

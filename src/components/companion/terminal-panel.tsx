@@ -12,9 +12,10 @@ interface Message {
 interface TerminalPanelProps {
   orbState: OrbState;
   onClose?: () => void;
+  onIMEChange?: (active: boolean) => void;
 }
 
-export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
+export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose, onIMEChange }: TerminalPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "system",
@@ -80,7 +81,6 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
     setIsStreaming(true);
     addMessage("user", userMessage);
 
-    // Placeholder for streaming
     const assistantIdx = messages.length + 1;
     setMessages((prev) => [...prev, { role: "assistant", content: "", timestamp: Date.now() }]);
 
@@ -108,7 +108,6 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
       const contentType = res.headers.get("content-type") ?? "";
 
       if (contentType.includes("text/event-stream")) {
-        // Streaming response
         const reader = res.body?.getReader();
         if (!reader) return;
 
@@ -147,7 +146,6 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
           }
         }
       } else {
-        // Non-streaming response (easter eggs, errors)
         const json = await res.json();
         setMessages((prev) => {
           const next = [...prev];
@@ -179,15 +177,12 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
     const trimmed = input.trim();
     if (!trimmed || isStreaming) return;
 
-    // Add to history
     setHistory((prev) => [trimmed, ...prev].slice(0, 50));
     setHistoryIdx(-1);
     setInput("");
 
-    // Check built-in commands
     if (handleCommand(trimmed)) return;
 
-    // Send to API
     streamResponse(trimmed);
   }, [input, isStreaming, handleCommand, streamResponse]);
 
@@ -316,14 +311,12 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onFocus={() => console.log("[Terminal] Input onFocus")}
-          onBlur={(e) => {
-            const rt = e.relatedTarget as HTMLElement | null;
-            console.log(`[Terminal] Input onBlur: relatedTarget=${rt ? `<${rt.tagName} class="${rt.className}" id="${rt.id}">` : "null (IME/virtual keyboard?)"}`);
-            // Check if relatedTarget is inside the terminal panel
-            const inputParent = e.currentTarget.closest("[aria-label='Scholarly Terminal']");
-            const isInside = rt && inputParent?.contains(rt);
-            console.log(`[Terminal] onBlur: relatedTarget inside terminal=${isInside}, setExpanded/setClicked NOT called from onBlur`);
+          onCompositionStart={() => onIMEChange?.(true)}
+          onCompositionEnd={(e) => {
+            onIMEChange?.(false);
+            setInput((e.target as HTMLInputElement).value);
+            // Refocus after IME composition completes
+            requestAnimationFrame(() => inputRef.current?.focus());
           }}
           disabled={isStreaming}
           placeholder={isStreaming ? "等待回复中..." : "输入问题或命令..."}
