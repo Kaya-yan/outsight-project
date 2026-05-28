@@ -47,13 +47,20 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel on outside mousedown — skip when IME is composing
+  // Close panel on outside mousedown — skip when input has focus (IME safe)
   useEffect(() => {
     if (!clicked) return;
 
     function onMouseDown(e: MouseEvent) {
-      // Don't collapse when IME candidate window is active
-      if (imeActiveRef.current) return;
+      const ae = document.activeElement;
+      console.log("[Terminal] mousedown activeElement:", ae?.tagName, "target:", (e.target as HTMLElement)?.tagName);
+
+      // If focus is on an input/textarea inside the terminal, this is an IME
+      // candidate click or input interaction — do NOT collapse
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") && ref.current?.contains(ae)) {
+        return;
+      }
+
       if (ref.current && !ref.current.contains(e.target as Node)) {
         setClicked(false);
         setExpanded(false);
