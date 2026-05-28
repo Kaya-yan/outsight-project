@@ -12,10 +12,9 @@ interface Message {
 interface TerminalPanelProps {
   orbState: OrbState;
   onClose?: () => void;
-  onIMEChange?: (active: boolean) => void;
 }
 
-export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose, onIMEChange }: TerminalPanelProps) {
+export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: TerminalPanelProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "system",
@@ -311,13 +310,6 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose, on
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          onCompositionStart={() => onIMEChange?.(true)}
-          onCompositionEnd={(e) => {
-            onIMEChange?.(false);
-            setInput((e.target as HTMLInputElement).value);
-            // Refocus after IME composition completes
-            requestAnimationFrame(() => inputRef.current?.focus());
-          }}
           disabled={isStreaming}
           placeholder={isStreaming ? "等待回复中..." : "输入问题或命令..."}
           style={{

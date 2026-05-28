@@ -17,7 +17,6 @@ export function XiaoWaiCompanion() {
   const [expanded, setExpanded] = useState(false);
   const [clicked, setClicked] = useState(false);
   const leaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const imeActiveRef = useRef(false);
 
   // Animation hooks — stop when expanded (TerminalPanel doesn't need them)
   const animActive = !expanded;
@@ -47,25 +46,9 @@ export function XiaoWaiCompanion() {
     return () => window.removeEventListener("xw-state", onState);
   }, []);
 
-  // Close panel on outside mousedown — skip when input has focus (IME safe)
+  // Close panel via Escape key only (mousedown removed to avoid IME conflicts)
   useEffect(() => {
     if (!clicked) return;
-
-    function onMouseDown(e: MouseEvent) {
-      const ae = document.activeElement;
-      console.log("[Terminal] mousedown activeElement:", ae?.tagName, "target:", (e.target as HTMLElement)?.tagName);
-
-      // If focus is on an input/textarea inside the terminal, this is an IME
-      // candidate click or input interaction — do NOT collapse
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA") && ref.current?.contains(ae)) {
-        return;
-      }
-
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setClicked(false);
-        setExpanded(false);
-      }
-    }
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -74,14 +57,9 @@ export function XiaoWaiCompanion() {
       }
     }
 
-    const t = setTimeout(() => {
-      document.addEventListener("mousedown", onMouseDown);
-      document.addEventListener("keydown", onKeyDown);
-    }, 100);
+    document.addEventListener("keydown", onKeyDown);
 
     return () => {
-      clearTimeout(t);
-      document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKeyDown);
       if (leaveTimerRef.current) {
         clearTimeout(leaveTimerRef.current);
@@ -115,10 +93,6 @@ export function XiaoWaiCompanion() {
     setExpanded(false);
   }, []);
 
-  const handleIMEChange = useCallback((active: boolean) => {
-    imeActiveRef.current = active;
-  }, []);
-
   if (mobile) return <XiaoWaiMobile />;
 
   const style = expanded
@@ -135,7 +109,7 @@ export function XiaoWaiCompanion() {
       aria-label="Scholarly Terminal"
     >
       {expanded ? (
-        <TerminalPanel orbState={orbState} onClose={handleClose} onIMEChange={handleIMEChange} />
+        <TerminalPanel orbState={orbState} onClose={handleClose} />
       ) : (
         <XiaoWaiSVG
           breathingScale={breathing}
