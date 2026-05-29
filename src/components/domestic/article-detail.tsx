@@ -392,6 +392,8 @@ export function ArticleDetail() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {DIMENSIONS.map(({ key, label, sub, color, Component }) => {
             const dimData = ai[key] as Record<string, unknown> | null;
+            const errors = ai.errors as Record<string, string | null> | undefined;
+            const dimError = errors?.[key];
             return (
               <Card key={key} className="border-[#E2E5E9]">
                 <CardContent className="p-4 space-y-2">
@@ -403,7 +405,10 @@ export function ArticleDetail() {
                   {dimData ? (
                     <Component data={dimData} />
                   ) : (
-                    <span className="text-xs text-[#95A5A6]">分析失败或无数据</span>
+                    <div className="text-xs">
+                      <span className="text-[#E67E22]">分析失败</span>
+                      {dimError && <span className="text-[#95A5A6] ml-1">— {dimError}</span>}
+                    </div>
                   )}
                 </CardContent>
               </Card>

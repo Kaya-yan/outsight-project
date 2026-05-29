@@ -282,6 +282,9 @@ export async function POST(request: Request) {
         }
         send({ log: `已加载 ${existingUrls.size} 条去重记录` });
 
+        // Track skip reasons for summary
+        const skipReasons: Record<string, number> = {};
+
         for (let i = 0; i < allLinks.length; i++) {
           const article = allLinks[i];
           const step = `正在抓取第 ${i + 1}/${allLinks.length} 篇`;
@@ -289,6 +292,7 @@ export async function POST(request: Request) {
 
           // URL dedup
           if (existingUrls.has(article.url)) {
+            skipReasons["URL重复"] = (skipReasons["URL重复"] || 0) + 1;
             skipped++;
             continue;
           }
@@ -296,6 +300,7 @@ export async function POST(request: Request) {
           // Title similarity dedup
           const isDuplicate = existingTitles.some((t) => titleSimilarity(t, article.title) > 0.85);
           if (isDuplicate) {
+            skipReasons["标题相似"] = (skipReasons["标题相似"] || 0) + 1;
             skipped++;
             continue;
           }
@@ -309,6 +314,7 @@ export async function POST(request: Request) {
             .maybeSingle();
 
           if (hashExists) {
+            skipReasons["Hash重复"] = (skipReasons["Hash重复"] || 0) + 1;
             skipped++;
             continue;
           }
@@ -330,6 +336,7 @@ export async function POST(request: Request) {
           }
 
           if (minWordCount && extracted.charCount < minWordCount) {
+            skipReasons["字数不足"] = (skipReasons["字数不足"] || 0) + 1;
             skipped++;
             continue;
           }
@@ -382,7 +389,7 @@ export async function POST(request: Request) {
         send({
           phase: "done",
           log: `采集完成 (耗时 ${elapsed}s): 成功 ${collected} 篇, 跳过 ${skipped} 篇, 失败 ${failed} 篇`,
-          summary: { collected, skipped, failed },
+          summary: { collected, skipped, failed, skipReasons },
         });
       } catch (err) {
         send({ phase: "error", log: `严重错误: ${err instanceof Error ? err.message : "unknown"}` });

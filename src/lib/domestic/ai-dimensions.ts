@@ -1,15 +1,21 @@
 /**
  * 8-dimension AI analysis for Chinese domestic media articles.
  * Each dimension has a specific theoretical grounding and operational definition.
- *
- * Uses the same callLLM interface as the existing ai-client.ts.
  */
 
-// ── callLLM helper (same pattern as ai-client.ts) ──
+// ── callLLM helper ──
+
 const BASE_URL = process.env.MIMO_BASE_URL || "https://token-plan-cn.xiaomimimo.com/anthropic";
 const API_KEY = process.env.MIMO_API_KEY || "";
 
-async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512): Promise<string | null> {
+interface LLMResult {
+  text: string | null;
+  error: string | null;
+}
+
+async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512): Promise<LLMResult> {
+  if (!API_KEY) return { text: null, error: "MIMO_API_KEY 未配置" };
+
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const res = await fetch(`${BASE_URL}/chat/completions`, {
@@ -27,28 +33,60 @@ async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512
           temperature: 0.2,
           max_tokens: maxTokens,
         }),
-        signal: AbortSignal.timeout(60000),
+        signal: AbortSignal.timeout(90000),
       });
 
-      if (!res.ok) continue;
+      if (!res.ok) {
+        const errBody = await res.text().catch(() => "");
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+          continue;
+        }
+        return { text: null, error: `API ${res.status}: ${errBody.slice(0, 100)}` };
+      }
+
       const data = await res.json();
-      return data.choices?.[0]?.message?.content ?? null;
-    } catch {
-      if (attempt < 2) await new Promise((r) => setTimeout(r, (attempt + 1) * 1000));
+      const content = data.choices?.[0]?.message?.content ?? null;
+      if (!content) return { text: null, error: "API 返回空内容" };
+      return { text: content, error: null };
+    } catch (err) {
+      if (attempt < 2) {
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+        continue;
+      }
+      return { text: null, error: err instanceof Error ? err.message : "请求失败" };
     }
   }
-  return null;
+  return { text: null, error: "重试耗尽" };
 }
 
 function parseJSON<T>(text: string | null): T | null {
   if (!text) return null;
   try {
-    // Extract JSON from possible markdown code blocks
     const cleaned = text.replace(/```json?\s*/g, "").replace(/```/g, "").trim();
     return JSON.parse(cleaned) as T;
   } catch {
     return null;
   }
+}
+
+// ── Dimension result wrapper ──
+
+export interface DimResult<T> {
+  data: T | null;
+  error: string | null;
+}
+
+async function runDimension<T>(
+  systemPrompt: string,
+  text: string,
+  maxTokens = 512,
+): Promise<DimResult<T>> {
+  const result = await callLLM(systemPrompt, text.slice(0, 4000), maxTokens);
+  if (result.error) return { data: null, error: result.error };
+  const parsed = parseJSON<T>(result.text);
+  if (!parsed) return { data: null, error: `JSON 解析失败: ${result.text?.slice(0, 80)}` };
+  return { data: parsed, error: null };
 }
 
 // ──────────────────────────────────────────────────────────
@@ -86,9 +124,8 @@ const FRAME_SYSTEM = `你是一名话语分析研究员。基于Entman框架理�
   "key_evidence": ["原文引语1", "原文引语2"]
 }`;
 
-export async function analyzeFrame(text: string): Promise<FrameResult | null> {
-  const result = await callLLM(FRAME_SYSTEM, text.slice(0, 4000), 512);
-  return parseJSON<FrameResult>(result);
+export async function analyzeFrame(text: string): Promise<DimResult<FrameResult>> {
+  return runDimension<FrameResult>(FRAME_SYSTEM, text, 512);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -132,9 +169,8 @@ const DISCOURSE_ACTOR_SYSTEM = `你是一名新闻话语分析研究员。基于
   "leader_speech_examples": ["原文引语1", "原文引语2"]
 }`;
 
-export async function analyzeDiscourseActors(text: string): Promise<DiscourseActorResult | null> {
-  const result = await callLLM(DISCOURSE_ACTOR_SYSTEM, text.slice(0, 4000), 512);
-  return parseJSON<DiscourseActorResult>(result);
+export async function analyzeDiscourseActors(text: string): Promise<DimResult<DiscourseActorResult>> {
+  return runDimension<DiscourseActorResult>(DISCOURSE_ACTOR_SYSTEM, text, 512);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -169,9 +205,8 @@ const POLICY_TOOL_SYSTEM = `你是一名公共政策分析研究员。基于Roth
   "dominant_type": "最多出现的类型"
 }`;
 
-export async function analyzePolicyTools(text: string): Promise<PolicyToolResult | null> {
-  const result = await callLLM(POLICY_TOOL_SYSTEM, text.slice(0, 4000), 512);
-  return parseJSON<PolicyToolResult>(result);
+export async function analyzePolicyTools(text: string): Promise<DimResult<PolicyToolResult>> {
+  return runDimension<PolicyToolResult>(POLICY_TOOL_SYSTEM, text, 512);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -180,7 +215,7 @@ export async function analyzePolicyTools(text: string): Promise<PolicyToolResult
 
 interface SentimentResult {
   polarity: "positive" | "neutral" | "negative";
-  intensity: number; // 1-5
+  intensity: number;
   target: string;
   keywords: string[];
 }
@@ -203,13 +238,12 @@ const SENTIMENT_SYSTEM = `你是一名情感计算研究员。基于Pang & Lee�
   "keywords": ["关键词1", "关键词2"]
 }`;
 
-export async function analyzeSentimentZh(text: string): Promise<SentimentResult | null> {
-  const result = await callLLM(SENTIMENT_SYSTEM, text.slice(0, 4000), 256);
-  return parseJSON<SentimentResult>(result);
+export async function analyzeSentimentZh(text: string): Promise<DimResult<SentimentResult>> {
+  return runDimension<SentimentResult>(SENTIMENT_SYSTEM, text, 256);
 }
 
 // ──────────────────────────────────────────────────────────
-// Dimension 5: 互文性追踪 (Kristeva) — with anti-hallucination
+// Dimension 5: 互文性追踪 (Kristeva)
 // ──────────────────────────────────────────────────────────
 
 interface IntertextualityResult {
@@ -229,13 +263,6 @@ const INTERTEXTUALITY_SYSTEM = `你是一名互文性分析研究员。基于Kri
 4. 引用名称必须是文本中实际出现的完整名称，不得缩写或改写
 5. 如果你不确定某个引用是否真实存在于文本中，不要列出它
 
-识别类别：
-- policy_documents：明确提到的政策文件名称（如"《关于...的意见》"、"二十大报告"）
-- leader_speeches：明确引用的领导人讲话（需标注发言人）
-- historical_events：明确提到的历史事件（需附原文引语）
-- foreign_media_refs：明确引用的外媒报道（需标注来源媒体）
-- classical_refs：明确引用的古典文献、诗词、典故
-
 输出JSON格式：
 {
   "policy_documents": [{"name": "文件全称", "evidence": "原文引语"}],
@@ -245,9 +272,8 @@ const INTERTEXTUALITY_SYSTEM = `你是一名互文性分析研究员。基于Kri
   "classical_refs": [{"text": "典故/诗词", "evidence": "原文引语"}]
 }`;
 
-export async function analyzeIntertextuality(text: string): Promise<IntertextualityResult | null> {
-  const result = await callLLM(INTERTEXTUALITY_SYSTEM, text.slice(0, 4000), 512);
-  return parseJSON<IntertextualityResult>(result);
+export async function analyzeIntertextuality(text: string): Promise<DimResult<IntertextualityResult>> {
+  return runDimension<IntertextualityResult>(INTERTEXTUALITY_SYSTEM, text, 512);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -259,7 +285,7 @@ interface SyntaxFormalityResult {
   passive_sentence_ratio: number;
   political_term_density: number;
   number_usage_frequency: number;
-  formality_score: number; // 1-5
+  formality_score: number;
 }
 
 const SYNTAX_SYSTEM = `你是一名语域分析研究员。基于Halliday语域理论，分析以下中文报道的句法正式度。
@@ -282,9 +308,8 @@ const SYNTAX_SYSTEM = `你是一名语域分析研究员。基于Halliday语域�
   "formality_score": 1-5
 }`;
 
-export async function analyzeSyntaxFormality(text: string): Promise<SyntaxFormalityResult | null> {
-  const result = await callLLM(SYNTAX_SYSTEM, text.slice(0, 4000), 256);
-  return parseJSON<SyntaxFormalityResult>(result);
+export async function analyzeSyntaxFormality(text: string): Promise<DimResult<SyntaxFormalityResult>> {
+  return runDimension<SyntaxFormalityResult>(SYNTAX_SYSTEM, text, 256);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -292,8 +317,8 @@ export async function analyzeSyntaxFormality(text: string): Promise<SyntaxFormal
 // ──────────────────────────────────────────────────────────
 
 interface NarrativePerspectiveResult {
-  macro_narrative_ratio: number; // 0-1, 宏观国家叙事占比
-  micro_narrative_ratio: number; // 0-1, 微观个人叙事占比
+  macro_narrative_ratio: number;
+  micro_narrative_ratio: number;
   narrative_voice: "omniscient" | "reporter" | "quoted" | "mixed";
   narrative_examples: { type: "macro" | "micro"; evidence: string }[];
 }
@@ -302,13 +327,7 @@ const NARRATIVE_SYSTEM = `你是一名叙事学分析研究员。基于Genette�
 
 分析维度：
 1. 宏观国家叙事 vs 微观个人叙事比例
-   - 宏观：国家政策、经济数据、国际关系、制度建设等
-   - 微观：个人经历、群众故事、具体案例、生活场景等
-2. 叙事声音类型：
-   - omniscient（全知叙述）：上帝视角，叙述者无所不知
-   - reporter（记者视角）：新闻报道体，客观陈述
-   - quoted（引语叙述）：以当事人/专家引语推动叙事
-   - mixed（混合视角）
+2. 叙事声音类型：omniscient（全知叙述）/ reporter（记者视角）/ quoted（引语叙述）/ mixed（混合视角）
 
 规则：比例之和应为1.0。每个示例附带原文引语。
 
@@ -320,9 +339,8 @@ const NARRATIVE_SYSTEM = `你是一名叙事学分析研究员。基于Genette�
   "narrative_examples": [{"type": "macro|micro", "evidence": "原文引语"}]
 }`;
 
-export async function analyzeNarrativePerspective(text: string): Promise<NarrativePerspectiveResult | null> {
-  const result = await callLLM(NARRATIVE_SYSTEM, text.slice(0, 4000), 512);
-  return parseJSON<NarrativePerspectiveResult>(result);
+export async function analyzeNarrativePerspective(text: string): Promise<DimResult<NarrativePerspectiveResult>> {
+  return runDimension<NarrativePerspectiveResult>(NARRATIVE_SYSTEM, text, 512);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -339,16 +357,9 @@ interface SpatialReferenceResult {
 const SPATIAL_SYSTEM = `你是一名空间分析研究员。基于Soja第三空间理论，分析以下报道的地域层级指向。
 
 分析维度（出现次数统计）：
-1. governance_level：治理层级
-   - central（中央层面）：国务院、中央、部委、总书记、全国性政策
-   - local（地方层面）：省、市、县、基层、地方
-2. geographic_scope：地理范围
-   - domestic（国内）：涉及中国境内事务
-   - international（国际）：涉及国际事务、外交、外国
-3. urban_rural：城乡指向
-   - urban（城市）：城市、都市、城区
-   - rural（农村）：农村、乡村、田野、农业
-   - neutral（不特指）
+1. governance_level：治理层级（central=中央, local=地方）
+2. geographic_scope：地理范围（domestic=国内, international=国际）
+3. urban_rural：城乡指向（urban=城市, rural=农村, neutral=不特指）
 4. key_locations：文中出现的具体地名（最多5个）
 
 规则：只统计文本中明确出现的地域指代。
@@ -361,9 +372,8 @@ const SPATIAL_SYSTEM = `你是一名空间分析研究员。基于Soja第三空�
   "key_locations": ["地名1", "地名2"]
 }`;
 
-export async function analyzeSpatialReference(text: string): Promise<SpatialReferenceResult | null> {
-  const result = await callLLM(SPATIAL_SYSTEM, text.slice(0, 4000), 384);
-  return parseJSON<SpatialReferenceResult>(result);
+export async function analyzeSpatialReference(text: string): Promise<DimResult<SpatialReferenceResult>> {
+  return runDimension<SpatialReferenceResult>(SPATIAL_SYSTEM, text, 384);
 }
 
 // ──────────────────────────────────────────────────────────
@@ -380,6 +390,17 @@ export interface DomesticAiAnalysis {
   narrative: NarrativePerspectiveResult | null;
   spatial: SpatialReferenceResult | null;
   analyzed_at: string;
+  /** Per-dimension error messages (null = success) */
+  errors: {
+    frame: string | null;
+    discourse_actors: string | null;
+    policy_tools: string | null;
+    sentiment: string | null;
+    intertextuality: string | null;
+    syntax_formality: string | null;
+    narrative: string | null;
+    spatial: string | null;
+  };
 }
 
 export async function runDomesticAiPipeline(text: string): Promise<DomesticAiAnalysis> {
@@ -398,8 +419,24 @@ export async function runDomesticAiPipeline(text: string): Promise<DomesticAiAna
   ]);
 
   return {
-    frame, discourse_actors, policy_tools, sentiment,
-    intertextuality, syntax_formality, narrative, spatial,
+    frame: frame.data,
+    discourse_actors: discourse_actors.data,
+    policy_tools: policy_tools.data,
+    sentiment: sentiment.data,
+    intertextuality: intertextuality.data,
+    syntax_formality: syntax_formality.data,
+    narrative: narrative.data,
+    spatial: spatial.data,
     analyzed_at: new Date().toISOString(),
+    errors: {
+      frame: frame.error,
+      discourse_actors: discourse_actors.error,
+      policy_tools: policy_tools.error,
+      sentiment: sentiment.error,
+      intertextuality: intertextuality.error,
+      syntax_formality: syntax_formality.error,
+      narrative: narrative.error,
+      spatial: spatial.error,
+    },
   };
 }

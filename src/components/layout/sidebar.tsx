@@ -10,6 +10,7 @@ import {
   Eye,
   BookOpen,
   Newspaper,
+  Languages,
 } from "lucide-react";
 import { SidebarItem } from "./sidebar-item";
 import { APP_VERSION } from "@/lib/constants";
@@ -18,6 +19,7 @@ const navItems = [
   { icon: LayoutDashboard, label: "控制台", href: "/dashboard" },
   { icon: FolderOpen, label: "语料", href: "/projects" },
   { icon: Newspaper, label: "国媒语料", href: "/domestic" },
+  { icon: Languages, label: "语料分析", href: "/linguistics" },
   { icon: Code2, label: "编码", href: "/coding" },
   { icon: BookOpen, label: "文献", href: "/literature" },
   { icon: BarChart3, label: "统计", href: "/analytics" },

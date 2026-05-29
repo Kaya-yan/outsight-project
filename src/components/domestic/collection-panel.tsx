@@ -231,10 +231,21 @@ export function CollectionPanel() {
 
             {/* Summary */}
             {collectProgress.summary && (
-              <div className="flex items-center gap-4 text-xs p-2 bg-[#4A90A4]/5 rounded">
-                <span className="text-emerald-600 font-medium">成功 {collectProgress.summary.collected}</span>
-                <span className="text-[#7F8A93]">跳过 {collectProgress.summary.skipped}</span>
-                <span className="text-[#E67E22]">失败 {collectProgress.summary.failed}</span>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-4 text-xs p-2 bg-[#4A90A4]/5 rounded">
+                  <span className="text-emerald-600 font-medium">成功 {collectProgress.summary.collected}</span>
+                  <span className="text-[#7F8A93]">跳过 {collectProgress.summary.skipped}</span>
+                  <span className="text-[#E67E22]">失败 {collectProgress.summary.failed}</span>
+                </div>
+                {collectProgress.summary.skipReasons && Object.keys(collectProgress.summary.skipReasons).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 text-[10px]">
+                    {Object.entries(collectProgress.summary.skipReasons).map(([reason, count]) => (
+                      <span key={reason} className="px-1.5 py-0.5 bg-[#f59e0b]/5 text-[#E67E22] rounded">
+                        {reason}: {count}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>

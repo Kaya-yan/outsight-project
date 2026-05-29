@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Info } from "lucide-react";
 
 // ── SVG Word Cloud ──
 
@@ -17,8 +18,9 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
   const minCount = words[words.length - 1]?.count ?? 1;
 
   // Generate positions using spiral placement
-  const placed: { word: string; x: number; y: number; size: number; color: string }[] = [];
-  const colors = ["#4A90A4", "#6C5CE7", "#00B894", "#E17055", "#FDCB6E", "#E84393", "#00CEC9", "#A29BFE"];
+  const placed: { word: string; x: number; y: number; size: number; color: string; count: number }[] = [];
+  // Single-hue gradient from dark to light (brand teal)
+  const colorStops = ["#2D6A7A", "#3A7D8F", "#4A90A4", "#6BA8B8", "#8DC0CC", "#A8D4DD", "#C4E4EB"];
 
   // Simple spiral placement
   const cx = 300, cy = 150;
@@ -54,10 +56,12 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
       attempts++;
     }
 
+    const colorIdx = Math.min(colorStops.length - 1, Math.floor(ratio * (colorStops.length - 1)));
     placed.push({
       word: w.word,
       x, y, size: fontSize,
-      color: colors[placed.length % colors.length],
+      color: colorStops[colorIdx],
+      count: w.count,
     });
 
     angle += 0.8;
@@ -76,8 +80,10 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
             fill={p.color}
             textAnchor="middle"
             dominantBaseline="middle"
+            className="cursor-pointer hover:opacity-70 transition-opacity"
             style={{ fontFamily: "system-ui, sans-serif" }}
           >
+            <title>{p.word}: {p.count}次</title>
             {p.word}
           </text>
         ))}
@@ -194,6 +200,29 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
   );
 }
 
+// ── Tooltip ──
+
+function MetricTooltip({ children, text }: { children: React.ReactNode; text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-flex items-center gap-1">
+      {children}
+      <span
+        className="cursor-help text-[#95A5A6] hover:text-[#7F8A93]"
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+      >
+        <Info className="h-3 w-3" />
+      </span>
+      {show && (
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal">
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
 // ── Main Dashboard ──
 
 export function AnalysisDashboard() {
@@ -239,6 +268,40 @@ export function AnalysisDashboard() {
         ))}
       </div>
 
+      {/* Lexical Metrics Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-[#6C5CE7]">{(stats.ttr * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-[#95A5A6]">
+              <MetricTooltip text="TTR（Type-Token Ratio）= 不同词形数 / 总词数。衡量词汇多样性，值越高说明用词越丰富。注意：受文本长度影响较大。">
+                <span>TTR 词汇多样性</span>
+              </MetricTooltip>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-[#6C5CE7]">{(stats.sttr * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-[#95A5A6]">
+              <MetricTooltip text="STTR（Standardized TTR）= 以 1000 词为窗口滑动计算 TTR 后取均值。解决了 TTR 受文本长度影响的问题，是更可靠的词汇丰富度指标。">
+                <span>STTR 标准化多样性</span>
+              </MetricTooltip>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-3 text-center">
+            <div className="text-lg font-bold text-[#6C5CE7]">{(stats.lexicalDensity * 100).toFixed(1)}%</div>
+            <div className="text-[10px] text-[#95A5A6]">
+              <MetricTooltip text="词汇密度（Lexical Density）= 实词数 / 总词数。密度越高表示信息承载量越大，通常新闻语体高于口语语体。">
+                <span>词汇密度</span>
+              </MetricTooltip>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Word Cloud */}
         <Card className="border-[#E2E5E9] lg:col-span-2">
@@ -277,6 +340,22 @@ export function AnalysisDashboard() {
           <CardContent className="p-4">
             <h3 className="text-xs text-[#7F8A93] mb-3">高频词 Top 20</h3>
             <BarChart data={stats.topWords.slice(0, 20) as unknown as Record<string, unknown>[]} labelKey="word" valueKey="count" color="#6C5CE7" />
+          </CardContent>
+        </Card>
+
+        {/* Character Frequency */}
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-4">
+            <h3 className="text-xs text-[#7F8A93] mb-3">高频字 Top 20</h3>
+            <BarChart data={stats.topChars?.slice(0, 20) as unknown as Record<string, unknown>[] ?? []} labelKey="char" valueKey="count" color="#00B894" />
+          </CardContent>
+        </Card>
+
+        {/* Bigram Frequency */}
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-4">
+            <h3 className="text-xs text-[#7F8A93] mb-3">高频双字组合 Top 15</h3>
+            <BarChart data={stats.topBigrams?.slice(0, 15) as unknown as Record<string, unknown>[] ?? []} labelKey="bigram" valueKey="count" color="#E17055" />
           </CardContent>
         </Card>
       </div>

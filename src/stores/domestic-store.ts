@@ -37,7 +37,7 @@ export interface CollectProgress {
   /** Structured error list for expandable display */
   errors: { title: string; reason: string }[];
   /** Summary stats after completion */
-  summary: { collected: number; skipped: number; failed: number } | null;
+  summary: { collected: number; skipped: number; failed: number; skipReasons?: Record<string, number> } | null;
 }
 
 export interface DomesticStats {
@@ -47,6 +47,11 @@ export interface DomesticStats {
   avgWordCount: number;
   sentimentDistribution: { polarity: string; count: number }[];
   topWords: { word: string; count: number }[];
+  topChars: { char: string; count: number }[];
+  topBigrams: { bigram: string; count: number }[];
+  ttr: number;
+  sttr: number;
+  lexicalDensity: number;
 }
 
 // ── Store ──
