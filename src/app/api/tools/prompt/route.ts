@@ -14,20 +14,20 @@ export async function POST(request: Request) {
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
+      const res = await fetch(`${baseUrl}/v1/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: "mimo-v2.5-pro",
+          max_tokens: 512,
+          system: systemPrompt,
           messages: [
-            { role: "system", content: systemPrompt },
             { role: "user", content: userInput },
           ],
-          temperature: 0.3,
-          max_tokens: 512,
         }),
         signal: AbortSignal.timeout(30000),
       });
@@ -41,7 +41,7 @@ export async function POST(request: Request) {
       }
 
       const json = await res.json();
-      const result = json.choices?.[0]?.message?.content?.trim() ?? "";
+      const result = json.content?.[0]?.text?.trim() ?? "";
 
       return NextResponse.json({ success: true, result });
     } catch {

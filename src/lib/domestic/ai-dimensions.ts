@@ -18,20 +18,20 @@ async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const res = await fetch(`${BASE_URL}/chat/completions`, {
+      const res = await fetch(`${BASE_URL}/v1/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${API_KEY}`,
+          "x-api-key": API_KEY,
+          "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: "mimo-v2.5-pro",
+          max_tokens: maxTokens,
+          system: systemPrompt,
           messages: [
-            { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          temperature: 0.2,
-          max_tokens: maxTokens,
         }),
         signal: AbortSignal.timeout(90000),
       });
@@ -46,7 +46,7 @@ async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512
       }
 
       const data = await res.json();
-      const content = data.choices?.[0]?.message?.content ?? null;
+      const content = data.content?.[0]?.text ?? null;
       if (!content) return { text: null, error: "API 返回空内容" };
       return { text: content, error: null };
     } catch (err) {

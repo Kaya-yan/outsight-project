@@ -11,20 +11,20 @@ async function callLLM(
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const res = await fetch(`${baseUrl}/chat/completions`, {
+      const res = await fetch(`${baseUrl}/v1/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: "mimo-v2.5-pro",
+          max_tokens: maxTokens,
+          system: systemPrompt,
           messages: [
-            { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt },
           ],
-          temperature: 0.3,
-          max_tokens: maxTokens,
         }),
         signal: AbortSignal.timeout(60000),
       });
@@ -38,7 +38,7 @@ async function callLLM(
       }
 
       const json = await res.json();
-      return json.choices?.[0]?.message?.content?.trim() ?? null;
+      return json.content?.[0]?.text?.trim() ?? null;
     } catch {
       if (attempt < MAX_RETRIES - 1) {
         await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));

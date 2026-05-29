@@ -46,21 +46,20 @@ export async function POST(request: Request) {
   }
 
   try {
-    const res = await fetch(`${MIMO_BASE}/chat/completions`, {
+    const res = await fetch(`${MIMO_BASE}/v1/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
         model: "mimo-v2.5-pro",
+        max_tokens: 2048,
+        system: SYSTEM_PROMPT,
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
           { role: "user", content: text.slice(0, 4000) },
         ],
-        temperature: 0.2,
-        max_tokens: 2048,
-        response_format: { type: "json_object" },
       }),
       signal: AbortSignal.timeout(25000),
     });
@@ -70,7 +69,7 @@ export async function POST(request: Request) {
     }
 
     const json = await res.json();
-    const content = json.choices?.[0]?.message?.content;
+    const content = json.content?.[0]?.text;
     if (!content) {
       return NextResponse.json({ error: "AI 未返回有效结果" }, { status: 500 });
     }

@@ -95,32 +95,27 @@ Output format:
 }`;
 
   try {
-    const res = await fetch(`${MIMO_BASE}/chat/completions`, {
+    const res = await fetch(`${MIMO_BASE}/v1/messages`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
         model: "mimo-v2.5-pro",
+        max_tokens: 2048,
+        system: "You are a professional English-Chinese dictionary translator. Output only valid JSON, no explanation.",
         messages: [
-          {
-            role: "system",
-            content:
-              "You are a professional English-Chinese dictionary translator. Output only valid JSON, no explanation.",
-          },
           { role: "user", content: prompt },
         ],
-        temperature: 0.2,
-        max_tokens: 2048,
-        response_format: { type: "json_object" },
       }),
       signal: AbortSignal.timeout(20000),
     });
 
     if (!res.ok) return null;
     const json = await res.json();
-    const content = json.choices?.[0]?.message?.content;
+    const content = json.content?.[0]?.text;
     if (!content) return null;
 
     const parsed = JSON.parse(content);

@@ -16,20 +16,20 @@ async function callTranslate(text: string): Promise<string | null> {
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await fetch(`${MIMO_BASE}/chat/completions`, {
+      const res = await fetch(`${MIMO_BASE}/v1/messages`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
         },
         body: JSON.stringify({
           model: "mimo-v2.5-pro",
+          max_tokens: Math.min(Math.ceil(text.length * 1.5), 2048),
+          system: TRANSLATION_SYSTEM_PROMPT,
           messages: [
-            { role: "system", content: TRANSLATION_SYSTEM_PROMPT },
             { role: "user", content: text },
           ],
-          temperature: 0.2,
-          max_tokens: Math.min(Math.ceil(text.length * 1.5), 2048),
         }),
         signal: AbortSignal.timeout(25000),
       });
@@ -43,7 +43,7 @@ async function callTranslate(text: string): Promise<string | null> {
       }
 
       const json = await res.json();
-      return json.choices?.[0]?.message?.content?.trim() ?? null;
+      return json.content?.[0]?.text?.trim() ?? null;
     } catch {
       if (attempt < 1) {
         await new Promise((r) => setTimeout(r, 1000));
