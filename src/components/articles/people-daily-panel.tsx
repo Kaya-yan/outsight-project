@@ -8,6 +8,8 @@ interface FetchResult {
   date: string;
   count: number;
   articles: { title: string; url: string; date: string }[];
+  error?: string;
+  debug?: string[];
 }
 
 interface CollectResult {
@@ -66,16 +68,18 @@ export function PeopleDailyPanel() {
 
     try {
       const listRes = await fetch(`/api/people-daily/fetch-list?date=${date}`);
-      if (!listRes.ok) {
-        const err = await listRes.json();
-        throw new Error(err.error || `HTTP ${listRes.status}`);
-      }
       const listData: FetchResult = await listRes.json();
       setFetchResult(listData);
 
+      if (!listRes.ok) {
+        setPhase("error");
+        setError(listData.error || `HTTP ${listRes.status}`);
+        return;
+      }
+
       if (listData.count === 0) {
         setPhase("error");
-        setError("未找到该日期的文章，请确认日期是否正确（人民网仅保留近期数据）");
+        setError(listData.error || "未找到该日期的文章。可能原因：该日期无出版（周日）、页面结构变更、或日期超出数据范围。");
         return;
       }
 
@@ -224,8 +228,20 @@ export function PeopleDailyPanel() {
 
             {/* Error */}
             {phase === "error" && (
-              <div className="text-xs text-[#ef4444] bg-[#ef4444]/5 p-3 rounded-lg border border-[#ef4444]/20">
-                {error}
+              <div className="space-y-2">
+                <div className="text-xs text-[#ef4444] bg-[#ef4444]/5 p-3 rounded-lg border border-[#ef4444]/20">
+                  {error}
+                </div>
+                {fetchResult?.debug && fetchResult.debug.length > 0 && (
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-[#7F8A93] hover:text-[#2D3436]">调试信息</summary>
+                    <div className="mt-1 bg-[#f8f9fb] p-2 rounded border border-[#E2E5E9] font-mono text-[10px] leading-relaxed max-h-40 overflow-y-auto">
+                      {fetchResult.debug.map((line, i) => (
+                        <div key={i} className="text-[#475569]">{line}</div>
+                      ))}
+                    </div>
+                  </details>
+                )}
               </div>
             )}
 
