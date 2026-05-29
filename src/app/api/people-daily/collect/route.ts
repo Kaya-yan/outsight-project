@@ -57,16 +57,19 @@ async function extractPdContent(url: string): Promise<{
 
     // Extract title
     let title = "";
-    const titleEl = doc.querySelector("h1") || doc.querySelector(".title") || doc.querySelector("title");
-    if (titleEl) title = titleEl.textContent?.trim() || "";
+    const titleEl = doc.querySelector("h1") || doc.querySelector(".title") || doc.querySelector("#rm_txt_zw")?.previousElementSibling || doc.querySelector("title");
+    if (titleEl) {
+      title = (titleEl.textContent?.trim() || "").replace(/\s*--.*$/, ""); // Remove trailing "--channel--人民网"
+    }
 
     // Extract main content - People's Daily uses specific containers
     let contentHtml = "";
     const contentSelectors = [
-      "#ozoom",           // Common in rmrb pages
+      "#rm_txt_zw",       // people.com.cn article body
+      "#ozoom",           // paper.people.com.cn
       "#articleContent",  // Alternative container
       ".text_content",    // Another variant
-      ".article_content", // Another variant
+      ".rm_txt_con",      // Another people.com.cn variant
       "td[class*='t_content']", // Table-based layout
     ];
 
@@ -103,10 +106,16 @@ async function extractPdContent(url: string): Promise<{
       return { title, content: cleanedHtml, fullText: "", author: null, publishDate: null, charCount: 0, error: "insufficient text after cleaning" };
     }
 
-    // Extract author (if present)
+    // Extract author/source (if present)
     let author: string | null = null;
-    const authorEl = doc.querySelector(".author") || doc.querySelector("[class*='editor']");
-    if (authorEl) author = authorEl.textContent?.replace(/责任编辑[:：]?\s*/g, "").trim() || null;
+    // people.com.cn puts the source in #laiyid or .author or near the title
+    const authorEl = doc.querySelector("#laiyid") || doc.querySelector(".author") || doc.querySelector("[class*='editor']");
+    if (authorEl) {
+      author = (authorEl.textContent?.trim() || "")
+        .replace(/责任编辑[:：]?\s*/g, "")
+        .replace(/来源[:：]?\s*/g, "")
+        .trim() || null;
+    }
 
     const charCount = fullText.replace(/\s/g, "").length;
 
