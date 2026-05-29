@@ -25,17 +25,19 @@ export interface DomesticFilters {
   dateTo?: string;
   keyword?: string;
   sourceType?: string;
-  sentiment?: string;
-  hasAiAnalysis?: boolean;
   search?: string;
 }
 
 export interface CollectProgress {
-  phase: "idle" | "fetching" | "collecting" | "analyzing" | "done" | "error";
+  phase: "idle" | "fetching" | "collecting" | "done" | "error";
   current: number;
   total: number;
   currentTitle: string;
   log: string[];
+  /** Structured error list for expandable display */
+  errors: { title: string; reason: string }[];
+  /** Summary stats after completion */
+  summary: { collected: number; skipped: number; failed: number } | null;
 }
 
 export interface DomesticStats {
@@ -75,7 +77,7 @@ interface DomesticStoreState {
   isLoadingStats: boolean;
 
   // Actions — list
-  setFilter: (key: keyof DomesticFilters, value: string | boolean | undefined) => void;
+  setFilter: (key: keyof DomesticFilters, value: string | undefined) => void;
   resetFilters: () => void;
   setPage: (page: number) => void;
   fetchArticles: () => Promise<void>;
@@ -91,12 +93,7 @@ interface DomesticStoreState {
     dateFrom: string;
     dateTo: string;
     keywords?: string;
-    sections?: string[];
     minWordCount?: number;
-    sourceType?: string;
-    dedup: boolean;
-    delayMs: number;
-    autoAnalyze: boolean;
   }) => Promise<void>;
 
   // Actions — detail
@@ -106,6 +103,16 @@ interface DomesticStoreState {
 
   // Actions — stats
   fetchStats: (dateFrom?: string, dateTo?: string) => Promise<void>;
+
+  // Actions — manual upload
+  uploadArticle: (data: {
+    title: string;
+    fullText: string;
+    media: string;
+    publishDate?: string;
+    author?: string;
+    url?: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 }
 
 function buildQuery(filters: DomesticFilters, page: number, pageSize: number): string {
@@ -118,7 +125,6 @@ function buildQuery(filters: DomesticFilters, page: number, pageSize: number): s
   if (filters.keyword) params.set("keyword", filters.keyword);
   if (filters.sourceType) params.set("sourceType", filters.sourceType);
   if (filters.search) params.set("search", filters.search);
-  if (filters.hasAiAnalysis) params.set("hasAiAnalysis", "true");
   return `/api/domestic/articles?${params.toString()}`;
 }
 
@@ -132,7 +138,7 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
   isLoading: false,
   error: null,
   selectedIds: [],
-  collectProgress: { phase: "idle", current: 0, total: 0, currentTitle: "", log: [] },
+  collectProgress: { phase: "idle", current: 0, total: 0, currentTitle: "", log: [], errors: [], summary: null },
   isCollecting: false,
   activeArticle: null,
   isLoadingDetail: false,
@@ -192,7 +198,7 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
   startCollect: async (params) => {
     set({
       isCollecting: true,
-      collectProgress: { phase: "fetching", current: 0, total: 0, currentTitle: "", log: [] },
+      collectProgress: { phase: "fetching", current: 0, total: 0, currentTitle: "", log: [], errors: [], summary: null },
     });
 
     try {
@@ -207,22 +213,15 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
         set({
           isCollecting: false,
           collectProgress: {
-            phase: "error",
-            current: 0,
-            total: 0,
-            currentTitle: "",
-            log: [json.error || "采集失败"],
+            phase: "error", current: 0, total: 0, currentTitle: "",
+            log: [json.error || "采集失败"], errors: [], summary: null,
           },
         });
         return;
       }
 
-      // Read SSE stream for progress
       const reader = res.body?.getReader();
-      if (!reader) {
-        set({ isCollecting: false });
-        return;
-      }
+      if (!reader) { set({ isCollecting: false }); return; }
 
       const decoder = new TextDecoder();
       let buffer = "";
@@ -245,9 +244,11 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
                 current: evt.current ?? s.collectProgress.current,
                 total: evt.total ?? s.collectProgress.total,
                 currentTitle: evt.currentTitle ?? s.collectProgress.currentTitle,
-                log: evt.log
-                  ? [...s.collectProgress.log, evt.log]
-                  : s.collectProgress.log,
+                log: evt.log ? [...s.collectProgress.log, evt.log] : s.collectProgress.log,
+                errors: evt.errorEntry
+                  ? [...s.collectProgress.errors, evt.errorEntry]
+                  : s.collectProgress.errors,
+                summary: evt.summary ?? s.collectProgress.summary,
               },
             }));
           } catch { /* ignore malformed SSE */ }
@@ -258,18 +259,13 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
         isCollecting: false,
         collectProgress: { ...s.collectProgress, phase: "done" },
       }));
-
-      // Refresh list
       get().fetchArticles();
     } catch {
       set({
         isCollecting: false,
         collectProgress: {
-          phase: "error",
-          current: 0,
-          total: 0,
-          currentTitle: "",
-          log: ["网络连接失败"],
+          phase: "error", current: 0, total: 0, currentTitle: "",
+          log: ["网络连接失败"], errors: [], summary: null,
         },
       });
     }
@@ -298,22 +294,19 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
   triggerAnalysis: async (id) => {
     set({ isLoadingDetail: true });
     try {
-      const res = await fetch(`/api/domestic/analyze`, {
+      const res = await fetch("/api/domestic/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ articleId: id }),
       });
-      const json = await res.json();
       if (res.ok) {
-        // Re-fetch article to get updated metadata
         get().fetchArticle(id);
       } else {
+        const json = await res.json();
         set({ error: json.error ?? "分析失败" });
       }
     } catch {
       set({ error: "网络连接失败" });
-    } finally {
-      set({ isLoadingDetail: false });
     }
   },
 
@@ -326,13 +319,28 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
       if (dateTo) params.set("dateTo", dateTo);
       const res = await fetch(`/api/domestic/stats?${params.toString()}`);
       const json = await res.json();
-      if (res.ok) {
-        set({ stats: json });
-      }
-    } catch {
-      // silent
-    } finally {
+      if (res.ok) set({ stats: json });
+    } catch { /* silent */ } finally {
       set({ isLoadingStats: false });
+    }
+  },
+
+  // ── Manual Upload ──
+  uploadArticle: async (data) => {
+    try {
+      const res = await fetch("/api/domestic/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        get().fetchArticles();
+        return { ok: true };
+      }
+      return { ok: false, error: json.error ?? "上传失败" };
+    } catch {
+      return { ok: false, error: "网络连接失败" };
     }
   },
 }));

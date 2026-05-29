@@ -11,7 +11,7 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  if (words.length === 0) return <span className="text-xs text-gray-500">暂无数据</span>;
+  if (words.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
 
   const maxCount = words[0]?.count ?? 1;
   const minCount = words[words.length - 1]?.count ?? 1;
@@ -94,20 +94,20 @@ function BarChart({ data, labelKey, valueKey, color }: {
   valueKey: string;
   color?: string;
 }) {
-  if (data.length === 0) return <span className="text-xs text-gray-500">暂无数据</span>;
+  if (data.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const max = Math.max(...data.map((d) => d[valueKey] as number), 1);
   return (
     <div className="space-y-1">
       {data.slice(0, 12).map((d, i) => (
         <div key={i} className="flex items-center gap-2">
-          <span className="text-[10px] text-gray-400 w-16 truncate shrink-0">{d[labelKey] as string}</span>
-          <div className="flex-1 bg-[#2D3436] rounded-full h-2">
+          <span className="text-[10px] text-[#7F8A93] w-16 truncate shrink-0">{d[labelKey] as string}</span>
+          <div className="flex-1 bg-[#E2E5E9] rounded-full h-2">
             <div
               className="h-2 rounded-full transition-all"
               style={{ width: `${((d[valueKey] as number) / max) * 100}%`, backgroundColor: color ?? "#4A90A4" }}
             />
           </div>
-          <span className="text-[10px] text-gray-500 w-8 text-right">{d[valueKey] as number}</span>
+          <span className="text-[10px] text-[#95A5A6] w-8 text-right">{d[valueKey] as number}</span>
         </div>
       ))}
     </div>
@@ -117,7 +117,7 @@ function BarChart({ data, labelKey, valueKey, color }: {
 // ── Simple Pie Chart (CSS) ──
 
 function PieChart({ data }: { data: { polarity: string; count: number }[] }) {
-  if (data.length === 0) return <span className="text-xs text-gray-500">暂无数据</span>;
+  if (data.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const total = data.reduce((s, d) => s + d.count, 0);
   const colors: Record<string, string> = { positive: "#00B894", neutral: "#636E72", negative: "#E17055" };
   const labels: Record<string, string> = { positive: "正面", neutral: "中性", negative: "负面" };
@@ -139,8 +139,8 @@ function PieChart({ data }: { data: { polarity: string; count: number }[] }) {
         {data.map((d, i) => (
           <div key={i} className="flex items-center gap-2 text-xs">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: colors[d.polarity] ?? "#636E72" }} />
-            <span className="text-gray-300">{labels[d.polarity] ?? d.polarity}</span>
-            <span className="text-gray-500">{d.count} ({((d.count / total) * 100).toFixed(0)}%)</span>
+            <span className="text-[#2D3436]">{labels[d.polarity] ?? d.polarity}</span>
+            <span className="text-[#95A5A6]">{d.count} ({((d.count / total) * 100).toFixed(0)}%)</span>
           </div>
         ))}
       </div>
@@ -151,7 +151,7 @@ function PieChart({ data }: { data: { polarity: string; count: number }[] }) {
 // ── Date Line Chart (SVG) ──
 
 function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
-  if (data.length === 0) return <span className="text-xs text-gray-500">暂无数据</span>;
+  if (data.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const max = Math.max(...data.map((d) => d.count), 1);
   const w = 500, h = 120, pad = 30;
   const xStep = (w - pad * 2) / Math.max(data.length - 1, 1);
@@ -207,10 +207,10 @@ export function AnalysisDashboard() {
     return (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Card key={i} className="border-[#3D4446] bg-[#1A1D1E]">
+          <Card key={i} className="border-[#E2E5E9]">
             <CardContent className="p-4">
-              <Skeleton className="h-4 w-24 mb-3 bg-[#2D3436]" />
-              <Skeleton className="h-32 w-full bg-[#2D3436]" />
+              <Skeleton className="h-4 w-24 mb-3 bg-[#E2E5E9]" />
+              <Skeleton className="h-32 w-full bg-[#E2E5E9]" />
             </CardContent>
           </Card>
         ))}
@@ -230,10 +230,10 @@ export function AnalysisDashboard() {
           { label: "平均字数", value: stats.avgWordCount },
           { label: "有AI分析", value: stats.sentimentDistribution.reduce((s, d) => s + d.count, 0) },
         ].map((item, i) => (
-          <Card key={i} className="border-[#3D4446] bg-[#1A1D1E]">
+          <Card key={i} className="border-[#E2E5E9]">
             <CardContent className="p-3 text-center">
               <div className="text-lg font-bold text-[#4A90A4]">{item.value}</div>
-              <div className="text-[10px] text-gray-500">{item.label}</div>
+              <div className="text-[10px] text-[#95A5A6]">{item.label}</div>
             </CardContent>
           </Card>
         ))}
@@ -241,41 +241,41 @@ export function AnalysisDashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Word Cloud */}
-        <Card className="border-[#3D4446] bg-[#1A1D1E] lg:col-span-2">
+        <Card className="border-[#E2E5E9] lg:col-span-2">
           <CardContent className="p-4">
-            <h3 className="text-xs text-gray-400 mb-2">高频词云</h3>
+            <h3 className="text-xs text-[#7F8A93] mb-2">高频词云</h3>
             <WordCloud words={stats.topWords} />
           </CardContent>
         </Card>
 
         {/* Media Distribution */}
-        <Card className="border-[#3D4446] bg-[#1A1D1E]">
+        <Card className="border-[#E2E5E9]">
           <CardContent className="p-4">
-            <h3 className="text-xs text-gray-400 mb-3">媒体分布</h3>
+            <h3 className="text-xs text-[#7F8A93] mb-3">媒体分布</h3>
             <BarChart data={stats.mediaDistribution as unknown as Record<string, unknown>[]} labelKey="media" valueKey="count" />
           </CardContent>
         </Card>
 
         {/* Sentiment Distribution */}
-        <Card className="border-[#3D4446] bg-[#1A1D1E]">
+        <Card className="border-[#E2E5E9]">
           <CardContent className="p-4">
-            <h3 className="text-xs text-gray-400 mb-3">情感分布</h3>
+            <h3 className="text-xs text-[#7F8A93] mb-3">情感分布</h3>
             <PieChart data={stats.sentimentDistribution} />
           </CardContent>
         </Card>
 
         {/* Date Distribution */}
-        <Card className="border-[#3D4446] bg-[#1A1D1E] lg:col-span-2">
+        <Card className="border-[#E2E5E9] lg:col-span-2">
           <CardContent className="p-4">
-            <h3 className="text-xs text-gray-400 mb-3">日期分布</h3>
+            <h3 className="text-xs text-[#7F8A93] mb-3">日期分布</h3>
             <DateLineChart data={stats.dateDistribution} />
           </CardContent>
         </Card>
 
         {/* Top Words Bar */}
-        <Card className="border-[#3D4446] bg-[#1A1D1E] lg:col-span-2">
+        <Card className="border-[#E2E5E9] lg:col-span-2">
           <CardContent className="p-4">
-            <h3 className="text-xs text-gray-400 mb-3">高频词 Top 20</h3>
+            <h3 className="text-xs text-[#7F8A93] mb-3">高频词 Top 20</h3>
             <BarChart data={stats.topWords.slice(0, 20) as unknown as Record<string, unknown>[]} labelKey="word" valueKey="count" color="#6C5CE7" />
           </CardContent>
         </Card>

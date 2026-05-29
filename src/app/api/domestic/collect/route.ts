@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { JSDOM } from "jsdom";
 import { cleanHtml, htmlToPlainText, cleanText } from "@/lib/text-cleaner";
-import { getAdapter, MEDIA_ADAPTERS } from "@/lib/domestic/media-adapters";
+import { getAdapter } from "@/lib/domestic/media-adapters";
 
 /**
  * POST /api/domestic/collect
- * Body: { mediaIds, dateFrom, dateTo, keywords?, sections?, minWordCount?,
- *         sourceType?, dedup, delayMs, autoAnalyze }
+ * Body: { mediaIds, dateFrom, dateTo, keywords?, minWordCount? }
  *
- * SSE stream: emits progress events { phase, current, total, currentTitle, log }
+ * Dedup is always enabled. Delay is fixed at 1200ms. No auto-analyze.
+ * SSE stream: emits progress events with granular status, error list, and summary.
  */
 
 interface CollectBody {
@@ -18,10 +18,6 @@ interface CollectBody {
   dateTo: string;
   keywords?: string;
   minWordCount?: number;
-  sourceType?: string;
-  dedup: boolean;
-  delayMs: number;
-  autoAnalyze: boolean;
 }
 
 interface FoundArticle {
@@ -31,6 +27,8 @@ interface FoundArticle {
   mediaId: string;
   mediaName: string;
 }
+
+const DELAY_MS = 1200;
 
 // ── Link extraction ──
 
@@ -56,7 +54,6 @@ async function fetchArticleLinks(
     const links: { url: string; title: string }[] = [];
     const seen = new Set<string>();
 
-    // Extract all href links
     const hrefRegex = /href="(https?:\/\/[^"]+)"[^>]*>([^<]*)</gi;
     let match: RegExpExecArray | null;
 
@@ -68,7 +65,6 @@ async function fetchArticleLinks(
       if (title.length < 3) continue;
       if (seen.has(url)) continue;
 
-      // Date filter: extract date from URL and check range
       const urlDate = extractDateFromUrl(url);
       if (urlDate && (urlDate < dateFrom || urlDate > dateTo)) continue;
 
@@ -83,14 +79,10 @@ async function fetchArticleLinks(
 }
 
 function extractDateFromUrl(url: string): string | null {
-  // Try YYYY/MMDD pattern (people.com.cn style)
   const m1 = url.match(/\/(\d{4})\/(\d{2})(\d{2})\//);
   if (m1) return `${m1[1]}-${m1[2]}-${m1[3]}`;
-
-  // Try YYYYMMDD pattern (ce.cn style)
   const m2 = url.match(/\/(\d{4})(\d{2})(\d{2})\//);
   if (m2) return `${m2[1]}-${m2[2]}-${m2[3]}`;
-
   return null;
 }
 
@@ -115,28 +107,20 @@ async function extractArticleContent(
     if (!res.ok) return { title: "", fullText: "", author: null, charCount: 0, error: `HTTP ${res.status}` };
 
     const html = await res.text();
-    if (html.length < 200) return { title: "", fullText: "", author: null, charCount: 0, error: "response too short" };
+    if (html.length < 200) return { title: "", fullText: "", author: null, charCount: 0, error: "响应内容过短" };
 
     const dom = new JSDOM(html, { url });
     const doc = dom.window.document;
 
-    // Title
     let title = "";
     const titleEl = doc.querySelector("h1") || doc.querySelector(".title") || doc.querySelector("title");
-    if (titleEl) {
-      title = (titleEl.textContent?.trim() || "").replace(/\s*--.*$/, "");
-    }
+    if (titleEl) title = (titleEl.textContent?.trim() || "").replace(/\s*--.*$/, "");
 
-    // Remove unwanted elements (ads, nav, comments, etc.)
     for (const sel of removeSelectors) {
-      try {
-        doc.querySelectorAll(sel).forEach((el) => el.remove());
-      } catch { /* invalid selector, skip */ }
+      try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch { /* skip */ }
     }
 
-    // Content extraction
     let contentHtml = "";
-    // Try multiple selectors (split by comma for fallback chain)
     const selectors = contentSelector.split(",").map((s) => s.trim());
     for (const sel of selectors) {
       const el = doc.querySelector(sel);
@@ -146,7 +130,6 @@ async function extractArticleContent(
       }
     }
 
-    // Fallback: collect all <p> tags
     if (!contentHtml) {
       const paragraphs = doc.body?.querySelectorAll("p");
       if (paragraphs && paragraphs.length > 2) {
@@ -154,16 +137,14 @@ async function extractArticleContent(
       }
     }
 
-    if (!contentHtml) return { title, fullText: "", author: null, charCount: 0, error: "no content found" };
+    if (!contentHtml) return { title, fullText: "", author: null, charCount: 0, error: "正文提取为空" };
 
-    // Clean
     const cleanedHtml = cleanHtml(contentHtml);
     let fullText = htmlToPlainText(cleanedHtml);
     fullText = cleanText(fullText);
 
-    if (fullText.length < 30) return { title, fullText: "", author: null, charCount: 0, error: "text too short" };
+    if (fullText.length < 30) return { title, fullText: "", author: null, charCount: 0, error: "清洗后文本过短" };
 
-    // Author
     let author: string | null = null;
     const authorEl = doc.querySelector(".author") || doc.querySelector("[class*='editor']") || doc.querySelector(".source");
     if (authorEl) {
@@ -176,11 +157,11 @@ async function extractArticleContent(
     const charCount = fullText.replace(/\s/g, "").length;
     return { title, fullText, author, charCount };
   } catch (err) {
-    return { title: "", fullText: "", author: null, charCount: 0, error: err instanceof Error ? err.message : "unknown" };
+    return { title: "", fullText: "", author: null, charCount: 0, error: err instanceof Error ? err.message : "未知错误" };
   }
 }
 
-// ── SHA-256 ──
+// ── Helpers ──
 
 async function sha256(input: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -188,8 +169,6 @@ async function sha256(input: string): Promise<string> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
-
-// ── Title similarity (Jaccard on character bigrams) ──
 
 function titleSimilarity(a: string, b: string): number {
   const bigrams = (s: string) => {
@@ -204,8 +183,6 @@ function titleSimilarity(a: string, b: string): number {
   for (const bg of setA) if (setB.has(bg)) intersection++;
   return intersection / (setA.size + setB.size - intersection);
 }
-
-// ── SSE Helper ──
 
 function sseEvent(data: Record<string, unknown>): string {
   return `data: ${JSON.stringify(data)}\n\n`;
@@ -225,15 +202,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "无效 JSON" }, { status: 400 });
   }
 
-  const { mediaIds, dateFrom, dateTo, keywords, minWordCount, dedup, delayMs, autoAnalyze } = body;
+  const { mediaIds, dateFrom, dateTo, keywords, minWordCount } = body;
 
   if (!mediaIds?.length || !dateFrom || !dateTo) {
     return NextResponse.json({ error: "缺少必要参数" }, { status: 400 });
   }
 
-  const delay = Math.max(1000, Math.min(5000, delayMs || 1500));
-
-  // SSE response
   const encoder = new TextEncoder();
   const stream = new ReadableStream({
     async start(controller) {
@@ -241,8 +215,10 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(sseEvent(data)));
       };
 
+      const startTime = Date.now();
+
       try {
-        // Phase 1: Collect article links from all selected media
+        // Phase 1: Scan media sources for article links
         send({ phase: "fetching", log: "开始扫描媒体源..." });
 
         const allLinks: FoundArticle[] = [];
@@ -254,12 +230,12 @@ export async function POST(request: Request) {
             continue;
           }
 
-          send({ log: `扫描 ${adapter.name} (${adapter.listPages.length} 个页面)` });
+          send({ log: `正在解析 ${adapter.name} (${adapter.listPages.length} 个列表页)` });
 
           for (const pageUrl of adapter.listPages) {
+            send({ log: `  请求: ${pageUrl}` });
             const links = await fetchArticleLinks(pageUrl, dateFrom, dateTo, adapter.articlePattern);
             for (const link of links) {
-              // Keyword filter
               if (keywords && !link.title.includes(keywords) && !link.url.includes(keywords)) continue;
               allLinks.push({
                 title: link.title,
@@ -269,65 +245,62 @@ export async function POST(request: Request) {
                 mediaName: adapter.name,
               });
             }
-            send({ log: `  ${pageUrl} → ${links.length} 篇` });
+            send({ log: `  → 发现 ${links.length} 篇匹配文章` });
             await new Promise((r) => setTimeout(r, 500));
           }
         }
 
-        send({ log: `共发现 ${allLinks.length} 篇文章`, total: allLinks.length });
+        send({ log: `扫描完成，共发现 ${allLinks.length} 篇文章`, total: allLinks.length });
 
         if (allLinks.length === 0) {
-          send({ phase: "done", log: "未找到符合条件的文章" });
+          send({ phase: "done", log: "未找到符合条件的文章", summary: { collected: 0, skipped: 0, failed: 0 } });
           controller.close();
           return;
         }
 
-        // Phase 2: Collect content for each article
+        // Phase 2: Collect content
         send({ phase: "collecting", current: 0, total: allLinks.length });
 
         let collected = 0;
         let skipped = 0;
         let failed = 0;
 
-        // Fetch existing URLs and titles for dedup
+        // Pre-fetch existing data for dedup
+        send({ log: "加载已有数据用于去重..." });
         const existingUrls = new Set<string>();
         const existingTitles: string[] = [];
-        if (dedup) {
-          const { data: existing } = await supabase
-            .from("articles")
-            .select("url, title")
-            .eq("source", "domestic_media")
-            .limit(2000);
-          if (existing) {
-            for (const e of existing) {
-              existingUrls.add(e.url);
-              existingTitles.push(e.title);
-            }
+        const { data: existing } = await supabase
+          .from("articles")
+          .select("url, title")
+          .eq("source", "domestic_media")
+          .limit(2000);
+        if (existing) {
+          for (const e of existing) {
+            existingUrls.add(e.url);
+            existingTitles.push(e.title);
           }
         }
+        send({ log: `已加载 ${existingUrls.size} 条去重记录` });
 
         for (let i = 0; i < allLinks.length; i++) {
           const article = allLinks[i];
-          send({ current: i + 1, total: allLinks.length, currentTitle: article.title.slice(0, 40) });
+          const step = `正在抓取第 ${i + 1}/${allLinks.length} 篇`;
+          send({ current: i + 1, total: allLinks.length, currentTitle: article.title.slice(0, 40), log: `${step}: ${article.title.slice(0, 30)}` });
 
           // URL dedup
-          if (dedup && existingUrls.has(article.url)) {
-            send({ log: `跳过 (URL重复): ${article.title.slice(0, 30)}` });
+          if (existingUrls.has(article.url)) {
             skipped++;
             continue;
           }
 
           // Title similarity dedup
-          if (dedup) {
-            const isDuplicate = existingTitles.some((t) => titleSimilarity(t, article.title) > 0.85);
-            if (isDuplicate) {
-              send({ log: `跳过 (标题相似): ${article.title.slice(0, 30)}` });
-              skipped++;
-              continue;
-            }
+          const isDuplicate = existingTitles.some((t) => titleSimilarity(t, article.title) > 0.85);
+          if (isDuplicate) {
+            skipped++;
+            continue;
           }
 
-          // URL hash dedup
+          // Hash dedup
           const urlHash = await sha256(article.url);
           const { data: hashExists } = await supabase
             .from("articles")
@@ -336,12 +309,12 @@ export async function POST(request: Request) {
             .maybeSingle();
 
           if (hashExists) {
-            send({ log: `跳过 (hash重复): ${article.title.slice(0, 30)}` });
             skipped++;
             continue;
           }
 
           // Extract content
+          send({ log: `  正在提取正文...` });
           const adapter = getAdapter(article.mediaId)!;
           const extracted = await extractArticleContent(
             article.url,
@@ -350,19 +323,19 @@ export async function POST(request: Request) {
           );
 
           if (!extracted.fullText || extracted.fullText.length < 30) {
-            send({ log: `失败: ${article.title.slice(0, 30)} — ${extracted.error || "无内容"}` });
+            const reason = extracted.error || "正文为空";
+            send({ log: `  失败: ${reason}`, errorEntry: { title: article.title.slice(0, 40), reason } });
             failed++;
             continue;
           }
 
-          // Word count filter
           if (minWordCount && extracted.charCount < minWordCount) {
-            send({ log: `跳过 (字数不足 ${extracted.charCount}): ${article.title.slice(0, 30)}` });
             skipped++;
             continue;
           }
 
           // Insert
+          send({ log: `  正在入库 (${extracted.charCount}字)...` });
           const insertData = {
             title: extracted.title || article.title,
             url: article.url,
@@ -392,38 +365,24 @@ export async function POST(request: Request) {
             .single();
 
           if (insertErr) {
-            send({ log: `入库失败: ${article.title.slice(0, 30)} — ${insertErr.message}` });
+            send({ log: `  入库失败: ${insertErr.message}`, errorEntry: { title: article.title.slice(0, 40), reason: `入库错误: ${insertErr.message}` } });
             failed++;
             continue;
           }
 
-          // Track for dedup
           existingUrls.add(article.url);
           existingTitles.push(article.title);
-
           collected++;
-          send({ log: `✓ ${article.title.slice(0, 40)} (${extracted.charCount}字)` });
+          send({ log: `  ✓ ${article.title.slice(0, 40)} (${extracted.charCount}字)` });
 
-          // Auto-analyze
-          if (autoAnalyze && inserted) {
-            try {
-              const { runDomesticAiPipeline } = await import("@/lib/domestic/ai-dimensions");
-              const analysis = await runDomesticAiPipeline(extracted.fullText);
-              const meta = { domestic_ai_analysis: analysis };
-              await supabase.from("articles").update({ metadata: meta }).eq("id", inserted.id);
-              send({ log: `  AI分析完成` });
-            } catch {
-              send({ log: `  AI分析失败` });
-            }
-          }
-
-          // Delay between requests
-          await new Promise((r) => setTimeout(r, delay));
+          await new Promise((r) => setTimeout(r, DELAY_MS));
         }
 
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(0);
         send({
           phase: "done",
-          log: `采集完成: 成功=${collected}, 跳过=${skipped}, 失败=${failed}`,
+          log: `采集完成 (耗时 ${elapsed}s): 成功 ${collected} 篇, 跳过 ${skipped} 篇, 失败 ${failed} 篇`,
+          summary: { collected, skipped, failed },
         });
       } catch (err) {
         send({ phase: "error", log: `严重错误: ${err instanceof Error ? err.message : "unknown"}` });

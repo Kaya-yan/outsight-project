@@ -28,7 +28,12 @@ export async function listArticles(
   const { from, to } = normalizePagination(opts);
   let query = client.from("articles").select("*", { count: "exact" });
 
-  if (opts?.source) query = query.eq("source", opts.source);
+  if (opts?.source) {
+    query = query.eq("source", opts.source);
+  } else {
+    // Exclude domestic media from English corpus by default
+    query = query.neq("source", "domestic_media");
+  }
   if (opts?.media) query = query.eq("media", opts.media);
   if (opts?.sourceType) query = query.eq("source_type", opts.sourceType);
   if (opts?.language) query = query.eq("language", opts.language);

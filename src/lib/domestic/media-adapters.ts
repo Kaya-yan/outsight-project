@@ -99,6 +99,83 @@ export const MEDIA_ADAPTERS: MediaAdapter[] = [
     ],
     sourceType: "mainstream_media",
   },
+  {
+    id: "guangming",
+    name: "光明日报",
+    listPages: [
+      "https://www.gmw.cn/",
+      "https://politics.gmw.cn/",
+      "https://economy.gmw.cn/",
+      "https://society.gmw.cn/",
+    ],
+    articlePattern: /gmw\.cn\/.*\/content_\d+\.htm/,
+    contentSelector: "#articleContent, .u-txt, .contentMain",
+    titleSelector: "h1, .article-title, .u-title",
+    authorSelector: ".author, .source, .m-title-source",
+    removeSelectors: [
+      ".share", ".comment", ".related", ".ad", ".breadcrumb",
+      ".recommend", ".login-area",
+    ],
+    sections: [
+      { id: "all", label: "全部" },
+      { id: "politics", label: "时政" },
+      { id: "economy", label: "经济" },
+      { id: "society", label: "社会" },
+      { id: "culture", label: "文化" },
+      { id: "science", label: "科技" },
+    ],
+    sourceType: "government",
+  },
+  {
+    id: "thepaper",
+    name: "澎湃新闻",
+    listPages: [
+      "https://www.thepaper.cn/",
+      "https://www.thepaper.cn/channel_25462",
+      "https://www.thepaper.cn/channel_26916",
+    ],
+    articlePattern: /thepaper\.cn\/newsDetail_forward_\d+/,
+    contentSelector: "#news_txt, .news_txt, .newsDetail_content",
+    titleSelector: "h1, .news_title, .title",
+    authorSelector: ".news_author, .author, .source",
+    removeSelectors: [
+      ".comment", ".related", ".ad", ".share",
+      ".recommend", ".breadcrumb",
+    ],
+    sections: [
+      { id: "all", label: "全部" },
+      { id: "politics", label: "时政" },
+      { id: "finance", label: "财经" },
+      { id: "thought", label: "思想" },
+      { id: "tech", label: "科技" },
+    ],
+    sourceType: "mainstream_media",
+  },
+  {
+    id: "chinadaily",
+    name: "中国日报",
+    listPages: [
+      "https://www.chinadaily.com.cn/",
+      "https://www.chinadaily.com.cn/china/",
+      "https://www.chinadaily.com.cn/world/",
+    ],
+    articlePattern: /chinadaily\.com\.cn\/.*\/content_\d+\.htm/,
+    contentSelector: "#Content, .article-body, .main_content",
+    titleSelector: "h1, .article-title, #Title",
+    authorSelector: ".author, .source, #Author",
+    removeSelectors: [
+      ".share", ".comment", ".related", ".ad", ".breadcrumb",
+      ".recommend", ".login",
+    ],
+    sections: [
+      { id: "all", label: "全部" },
+      { id: "china", label: "中国" },
+      { id: "world", label: "国际" },
+      { id: "business", label: "财经" },
+      { id: "culture", label: "文化" },
+    ],
+    sourceType: "mainstream_media",
+  },
 ];
 
 /**
@@ -112,5 +189,5 @@ export function getAdapter(id: string): MediaAdapter | undefined {
  * Get all adapter IDs and names (for frontend display).
  */
 export function getMediaOptions() {
-  return MEDIA_ADAPTERS.map((a) => ({ id: a.id, name: a.name }));
+  return MEDIA_ADAPTERS.map((a) => ({ id: a.id, name: a.name, sourceType: a.sourceType }));
 }
