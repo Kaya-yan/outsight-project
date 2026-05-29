@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OutSight 2.0 — 数据采集、AI 分析与话语研究协作平台</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700;900&display=swap');
+
+/* ═══════════════════ THEME SYSTEM ═══════════════════ */
+[data-theme="dark"] {
+  --bg: #080c14; --bg2: #0d1320;
+  --glass: rgba(15,23,42,0.75); --glass-border: rgba(56,189,248,0.12);
+  --card: rgba(15,23,42,0.6); --card-hover: rgba(30,41,59,0.8);
+  --border: rgba(51,65,85,0.5); --border-hover: rgba(56,189,248,0.4);
+  --text: #e2e8f0; --text-dim: #94a3b8; --text-muted: #64748b;
+  --accent: #38bdf8; --accent2: #818cf8; --accent3: #34d399; --accent4: #f472b6; --accent5: #fb923c;
+  --g1: linear-gradient(135deg,#38bdf8,#818cf8); --g2: linear-gradient(135deg,#34d399,#38bdf8);
+  --g3: linear-gradient(135deg,#f472b6,#fb923c); --g4: linear-gradient(135deg,#818cf8,#f472b6);
+  --code-bg: #0d1117; --code-text: #c9d1d9;
+  --orb1: rgba(56,189,248,0.06); --orb2: rgba(129,140,248,0.05); --orb3: rgba(244,114,182,0.04);
+  --particle: rgba(56,189,248,0.3); --particle-line: rgba(56,189,248,0.06);
+  --slide-accent-line: var(--g1);
+  --nav-bg: rgba(15,23,42,0.92);
+}
+[data-theme="light"] {
+  --bg: #f8f9fb; --bg2: #eef1f6;
+  --glass: rgba(255,255,255,0.82); --glass-border: rgba(99,102,241,0.15);
+  --card: rgba(255,255,255,0.7); --card-hover: rgba(255,255,255,0.9);
+  --border: rgba(203,213,225,0.6); --border-hover: rgba(99,102,241,0.4);
+  --text: #1e293b; --text-dim: #475569; --text-muted: #94a3b8;
+  --accent: #2563eb; --accent2: #7c3aed; --accent3: #059669; --accent4: #db2777; --accent5: #ea580c;
+  --g1: linear-gradient(135deg,#2563eb,#7c3aed); --g2: linear-gradient(135deg,#059669,#2563eb);
+  --g3: linear-gradient(135deg,#db2777,#ea580c); --g4: linear-gradient(135deg,#7c3aed,#db2777);
+  --code-bg: #1e293b; --code-text: #e2e8f0;
+  --orb1: rgba(37,99,235,0.06); --orb2: rgba(124,58,237,0.05); --orb3: rgba(219,39,119,0.04);
+  --particle: rgba(37,99,235,0.25); --particle-line: rgba(37,99,235,0.08);
+  --slide-accent-line: var(--g1);
+  --nav-bg: rgba(255,255,255,0.92);
+}
+[data-theme="neon"] {
+  --bg: #0a0014; --bg2: #0f0020;
+  --glass: rgba(15,0,30,0.78); --glass-border: rgba(168,85,247,0.2);
+  --card: rgba(20,0,40,0.65); --card-hover: rgba(40,10,70,0.8);
+  --border: rgba(168,85,247,0.25); --border-hover: rgba(168,85,247,0.6);
+  --text: #e8e0f0; --text-dim: #b8a4d0; --text-muted: #7a6890;
+  --accent: #c084fc; --accent2: #22d3ee; --accent3: #4ade80; --accent4: #fb7185; --accent5: #fbbf24;
+  --g1: linear-gradient(135deg,#c084fc,#22d3ee); --g2: linear-gradient(135deg,#4ade80,#c084fc);
+  --g3: linear-gradient(135deg,#fb7185,#fbbf24); --g4: linear-gradient(135deg,#22d3ee,#fb7185);
+  --code-bg: #110022; --code-text: #d4c0f0;
+  --orb1: rgba(168,85,247,0.08); --orb2: rgba(34,211,238,0.06); --orb3: rgba(251,113,133,0.05);
+  --particle: rgba(168,85,247,0.35); --particle-line: rgba(168,85,247,0.08);
+  --slide-accent-line: var(--g1);
+  --nav-bg: rgba(15,0,30,0.92);
+}
+
+/* ═══════════════════ BASE ═══════════════════ */
+*{margin:0;padding:0;box-sizing:border-box}
+html{font-size:16px}
+body{font-family:'Inter','Noto Sans SC',-apple-system,sans-serif;background:var(--bg);color:var(--text);overflow:hidden;height:100vh;width:100vw;transition:background .4s,color .4s}
+
+/* ═══════════════════ CANVAS BG ═══════════════════ */
+#particleCanvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+/* ═══════════════════ FLOATING ORBS ═══════════════════ */
+.orb{position:fixed;border-radius:50%;filter:blur(80px);pointer-events:none;z-index:0;transition:background 1s}
+.orb-1{width:500px;height:500px;background:var(--orb1);top:-10%;left:20%;animation:orbFloat1 25s ease-in-out infinite}
+.orb-2{width:400px;height:400px;background:var(--orb2);bottom:-5%;right:15%;animation:orbFloat2 30s ease-in-out infinite}
+.orb-3{width:350px;height:350px;background:var(--orb3);top:40%;left:60%;animation:orbFloat3 20s ease-in-out infinite}
+@keyframes orbFloat1{0%,100%{transform:translate(0,0)}33%{transform:translate(60px,40px)}66%{transform:translate(-30px,60px)}}
+@keyframes orbFloat2{0%,100%{transform:translate(0,0)}33%{transform:translate(-50px,-30px)}66%{transform:translate(40px,-50px)}}
+@keyframes orbFloat3{0%,100%{transform:translate(0,0)}50%{transform:translate(-40px,30px)}}
+
+/* ═══════════════════ PROGRESS BAR ═══════════════════ */
+.progress-track{position:fixed;top:0;left:0;width:100%;height:3px;z-index:200;background:rgba(255,255,255,0.05)}
+.progress-fill{height:100%;background:var(--g1);transition:width .4s ease;border-radius:0 2px 2px 0}
+
+/* ═══════════════════ THEME TOGGLE ═══════════════════ */
+.theme-btn{position:fixed;top:20px;right:20px;z-index:200;width:42px;height:42px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);backdrop-filter:blur(12px);color:var(--accent);cursor:pointer;font-size:1.1rem;display:flex;align-items:center;justify-content:center;transition:all .3s}
+.theme-btn:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(56,189,248,0.2);transform:scale(1.1)}
+.theme-toast{position:fixed;top:70px;right:20px;z-index:200;background:var(--glass);backdrop-filter:blur(12px);border:1px solid var(--glass-border);border-radius:8px;padding:6px 14px;font-size:.75rem;font-weight:600;color:var(--accent);opacity:0;transform:translateY(-8px);transition:all .3s;pointer-events:none}
+.theme-toast.show{opacity:1;transform:translateY(0)}
+
+/* ═══════════════════ HELP BUTTON ═══════════════════ */
+.help-btn{position:fixed;top:20px;right:72px;z-index:200;width:42px;height:42px;border-radius:50%;border:1px solid var(--glass-border);background:var(--glass);backdrop-filter:blur(12px);color:var(--text-dim);cursor:pointer;font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center;transition:all .3s;font-family:var(--mono,'JetBrains Mono',monospace)}
+.help-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+/* ═══════════════════ SHORTCUTS OVERLAY ═══════════════════ */
+.shortcuts-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);display:none;align-items:center;justify-content:center}
+.shortcuts-overlay.show{display:flex}
+.shortcuts-box{background:var(--glass);backdrop-filter:blur(16px);border:1px solid var(--glass-border);border-radius:16px;padding:2rem 2.5rem;max-width:480px;width:90%}
+.shortcuts-box h3{font-size:1.1rem;margin-bottom:1rem;color:var(--accent)}
+.shortcut-row{display:flex;justify-content:space-between;padding:.4rem 0;font-size:.85rem}
+.shortcut-row span:last-child{font-family:'JetBrains Mono',monospace;background:var(--card);border:1px solid var(--border);border-radius:4px;padding:2px 8px;font-size:.75rem}
+
+/* ═══════════════════ GRID OVERVIEW ═══════════════════ */
+.grid-overlay{position:fixed;inset:0;z-index:250;background:rgba(0,0,0,0.85);backdrop-filter:blur(8px);display:none;overflow-y:auto;padding:2rem}
+.grid-overlay.show{display:block}
+.grid-overlay h3{text-align:center;font-size:1.2rem;color:var(--accent);margin-bottom:1.5rem}
+.grid-container{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem;max-width:1200px;margin:0 auto}
+.grid-thumb{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:1rem;cursor:pointer;transition:all .3s;min-height:100px}
+.grid-thumb:hover{border-color:var(--accent);transform:scale(1.03)}
+.grid-thumb.active{border-color:var(--accent);box-shadow:0 0 15px rgba(56,189,248,0.2)}
+.grid-thumb .num{font-size:.7rem;color:var(--text-muted);font-family:'JetBrains Mono',monospace}
+.grid-thumb .title{font-size:.8rem;font-weight:600;margin-top:.3rem;color:var(--text);line-height:1.3}
+.grid-close{position:fixed;top:20px;right:20px;z-index:260;background:var(--glass);border:1px solid var(--border);border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-dim);font-size:1.2rem}
+
+/* ═══════════════════ SLIDES ═══════════════════ */
+.slides{position:relative;width:100%;height:100vh;z-index:1}
+.slide{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:60px 80px;opacity:0;transform:scale(0.97);transition:opacity .5s ease,transform .5s ease;pointer-events:none;overflow-y:auto;z-index:1}
+.slide.active{opacity:1;transform:scale(1);pointer-events:all}
+
+/* accent line at top of each slide */
+.slide::before{content:'';position:absolute;top:0;left:10%;right:10%;height:2px;background:var(--slide-accent-line);border-radius:0 0 4px 4px;opacity:0;transition:opacity .6s .2s}
+.slide.active::before{opacity:.6}
+
+/* staggered card animation */
+.slide.active .card,.slide.active .anim-item{animation:cardIn .5s ease both}
+.slide.active .card:nth-child(1),.slide.active .anim-item:nth-child(1){animation-delay:.1s}
+.slide.active .card:nth-child(2),.slide.active .anim-item:nth-child(2){animation-delay:.2s}
+.slide.active .card:nth-child(3),.slide.active .anim-item:nth-child(3){animation-delay:.3s}
+.slide.active .card:nth-child(4),.slide.active .anim-item:nth-child(4){animation-delay:.4s}
+.slide.active .card:nth-child(5),.slide.active .anim-item:nth-child(5){animation-delay:.5s}
+.slide.active .card:nth-child(6),.slide.active .anim-item:nth-child(6){animation-delay:.6s}
+.slide.active .card:nth-child(7),.slide.active .anim-item:nth-child(7){animation-delay:.7s}
+.slide.active .card:nth-child(8),.slide.active .anim-item:nth-child(8){animation-delay:.8s}
+.slide.active .card:nth-child(9),.slide.active .anim-item:nth-child(9){animation-delay:.9s}
+@keyframes cardIn{from{opacity:0;transform:translateY(18px) scale(0.96)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* ═══════════════════ TYPOGRAPHY ═══════════════════ */
+h1{font-size:3.2rem;font-weight:800;line-height:1.15;letter-spacing:-.03em}
+h2{font-size:2.2rem;font-weight:700;line-height:1.2;letter-spacing:-.02em;margin-bottom:1rem}
+h3{font-size:1.25rem;font-weight:600;color:var(--accent);margin-bottom:.6rem}
+p{font-size:1rem;line-height:1.7;color:var(--text-dim);max-width:900px}
+.subtitle{font-size:1.3rem;color:var(--text-muted);font-weight:400;margin-top:.6rem}
+.label{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.15em;color:var(--accent);margin-bottom:.5rem}
+
+.grad{background:var(--g1);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad2{background:var(--g2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad3{background:var(--g3);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.grad4{background:var(--g4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+
+/* ═══════════════════ CARDS (GLASSMORPHISM) ═══════════════════ */
+.card-grid{display:grid;gap:1rem;margin-top:1.2rem;width:100%;max-width:1100px}
+.card-grid.cols-2{grid-template-columns:1fr 1fr}
+.card-grid.cols-3{grid-template-columns:1fr 1fr 1fr}
+.card-grid.cols-4{grid-template-columns:1fr 1fr 1fr 1fr}
+
+.card{background:var(--card);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:14px;padding:1.3rem;transition:all .35s ease;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;inset:-1px;border-radius:14px;padding:1px;background:linear-gradient(135deg,transparent,var(--accent),transparent);-webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);-webkit-mask-composite:xor;mask-composite:exclude;opacity:0;transition:opacity .4s}
+.card:hover{background:var(--card-hover);transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,0.15)}
+.card:hover::before{opacity:.5}
+
+/* mouse glow effect */
+.card .card-glow{position:absolute;width:200px;height:200px;border-radius:50%;background:radial-gradient(circle,var(--accent) 0%,transparent 70%);opacity:0;pointer-events:none;transform:translate(-50%,-50%);transition:opacity .3s;z-index:0}
+.card:hover .card-glow{opacity:0.04}
+.card>*{position:relative;z-index:1}
+
+.card .icon{font-size:1.8rem;margin-bottom:.6rem}
+.card h4{font-size:.95rem;font-weight:600;margin-bottom:.3rem}
+.card p{font-size:.82rem;color:var(--text-muted);line-height:1.5}
+
+/* ═══════════════════ EXPANDABLE CARDS ═══════════════════ */
+.expandable{cursor:pointer}
+.expandable .expand-hint{display:flex;align-items:center;gap:.3rem;font-size:.7rem;color:var(--text-muted);margin-top:.6rem;transition:color .3s}
+.expandable:hover .expand-hint{color:var(--accent)}
+.expand-hint .chevron{transition:transform .3s;display:inline-block}
+.expandable.expanded .expand-hint .chevron{transform:rotate(180deg)}
+.expand-body{max-height:0;overflow:hidden;transition:max-height .4s ease,opacity .3s ease;opacity:0}
+.expandable.expanded .expand-body{max-height:600px;opacity:1;margin-top:.8rem}
+.expand-body-inner{padding-top:.8rem;border-top:1px solid var(--border);font-size:.8rem;color:var(--text-dim);line-height:1.6}
+.expand-body-inner .prompt-block{background:var(--code-bg);border-radius:8px;padding:.8rem 1rem;font-family:'JetBrains Mono',monospace;font-size:.72rem;color:var(--code-text);margin:.5rem 0;line-height:1.5;white-space:pre-wrap}
+.expand-body-inner .detail-row{display:flex;gap:.5rem;padding:.2rem 0}
+.expand-body-inner .detail-label{color:var(--accent);font-weight:600;min-width:60px;flex-shrink:0;font-size:.75rem}
+
+/* ═══════════════════ FLOW DIAGRAM ═══════════════════ */
+.flow{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;justify-content:center;margin:1.2rem 0}
+.flow-node{background:var(--card);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;padding:.7rem 1rem;font-size:.82rem;font-weight:500;text-align:center;min-width:90px;transition:all .3s}
+.flow-node.highlight{border-color:var(--accent);box-shadow:0 0 20px rgba(56,189,248,0.12)}
+.flow-arrow{color:var(--text-muted);font-size:1rem;font-weight:300}
+
+/* ═══════════════════ STATS ═══════════════════ */
+.stats-row{display:flex;gap:2rem;margin:1.5rem 0;flex-wrap:wrap;justify-content:center}
+.stat{text-align:center}
+.stat-value{font-size:2.8rem;font-weight:800;line-height:1;font-family:'Inter',sans-serif}
+.stat-label{font-size:.78rem;color:var(--text-muted);margin-top:.3rem}
+
+/* ═══════════════════ CODE BLOCKS ═══════════════════ */
+.code-block{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;overflow:hidden;max-width:900px;width:100%;margin:.8rem 0}
+.code-header{display:flex;align-items:center;gap:6px;padding:.5rem .8rem;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border)}
+.code-dot{width:10px;height:10px;border-radius:50%}
+.code-dot.red{background:#ff5f56}.code-dot.yellow{background:#ffbd2e}.code-dot.green{background:#27c93f}
+.code-title{font-size:.65rem;color:var(--text-muted);margin-left:.5rem;font-family:'JetBrains Mono',monospace}
+.code-body{padding:1rem 1.2rem;font-family:'JetBrains Mono',monospace;font-size:.78rem;line-height:1.6;color:var(--code-text);overflow-x:auto;white-space:pre}
+.code-body .kw{color:#ff7b72}.code-body .fn{color:#d2a8ff}.code-body .str{color:#a5d6ff}.code-body .cm{color:#8b949e}.code-body .tp{color:#79c0ff}
+
+/* ═══════════════════ TABLES ═══════════════════ */
+.data-table{border-collapse:collapse;margin:.8rem 0;font-size:.82rem;width:100%;max-width:900px}
+.data-table th{text-align:left;padding:.5rem .8rem;border-bottom:2px solid var(--border);color:var(--accent);font-weight:600;font-size:.72rem;text-transform:uppercase;letter-spacing:.1em}
+.data-table td{padding:.5rem .8rem;border-bottom:1px solid rgba(51,65,85,0.3);color:var(--text-dim);transition:background .2s}
+.data-table tr:hover td{background:rgba(56,189,248,0.04)}
+
+/* ═══════════════════ TAGS ═══════════════════ */
+.tag{display:inline-block;padding:.15rem .55rem;border-radius:5px;font-size:.68rem;font-weight:600;font-family:'JetBrains Mono',monospace}
+.tag.blue{background:rgba(56,189,248,0.12);color:var(--accent)}
+.tag.green{background:rgba(52,211,153,0.12);color:var(--accent3)}
+.tag.pink{background:rgba(244,114,182,0.12);color:var(--accent4)}
+.tag.orange{background:rgba(251,146,60,0.12);color:var(--accent5)}
+.tag.purple{background:rgba(129,140,248,0.12);color:var(--accent2)}
+
+/* ═══════════════════ HEATMAP ═══════════════════ */
+.heatmap{border-collapse:collapse;margin:.8rem 0;font-size:.78rem}
+.heatmap th{padding:.4rem .7rem;color:var(--text-muted);font-weight:500;font-size:.68rem}
+.heatmap td{padding:.45rem .7rem;text-align:center;font-family:'JetBrains Mono',monospace;font-weight:600;border-radius:5px;min-width:55px;transition:transform .2s}
+.heatmap td:hover{transform:scale(1.08)}
+
+/* ═══════════════════ BADGES ═══════════════════ */
+.badge{display:inline-flex;align-items:center;gap:.3rem;padding:.2rem .6rem;border-radius:999px;font-size:.7rem;font-weight:600;position:relative;overflow:hidden}
+.badge::after{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:linear-gradient(45deg,transparent 30%,rgba(255,255,255,0.08) 50%,transparent 70%);animation:shimmer 3s ease-in-out infinite}
+@keyframes shimmer{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+/* ═══════════════════ TIMELINE ═══════════════════ */
+.timeline{position:relative;padding-left:2rem;margin:.8rem 0}
+.timeline::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--border)}
+.timeline-item{position:relative;padding:.6rem 0 .6rem 1.3rem}
+.timeline-item::before{content:'';position:absolute;left:-2rem;top:.8rem;width:10px;height:10px;border-radius:50%;background:var(--accent);border:2px solid var(--bg);box-shadow:0 0 8px rgba(56,189,248,0.3)}
+.timeline-item h4{font-size:.85rem;font-weight:600;color:var(--text)}
+.timeline-item p{font-size:.78rem;color:var(--text-muted);margin-top:.15rem}
+
+/* ═══════════════════ KAPPA SCALE ═══════════════════ */
+.kappa-scale{display:flex;gap:0;margin:.8rem 0;border-radius:8px;overflow:hidden;width:100%;max-width:550px}
+.kappa-seg{flex:1;padding:.5rem .3rem;text-align:center;font-size:.62rem;font-weight:600;transition:transform .2s}
+.kappa-seg:hover{transform:scaleY(1.15)}
+
+/* ═══════════════════ FEATURE LIST ═══════════════════ */
+.feature-list{list-style:none;margin:.8rem 0}
+.feature-list li{padding:.35rem 0;font-size:.9rem;color:var(--text-dim);display:flex;align-items:flex-start;gap:.5rem}
+.feature-list li::before{content:"›";color:var(--accent);font-weight:700;flex-shrink:0;font-size:1.1rem}
+
+/* ═══════════════════ TWO COLUMN ═══════════════════ */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:2rem;width:100%;max-width:1100px}
+
+/* ═══════════════════ MEDIA CHIPS ═══════════════════ */
+.media-row{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;margin:1.2rem 0}
+.media-chip{background:var(--card);backdrop-filter:blur(8px);border:1px solid var(--border);border-radius:10px;padding:.5rem 1.1rem;font-weight:600;font-size:.85rem;transition:all .3s}
+.media-chip:hover{border-color:var(--accent);box-shadow:0 0 15px rgba(56,189,248,0.1);transform:translateY(-2px)}
+
+/* ═══════════════════ NAVIGATION ═══════════════════ */
+.nav{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:.8rem;background:var(--nav-bg);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid var(--glass-border);border-radius:999px;padding:.45rem 1.2rem;z-index:100;transition:background .4s,border-color .4s}
+.nav button{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:1.1rem;padding:.3rem .5rem;border-radius:6px;transition:all .2s}
+.nav button:hover{color:var(--accent);background:rgba(56,189,248,0.08)}
+.nav .page-info{font-family:'JetBrains Mono',monospace;font-size:.78rem;color:var(--text-muted);min-width:55px;text-align:center}
+
+/* dots */
+.slide-dots{display:flex;gap:6px;align-items:center}
+.slide-dot{width:6px;height:6px;border-radius:50%;background:var(--border);cursor:pointer;transition:all .3s}
+.slide-dot.active{background:var(--accent);width:18px;border-radius:3px}
+.slide-dot:hover{background:var(--accent)}
+
+/* ═══════════════════ SLIDE TYPES ═══════════════════ */
+.title-slide{text-align:center}
+.title-slide h1{font-size:3.8rem;margin-bottom:.4rem}
+.section-slide{text-align:center}
+.section-slide h2{font-size:2.8rem}
+.content-slide{align-items:flex-start;justify-content:flex-start;padding-top:70px}
+.content-slide h2{margin-bottom:.8rem}
+
+/* ═══════════════════ CLICK HINT ═══════════════════ */
+.click-hint{position:fixed;bottom:75px;left:50%;transform:translateX(-50%);font-size:.7rem;color:var(--text-muted);z-index:50;opacity:.5;pointer-events:none;animation:fadeHint 4s ease infinite}
+@keyframes fadeHint{0%,100%{opacity:.3}50%{opacity:.6}}
+
+/* ═══════════════════ RESPONSIVE ═══════════════════ */
+@media(max-width:768px){
+  .slide{padding:30px 20px}
+  h1{font-size:2rem}h2{font-size:1.5rem}
+  .card-grid.cols-2,.card-grid.cols-3,.card-grid.cols-4{grid-template-columns:1fr}
+  .two-col{grid-template-columns:1fr}
+  .stats-row{gap:1rem}.stat-value{font-size:2rem}
+  .title-slide h1{font-size:2.5rem}
+  .flow{flex-direction:column}
+  .flow-arrow{transform:rotate(90deg)}
+}
+</style>
+</head>
+<body>
+
+<!-- Background layers -->
+<canvas id="particleCanvas"></canvas>
+<div class="orb orb-1"></div>
+<div class="orb orb-2"></div>
+<div class="orb orb-3"></div>
+
+<!-- Progress bar -->
+<div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+<!-- Theme toggle -->
+<button class="theme-btn" id="themeBtn" title="切换主题">🎨</button>
+<div class="theme-toast" id="themeToast">Dark</div>
+
+<!-- Help button -->
+<button class="help-btn" id="helpBtn" title="快捷键 (?)">?</button>
+
+<!-- Shortcuts overlay -->
+<div class="shortcuts-overlay" id="shortcutsOverlay">
+  <div class="shortcuts-box">
+    <h3>快捷键</h3>
+    <div class="shortcut-row"><span>下一页</span><span>→ / Space / Click</span></div>
+    <div class="shortcut-row"><span>上一页</span><span>← / PageUp</span></div>
+    <div class="shortcut-row"><span>第一页</span><span>Home</span></div>
+    <div class="shortcut-row"><span>最后一页</span><span>End</span></div>
+    <div class="shortcut-row"><span>幻灯片总览</span><span>G</span></div>
+    <div class="shortcut-row"><span>全屏</span><span>F</span></div>
+    <div class="shortcut-row"><span>快捷键帮助</span><span>? / Esc</span></div>
+  </div>
+</div>
+
+<!-- Grid overview -->
+<div class="grid-overlay" id="gridOverlay">
+  <h3>幻灯片总览</h3>
+  <div class="grid-container" id="gridContainer"></div>
+</div>
+
+<!-- ═══════════════════ SLIDES ═══════════════════ -->
+<div class="slides" id="slides">
+
+<!-- ========== SLIDE 0: Title ========== -->
+<div class="slide title-slide active" data-index="0" data-title="OutSight 2.0">
+  <div class="label anim-item" style="margin-bottom:1rem">学术讲座 · 研究方法与技术实践</div>
+  <h1><span class="grad" id="typingTitle">OutSight</span> <span style="font-weight:300;color:var(--text-muted)">2.0</span></h1>
+  <p class="subtitle anim-item" style="font-size:1.4rem;margin-top:.4rem">外眼 · 数据采集、AI 分析与话语研究协作平台</p>
+  <div class="anim-item" style="margin-top:2rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap">
+    <div class="badge" style="background:rgba(56,189,248,0.1);color:var(--accent)">Next.js 14</div>
+    <div class="badge" style="background:rgba(129,140,248,0.1);color:var(--accent2)">Supabase</div>
+    <div class="badge" style="background:rgba(52,211,153,0.1);color:var(--accent3)">MiMo v2.5 Pro</div>
+    <div class="badge" style="background:rgba(244,114,182,0.1);color:var(--accent4)">Recharts</div>
+  </div>
+  <p class="anim-item" style="margin-top:2.5rem;font-size:.82rem;color:var(--text-muted)">山东大学 · 话语研究协作平台 · 2026</p>
+</div>
+
+<!-- ========== SLIDE 1: Agenda ========== -->
+<div class="slide content-slide" data-index="1" data-title="目录">
+  <div class="label">目录</div>
+  <h2>讲座内容概览</h2>
+  <div class="card-grid cols-2" style="margin-top:.5rem">
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🔍</div><h4>一、研究设计与背景</h4><p>研究问题、理论框架、媒体样本与时间窗口</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">理论</span><span>CDA 三维模型 + 框架理论 + 内容分析法</span></div>
+        <div class="detail-row"><span class="detail-label">媒体</span><span>NYT、WP、WSJ、Guardian、Economist、BBC</span></div>
+        <div class="detail-row"><span class="detail-label">时段</span><span>2022.10 — 2024.12（27 个月，5 个半年周期）</span></div>
+        <div class="detail-row"><span class="detail-label">规模</span><span>800+ 篇已入库文章</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📥</div><h4>二、数据采集体系</h4><p>四源采集架构、批次设计、入库守卫</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">数据源</span><span>RSS、NewsAPI、GDELT、搜索引擎（Bing/Serper/Google）</span></div>
+        <div class="detail-row"><span class="detail-label">批次</span><span>~37 批次，前端驱动轮询，每批 ~8 秒</span></div>
+        <div class="detail-row"><span class="detail-label">守卫</span><span>时间过滤 + SHA-256 URL 去重</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🧹</div><h4>三、内容提取与清洗</h4><p>Readability 正文提取、文本清洗、付费墙检测</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">提取</span><span>JSDOM + Mozilla Readability → cleanHtml → htmlToPlainText → cleanText</span></div>
+        <div class="detail-row"><span class="detail-label">付费墙</span><span>双条件判定：字数 &lt; 800 + 30+ 关键词匹配</span></div>
+        <div class="detail-row"><span class="detail-label">批量</span><span>batch-clean API，metadata.cleaned_at 幂等</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🤖</div><h4>四、AI 预读分析系统</h4><p>9 维度并行分析、AI-人工协作编码模式</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">模型</span><span>MiMo v2.5 Pro，temperature=0.3，3 次指数退避重试</span></div>
+        <div class="detail-row"><span class="detail-label">维度</span><span>摘要(EN/ZH)、情感、框架、术语、语言特征、叙事、信源、语调</span></div>
+        <div class="detail-row"><span class="detail-label">协作</span><span>AI 辅助 + 人工决策 + 双人编码 + Kappa 检验</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">✏️</div><h4>五、人工编码与信度检验</h4><p>编码框架、双人编码、Cohen's Kappa</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">框架</span><span>层级树结构（nested set model），编码节点 + 标注</span></div>
+        <div class="detail-row"><span class="detail-label">流程</span><span>领取 → 阅读 → 选中 → 编码 → 双人比对 → 仲裁</span></div>
+        <div class="detail-row"><span class="detail-label">信度</span><span>Cohen's Kappa，≥ 0.6 为良好</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📊</div><h4>六、可视化与数据利用</h4><p>热力图、饼图、时间线、定量与定性分析路径</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 点击查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">图表</span><span>框架饼图、媒体热力图、时间线柱状图、Kappa 分布图</span></div>
+        <div class="detail-row"><span class="detail-label">定量</span><span>框架分布、情感趋势、卡方检验、信度统计</span></div>
+        <div class="detail-row"><span class="detail-label">定性</span><span>叙事模式、信源策略、语言特征、术语话语</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 2: Research Context ========== -->
+<div class="slide content-slide" data-index="2" data-title="研究设计">
+  <div class="label">第一章 · 研究设计</div>
+  <h2>研究问题与理论框架</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>核心研究问题</h3>
+      <p style="font-size:1.05rem;color:var(--text);font-weight:500;margin-bottom:.8rem">英语主流媒体如何报道和建构"中国式现代化"话语？</p>
+      <ul class="feature-list">
+        <li>哪些话语框架被使用？（威胁/机遇/问题/中性）</li>
+        <li>情感倾向如何？正面/负面/中性分布</li>
+        <li>信源策略如何？官方/专家/公众/匿名比例</li>
+        <li>叙事模式如何？冲突驱动/数据驱动/人文关怀</li>
+        <li>跨媒体/跨时段有何差异与演变？</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>理论根基</h3>
+      <div class="card" style="margin-bottom:.6rem"><h4>批评话语分析 (CDA)</h4><p>Fairclough 三维模型：文本—话语实践—社会实践</p></div>
+      <div class="card" style="margin-bottom:.6rem"><h4>框架理论 (Framing)</h4><p>媒体通过选择、强调、排除来建构现实</p></div>
+      <div class="card"><h4>内容分析法</h4><p>系统化的定量编码与统计推断</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 3: Research Scope ========== -->
+<div class="slide content-slide" data-index="3" data-title="研究范围">
+  <div class="label">第一章 · 研究设计</div>
+  <h2>研究对象与范围</h2>
+  <div class="media-row">
+    <div class="media-chip">NYT</div><div class="media-chip">Washington Post</div><div class="media-chip">WSJ</div>
+    <div class="media-chip">Guardian</div><div class="media-chip">Economist</div><div class="media-chip">BBC</div>
+  </div>
+  <div class="stats-row" style="margin-top:1.5rem">
+    <div class="stat"><div class="stat-value grad" data-count="6">0</div><div class="stat-label">媒体来源</div></div>
+    <div class="stat"><div class="stat-value grad2" data-count="5">0</div><div class="stat-label">研究时段</div></div>
+    <div class="stat"><div class="stat-value grad3" data-count="800" data-suffix="+">0</div><div class="stat-label">语料规模</div></div>
+    <div class="stat"><div class="stat-value grad4" data-count="27">0</div><div class="stat-label">月跨度</div></div>
+  </div>
+  <div style="margin-top:1.5rem;width:100%;max-width:900px">
+    <h3>五个研究时段</h3>
+    <div class="timeline">
+      <div class="timeline-item"><h4>2022.10 — 2023.03</h4><p>二十大召开，中国式现代化概念正式提出</p></div>
+      <div class="timeline-item"><h4>2023.04 — 2023.09</h4><p>两会后续效应，国际反应发酵</p></div>
+      <div class="timeline-item"><h4>2023.10 — 2024.03</h4><p>一带一路十周年，第三届高峰论坛</p></div>
+      <div class="timeline-item"><h4>2024.04 — 2024.09</h4><p>中美关系波动，经贸摩擦</p></div>
+      <div class="timeline-item"><h4>2024.10 — 2024.12</h4><p>研究窗口收尾</p></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 4: Section - Data Collection ========== -->
+<div class="slide section-slide" data-index="4" data-title="数据采集体系">
+  <div class="label">第二章</div>
+  <h2 class="grad2">数据采集体系</h2>
+  <p style="margin-top:.8rem">四源采集 × 批次架构 × 入库守卫</p>
+</div>
+
+<!-- ========== SLIDE 5: Four Sources ========== -->
+<div class="slide content-slide" data-index="5" data-title="四大数据源">
+  <div class="label">第二章 · 数据采集</div>
+  <h2>四大数据源</h2>
+  <div class="card-grid cols-2">
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📡</div><h4>RSS 订阅</h4><p>BBC World/Business + Guardian World，自研 XML 解析器</p>
+      <div class="tag blue" style="margin-top:.4rem">3 个 Feed</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 技术详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">解析</span><span>自研轻量 XML 解析器，无需第三方依赖</span></div>
+        <div class="detail-row"><span class="detail-label">过滤</span><span>标题关键词匹配：China, Chinese, modernization, Xi Jinping 等</span></div>
+        <div class="detail-row"><span class="detail-label">频率</span><span>每次采集任务运行时拉取最新条目</span></div>
+        <div class="detail-row"><span class="detail-label">容错</span><span>单 Feed 失败不阻塞其他源</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🔑</div><h4>NewsAPI</h4><p>"China modernization" 跨 6 家媒体搜索</p>
+      <div class="tag green" style="margin-top:.4rem">6 家媒体</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 技术详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">参数</span><span>pageSize=50, sortBy=publishedAt, language=en</span></div>
+        <div class="detail-row"><span class="detail-label">查询</span><span>多组关键词 × 6 媒体域名，按日期范围分段</span></div>
+        <div class="detail-row"><span class="detail-label">限流</span><span>免费版 100 请求/天，Pro 版无限制</span></div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>JSON {articles: [{title, url, description, publishedAt, ...}]}</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🌍</div><h4>GDELT 全球事件数据库</h4><p>20 组关键词 × 5 时段 = 50 次查询/轮</p>
+      <div class="tag purple" style="margin-top:.4rem">20 组关键词</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 技术详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">间隔</span><span>1.5 秒间隔（遵守 rate limit）</span></div>
+        <div class="detail-row"><span class="detail-label">过滤</span><span>domain: 限定 6 家媒体域名</span></div>
+        <div class="detail-row"><span class="detail-label">数量</span><span>每次最多 250 条结果</span></div>
+        <div class="detail-row"><span class="detail-label">扩展</span><span>关键词组合扩展：同义词、缩写、变体</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🔍</div><h4>搜索引擎发现</h4><p>Bing → Serper → Google CSE 三级降级</p>
+      <div class="tag orange" style="margin-top:.4rem">3 引擎降级</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 技术详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">降级</span><span>Bing（主）→ Serper（备）→ Google CSE（兜底）</span></div>
+        <div class="detail-row"><span class="detail-label">规模</span><span>26 关键词 × 6 媒体 = 156 个 site: 查询</span></div>
+        <div class="detail-row"><span class="detail-label">策略</span><span>某引擎超时/报错自动切换下一引擎</span></div>
+        <div class="detail-row"><span class="detail-label">去重</span><span>跨引擎结果合并，URL 哈希去重</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 6: Batch Architecture ========== -->
+<div class="slide content-slide" data-index="6" data-title="批次架构">
+  <div class="label">第二章 · 数据采集</div>
+  <h2>批次架构设计</h2>
+  <p style="margin-bottom:.8rem">Vercel 无服务器函数有 ~8 秒超时限制 → 前端驱动的批次架构</p>
+  <div class="flow">
+    <div class="flow-node highlight">用户点击<br><span style="font-size:.65rem;color:var(--text-muted)">开始采集</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">POST /crawl/start<br><span style="font-size:.65rem;color:var(--text-muted)">生成 ~37 批次</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">前端循环<br><span style="font-size:.65rem;color:var(--text-muted)">每批 ~8 秒</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">入库守卫<br><span style="font-size:.65rem;color:var(--text-muted)">时间+去重</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">写入数据库<br><span style="font-size:.65rem;color:var(--text-muted)">Supabase</span></div>
+  </div>
+  <div class="card-grid cols-4" style="margin-top:1.2rem">
+    <div class="card" style="text-align:center"><h4>Batch 0</h4><p>RSS + NewsAPI</p></div>
+    <div class="card" style="text-align:center"><h4>Batch 1-20</h4><p>GDELT<br>3 组关键词/批</p></div>
+    <div class="card" style="text-align:center"><h4>Batch 21-36</h4><p>搜索引擎<br>6 查询/批</p></div>
+    <div class="card" style="text-align:center"><h4>Batch 37</h4><p>flush 收尾</p></div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 7: Guard System ========== -->
+<div class="slide content-slide" data-index="7" data-title="入库守卫">
+  <div class="label">第二章 · 数据采集</div>
+  <h2>入库守卫系统</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>双条件过滤</h3>
+      <div class="card" style="margin-bottom:.8rem"><h4>① 时间过滤</h4><p>发布日期 ∈ [2022-10-01, 2024-12-31]，超出范围 → 拒绝入库</p></div>
+      <div class="card"><h4>② URL 去重</h4><p>URL 标准化 → SHA-256 哈希 → 数据库查重，重复 → 拒绝入库</p></div>
+    </div>
+    <div class="col">
+      <h3>URL 标准化规则</h3>
+      <div class="code-block">
+        <div class="code-header"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div><span class="code-title">src/lib/dedup.ts</span></div>
+        <div class="code-body"><span class="kw">function</span> <span class="fn">normalizeUrl</span>(url) {
+  <span class="cm">// 1. 去除尾部斜杠</span>
+  <span class="cm">// 2. 剥离追踪参数</span>
+  <span class="cm">//    utm_source, utm_medium,</span>
+  <span class="cm">//    utm_campaign, fbclid, ref</span>
+  <span class="cm">// 3. 排序剩余参数</span>
+  <span class="cm">// 4. 转小写</span>
+  <span class="kw">return</span> normalized;
+}
+
+<span class="kw">function</span> <span class="fn">hashUrl</span>(url) {
+  <span class="kw">return</span> <span class="fn">sha256</span>(url); <span class="cm">// O(1) 查重</span>
+}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 8: Section - Content Extraction ========== -->
+<div class="slide section-slide" data-index="8" data-title="内容提取与清洗">
+  <div class="label">第三章</div>
+  <h2 class="grad3">内容提取与文本清洗</h2>
+  <p style="margin-top:.8rem">Readability 正文提取 · 广告/导航清理 · 付费墙检测 · 批量清洗</p>
+</div>
+
+<!-- ========== SLIDE 9: Extraction Pipeline ========== -->
+<div class="slide content-slide" data-index="9" data-title="提取流水线">
+  <div class="label">第三章 · 内容提取</div>
+  <h2>全文提取流水线</h2>
+  <div class="flow" style="flex-wrap:wrap;gap:.4rem">
+    <div class="flow-node">URL</div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">fetch<span style="font-size:.6rem;display:block;color:var(--text-muted)">15s 超时</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">JSDOM<span style="font-size:.6rem;display:block;color:var(--text-muted)">HTML 解析</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">Readability<span style="font-size:.6rem;display:block;color:var(--text-muted)">正文提取</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">cleanHtml<span style="font-size:.6rem;display:block;color:var(--text-muted)">广告清理</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">htmlToPlainText<span style="font-size:.6rem;display:block;color:var(--text-muted)">结构保留</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">cleanText<span style="font-size:.6rem;display:block;color:var(--text-muted)">版权截断</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">DB</div>
+  </div>
+  <div class="card-grid cols-3" style="margin-top:1.2rem">
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>cleanHtml()</h4><p>移除社交媒体嵌入和广告/导航块</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">社交</span><span>twitter-tweet, instagram-media, tiktok-embed 等 class 匹配</span></div>
+        <div class="detail-row"><span class="detail-label">广告</span><span>40+ 黑名单关键词（ad, sponsor, subscribe, newsletter...）</span></div>
+        <div class="detail-row"><span class="detail-label">规则</span><span>仅移除 &lt; 200 字符的短块，保护正文内容</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>htmlToPlainText()</h4><p>DOM 遍历，按块级元素插入换行</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">块标签</span><span>P, DIV, SECTION, H1-H6, BLOCKQUOTE, LI, TR 等</span></div>
+        <div class="detail-row"><span class="detail-label">换行</span><span>块级 → 双换行，&lt;br&gt; → 单换行</span></div>
+        <div class="detail-row"><span class="detail-label">保留</span><span>段落结构、列表层次、引用缩进</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>cleanText()</h4><p>版权/署名截断，空白规范化</p>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">截断</span><span>扫描末尾 6 行，匹配 © / copyright / By / — 等模式</span></div>
+        <div class="detail-row"><span class="detail-label">空白</span><span>全角→半角，连续空行/空格压缩</span></div>
+        <div class="detail-row"><span class="detail-label">安全</span><span>保守策略，避免误删正文</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 10: Paywall ========== -->
+<div class="slide content-slide" data-index="10" data-title="付费墙检测">
+  <div class="label">第三章 · 内容提取</div>
+  <h2>付费墙检测与媒体策略</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>双条件判定</h3>
+      <div class="code-block">
+        <div class="code-header"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div><span class="code-title">src/lib/paywall-detector.ts</span></div>
+        <div class="code-body"><span class="kw">function</span> <span class="fn">detectPaywall</span>(fullText, wordCount) {
+  <span class="kw">const</span> isShort = wordCount &lt; <span class="tp">800</span>;
+  <span class="kw">if</span> (!isShort) <span class="kw">return</span> { isPaywalled: <span class="tp">false</span> };
+
+  <span class="cm">// 检查 30+ 付费关键词</span>
+  <span class="kw">const</span> matched = keywords.<span class="fn">filter</span>(
+    kw => fullText.<span class="fn">includes</span>(kw)
+  );
+
+  <span class="kw">return</span> {
+    <span class="cm">// 短 + 有关键词 → paywalled</span>
+    <span class="cm">// 短 + 无关键词 → partial</span>
+    isPaywalled: matched.length > <span class="tp">0</span>
+  };
+}</div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>媒体策略分级</h3>
+      <table class="data-table">
+        <thead><tr><th>策略</th><th>媒体</th><th>说明</th></tr></thead>
+        <tbody>
+          <tr><td><span class="tag green">开放</span></td><td>BBC, Guardian</td><td>全文可直接获取</td></tr>
+          <tr><td><span class="tag orange">软付费墙</span></td><td>NYT, WP</td><td>部分内容可获取</td></tr>
+          <tr><td><span class="tag pink">硬付费墙</span></td><td>WSJ, Economist</td><td>通常只有摘要</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:.8rem;font-size:.82rem">所有媒体仍会尝试抓取，付费墙检测用于标记状态而非跳过。</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 11: Batch Clean ========== -->
+<div class="slide content-slide" data-index="11" data-title="批量清洗">
+  <div class="label">第三章 · 内容提取</div>
+  <h2>批量文本清洗</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>前端驱动轮询架构</h3>
+      <div class="flow" style="flex-direction:column;align-items:flex-start;gap:.5rem">
+        <div class="flow-node" style="width:100%;text-align:left">1. 点击"清洗已有全文"按钮</div>
+        <div class="flow-arrow" style="transform:rotate(90deg)">→</div>
+        <div class="flow-node" style="width:100%;text-align:left">2. GET /api/articles/batch-clean?limit=50</div>
+        <div class="flow-arrow" style="transform:rotate(90deg)">→</div>
+        <div class="flow-node" style="width:100%;text-align:left">3. 每 2 秒轮询下一批，直到 done=true</div>
+        <div class="flow-arrow" style="transform:rotate(90deg)">→</div>
+        <div class="flow-node highlight" style="width:100%;text-align:left">4. 安全检查：字数下降 &gt; 80% → 标记 needs_review</div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>幂等性设计</h3>
+      <div class="card" style="margin-bottom:.8rem">
+        <h4>metadata.cleaned_at 时间戳</h4>
+        <p>每篇处理过的文章（包括跳过的）都写入清洗时间戳，查询时排除已有时间戳的文章，确保不重复清洗。</p>
+      </div>
+      <div class="card">
+        <h4>安全机制</h4>
+        <p>字数下降超 80% 且原文 &gt; 100 词 → 不覆盖原文，标记 metadata.needs_review = true，记录原始和清洗后字数。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 12: Section - AI Pre-read ========== -->
+<div class="slide section-slide" data-index="12" data-title="AI 预读分析">
+  <div class="label">第四章</div>
+  <h2 class="grad4">AI 预读分析系统</h2>
+  <p style="margin-top:.8rem">9 维度并行分析 · MiMo v2.5 Pro · AI-人工协作</p>
+</div>
+
+<!-- ========== SLIDE 13: AI Architecture ========== -->
+<div class="slide content-slide" data-index="13" data-title="AI 架构">
+  <div class="label">第四章 · AI 预读</div>
+  <h2>系统架构与工作流</h2>
+  <div class="flow" style="margin-bottom:1.2rem">
+    <div class="flow-node">文章<span style="font-size:.6rem;display:block;color:var(--text-muted)">已清洗</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">runPreReadPipeline<span style="font-size:.6rem;display:block;color:var(--text-muted)">Promise.all</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">9 个分析函数<span style="font-size:.6rem;display:block;color:var(--text-muted)">并行执行</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node">写入数据库<span style="font-size:.6rem;display:block;color:var(--text-muted)">5 直接字段 + metadata</span></div>
+    <div class="flow-arrow">→</div>
+    <div class="flow-node highlight">状态推进<span style="font-size:.6rem;display:block;color:var(--text-muted)">→ 已预读</span></div>
+  </div>
+  <div class="card-grid cols-3">
+    <div class="card"><h4>模型</h4><p>MiMo v2.5 Pro<br>小米 Anthropic 代理</p></div>
+    <div class="card"><h4>参数</h4><p>temperature=0.3<br>max_tokens=512<br>输入截断 4000 字符</p></div>
+    <div class="card"><h4>容错</h4><p>3 次指数退避重试<br>60 秒超时/请求<br>失败不阻塞管线</p></div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 14: 9 Dimensions ========== -->
+<div class="slide content-slide" data-index="14" data-title="九维度分析">
+  <div class="label">第四章 · AI 预读</div>
+  <h2>九维度分析详解</h2>
+  <p style="margin-bottom:.5rem;font-size:.85rem;color:var(--text-muted)">点击每张卡片查看 Prompt、输出格式与应用场景</p>
+  <div class="card-grid cols-3" style="font-size:.82rem">
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📝</div><h4>① 英文摘要</h4><p>150 词以内，聚焦主要论点</p>
+      <div class="tag blue" style="margin-top:.4rem">ai_summary</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"You are a research assistant. Summarize the article in under 150 words in English. Focus on the main argument."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>150 词英文摘要</span></div>
+        <div class="detail-row"><span class="detail-label">存储</span><span>articles.ai_summary</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>快速浏览、文献综述辅助、跨文章比较</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📝</div><h4>② 中文摘要</h4><p>~150 字中文概述</p>
+      <div class="tag blue" style="margin-top:.4rem">metadata.ai_summary_zh</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"你是一名学术研究助手。请用中文概括以下英文文章的核心内容，不超过150字。"</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>150 字中文概述</span></div>
+        <div class="detail-row"><span class="detail-label">存储</span><span>articles.metadata.ai_summary_zh</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>中文团队快速理解、编码前预览</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🎯</div><h4>③ 情感分析</h4><p>positive/negative/neutral + 置信度</p>
+      <div class="tag green" style="margin-top:.4rem">ai_sentiment</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"You are a sentiment analyst. Output ONLY valid JSON:
+{"sentiment":"positive"|"negative"|"neutral",
+ "confidence":0.0-1.0}"</div>
+        <div class="detail-row"><span class="detail-label">存储</span><span>ai_sentiment + ai_confidence</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>跨媒体情感比较、情感趋势、情感×框架关联</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📊</div><h4>④ 框架分类</h4><p>threat/opportunity/problem/neutral</p>
+      <div class="tag purple" style="margin-top:.4rem">ai_framework_hint</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Classify the article's framing of Chinese modernization as:
+threat / opportunity / problem / neutral.
+Provide confidence (0-1) and 1-2 evidence quotes."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>框架 + 置信度 + 证据引文</span></div>
+        <div class="detail-row"><span class="detail-label">存储</span><span>ai_framework_hint + ai_evidence_quotes</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>框架分布统计、框架时间演变、媒体立场关联</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📚</div><h4>⑤ 术语提取</h4><p>中国式现代化话语关键词</p>
+      <div class="tag orange" style="margin-top:.4rem">metadata.ai_terms</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Extract key terms and phrases related to Chinese modernization discourse. Output as JSON array of strings."</div>
+        <div class="detail-row"><span class="detail-label">示例</span><span>["Chinese modernization", "common prosperity", "Belt and Road Initiative"]</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>术语共现网络、术语演变追踪、跨媒体术语比较</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🔍</div><h4>⑥ 语言特征</h4><p>被动语态、比较修辞、引用类型</p>
+      <div class="tag pink" style="margin-top:.4rem">metadata.ai_linguistic</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Analyze linguistic features: passive voice examples, comparative rhetoric, citation types. Output as JSON."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>{passiveVoice: [...], comparativeRhetoric: [...], citationTypes: {official, expert, ...}}</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>隐性立场识别、他者化策略、引用多样性评估</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📖</div><h4>⑦ 叙事分析</h4><p>conflict-driven / hero-villain 等</p>
+      <div class="tag purple" style="margin-top:.4rem">metadata.ai_narrative</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Analyze the narrative style: conflict-driven / hero-villain / victimhood / problem-solution / data-driven / human-interest / episodic / thematic. Identify framing devices and story arc."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>{narrativeStyle, framingDevices, storyArc}</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>叙事模式分类、框架手法识别、跨媒体叙事比较</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">📡</div><h4>⑧ 信源分析</h4><p>官方/专家/公众/匿名统计</p>
+      <div class="tag green" style="margin-top:.4rem">metadata.ai_sources</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Analyze source attribution: count official/expert/public/anonymous/media/corporate sources. List named sources."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>{official:4, expert:6, public:2, anonymous:3, namedSources: [...]}</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>话语权分配分析、匿名信源使用、信源地理分布</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <div class="icon">🎭</div><h4>⑨ 语调分析</h4><p>critical/constructive/descriptive</p>
+      <div class="tag orange" style="margin-top:.4rem">metadata.ai_tone</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 查看详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="prompt-block">"Classify the tone as: critical / constructive / descriptive / alarming / celebratory. Provide confidence and key tone-indicating words."</div>
+        <div class="detail-row"><span class="detail-label">输出</span><span>{tone, confidence, keywords: [...]}</span></div>
+        <div class="detail-row"><span class="detail-label">应用</span><span>语调分布统计、语调×情感关联、语调时间变化</span></div>
+      </div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 15: AI-Human Collaboration ========== -->
+<div class="slide content-slide" data-index="15" data-title="AI-人工协作">
+  <div class="label">第四章 · AI 预读</div>
+  <h2>AI-人工协作编码模式</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>AI 的角色：辅助者，非替代者</h3>
+      <ul class="feature-list">
+        <li><strong>效率工具：</strong>自动提取摘要、术语、信源统计</li>
+        <li><strong>参考锚点：</strong>情感/框架/叙事的初步判断</li>
+        <li><strong>一致性锚点：</strong>AI 分析可作为编码校验基准</li>
+        <li><strong>规模化：</strong>800+ 篇文章的批量预处理</li>
+      </ul>
+      <h3 style="margin-top:1.2rem">人工的不可替代性</h3>
+      <ul class="feature-list">
+        <li><strong>决策者：</strong>最终编码决策由人工做出</li>
+        <li><strong>质量控制：</strong>双人编码 + Kappa 检验</li>
+        <li><strong>理论建构：</strong>基于编码数据进行话语分析</li>
+        <li><strong>文化理解：</strong>跨文化语境的深度解读</li>
+      </ul>
+    </div>
+    <div class="col">
+      <h3>AI 预读面板（编码工作空间）</h3>
+      <div class="card" style="font-size:.78rem;font-family:'JetBrains Mono',monospace;line-height:1.8">
+        <div style="color:var(--accent);font-weight:600">▼ AI 预读参考</div>
+        <div style="border-top:1px solid var(--border);margin:.4rem 0;padding-top:.4rem">
+          <div>📝 中文摘要：本文分析了中国式现代化...</div>
+          <div>🎯 情感：<span style="color:#ef4444">negative</span>（85%）</div>
+          <div>📊 框架：<span style="color:#f59e0b">threat</span>（78%）</div>
+          <div>📖 叙事：conflict-driven</div>
+          <div>🎭 语调：critical（72%）</div>
+          <div>📡 信源：官方:4 专家:6 匿名:3</div>
+          <div>💬 "Beijing's aggressive expansion..."</div>
+          <div>📚 Chinese modernization, BRI...</div>
+        </div>
+      </div>
+      <p style="margin-top:.6rem;font-size:.78rem;color:var(--text-muted)">编码员可参考 AI 分析，但最终决策由人工做出。</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 16: Section - Coding ========== -->
+<div class="slide section-slide" data-index="16" data-title="人工编码">
+  <div class="label">第五章</div>
+  <h2 class="grad">人工编码与信度检验</h2>
+  <p style="margin-top:.8rem">层级编码框架 · 双人编码 · Cohen's Kappa · 仲裁流程</p>
+</div>
+
+<!-- ========== SLIDE 17: Coding Framework ========== -->
+<div class="slide content-slide" data-index="17" data-title="编码框架">
+  <div class="label">第五章 · 人工编码</div>
+  <h2>编码框架与工作流</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>层级树结构</h3>
+      <div class="code-block">
+        <div class="code-header"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div><span class="code-title">coding_nodes (nested set model)</span></div>
+        <div class="code-body">编码框架 (Framework)
+├─ <span class="kw">一级节点 A</span>（威胁话语）
+│  ├─ 二级 A1（军事威胁）
+│  ├─ 二级 A2（经济威胁）
+│  └─ 二级 A3（技术威胁）
+├─ <span class="kw">一级节点 B</span>（机遇话语）
+│  ├─ 二级 B1（经济合作）
+│  └─ 二级 B2（技术交流）
+├─ <span class="kw">一级节点 C</span>（问题话语）
+│  └─ ...
+└─ <span class="kw">一级节点 D</span>（中性报道）
+   └─ ...</div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>编码工作流</h3>
+      <div class="timeline">
+        <div class="timeline-item"><h4>1. 领取任务</h4><p>从任务列表领取或管理员分配</p></div>
+        <div class="timeline-item"><h4>2. 阅读文章</h4><p>全文阅读 + 参考 AI 预读面板</p></div>
+        <div class="timeline-item"><h4>3. 选中文本</h4><p>选中片段 → 选择编码节点</p></div>
+        <div class="timeline-item"><h4>4. 填写置信度</h4><p>1-5 分 + 编码备注</p></div>
+        <div class="timeline-item"><h4>5. 提交标注</h4><p>保存并提交任务</p></div>
+      </div>
+      <h3 style="margin-top:.8rem">双人编码 + 仲裁</h3>
+      <p style="font-size:.82rem">两人独立编码 → 系统计算 Kappa → 不达标则仲裁</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 18: Kappa ========== -->
+<div class="slide content-slide" data-index="18" data-title="Cohen's Kappa">
+  <div class="label">第五章 · 信度检验</div>
+  <h2>Cohen's Kappa 信度统计</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3>计算公式</h3>
+      <div class="code-block">
+        <div class="code-header"><div class="code-dot red"></div><div class="code-dot yellow"></div><div class="code-dot green"></div><span class="code-title">agreement.ts</span></div>
+        <div class="code-body"><span class="cm">// κ = (Po - Pe) / (1 - Pe)</span>
+
+<span class="kw">Po</span> = 观察一致率
+  <span class="cm">// 两人实际选择相同节点的比例</span>
+
+<span class="kw">Pe</span> = 期望一致率
+  <span class="cm">// 若随机编码，预期一致的比例</span>
+
+<span class="cm">// Po = Σ min(pA_i, pB_i)</span>
+<span class="cm">// Pe = Σ pA_i × pB_i</span>
+<span class="cm">// κ = (Po - Pe) / (1 - Pe)</span></div>
+      </div>
+    </div>
+    <div class="col">
+      <h3>Kappa 值解读</h3>
+      <div class="kappa-scale">
+        <div class="kappa-seg" style="background:#ef4444;color:white">&lt;0<br>极差</div>
+        <div class="kappa-seg" style="background:#f97316;color:white">0-0.2<br>差</div>
+        <div class="kappa-seg" style="background:#eab308;color:#1a1a1a">0.2-0.4<br>一般</div>
+        <div class="kappa-seg" style="background:#84cc16;color:#1a1a1a">0.4-0.6<br>中等</div>
+        <div class="kappa-seg" style="background:#22c55e;color:white">0.6-0.8<br>良好</div>
+        <div class="kappa-seg" style="background:#10b981;color:white">0.8-1.0<br>优秀</div>
+      </div>
+      <h3 style="margin-top:1.2rem">多层一致率</h3>
+      <table class="data-table">
+        <thead><tr><th>指标</th><th>含义</th></tr></thead>
+        <tbody>
+          <tr><td>整体一致率</td><td>两人选择相同节点的比例</td></tr>
+          <tr><td>一级节点一致率</td><td>框架大类的一致性</td></tr>
+          <tr><td>二级节点一致率</td><td>细分编码的一致性</td></tr>
+          <tr><td>Cohen's Kappa</td><td>排除偶然一致的标准化指标</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 19: Section - Visualization ========== -->
+<div class="slide section-slide" data-index="19" data-title="可视化">
+  <div class="label">第六章</div>
+  <h2 class="grad2">可视化策略与实现</h2>
+  <p style="margin-top:.8rem">热力图 · 饼图 · 时间线 · Kappa 分布 · Recharts</p>
+</div>
+
+<!-- ========== SLIDE 20: Charts ========== -->
+<div class="slide content-slide" data-index="20" data-title="可视化组件">
+  <div class="label">第六章 · 可视化</div>
+  <h2>分析仪表盘可视化组件</h2>
+  <div class="card-grid cols-2">
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>框架分布饼图</h4><p>Recharts PieChart，Top 10 编码节点</p>
+      <div class="tag blue" style="margin-top:.4rem">FrameworkPie</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">数据源</span><span>annotations 表按 node_id 分组计数</span></div>
+        <div class="detail-row"><span class="detail-label">实现</span><span>PieChart + Pie, outerRadius=90, 百分比标签</span></div>
+        <div class="detail-row"><span class="detail-label">配色</span><span>#4A90A4, #5DAD93, #2D3436, #E67E22</span></div>
+        <div class="detail-row"><span class="detail-label">价值</span><span>识别哪些话语框架被最多使用</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>媒体×时段热力图</h4><p>6 媒体 × 5 时段 HTML 表格</p>
+      <div class="tag green" style="margin-top:.4rem">MediaHeatmap</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">数据源</span><span>articles 表按 media × period 交叉分组</span></div>
+        <div class="detail-row"><span class="detail-label">实现</span><span>单元格背景色 rgba 强度 = count/maxVal</span></div>
+        <div class="detail-row"><span class="detail-label">交互</span><span>点击单元格 → 跳转到筛选后的语料工作台</span></div>
+        <div class="detail-row"><span class="detail-label">价值</span><span>识别报道密度分布、发现报道空白</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>时间线柱状图</h4><p>Recharts Stacked BarChart</p>
+      <div class="tag purple" style="margin-top:.4rem">TimelineChart</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">数据源</span><span>同热力图，按时段维度聚合</span></div>
+        <div class="detail-row"><span class="detail-label">实现</span><span>Stacked BarChart, X=5 时段, 每色=媒体</span></div>
+        <div class="detail-row"><span class="detail-label">特征</span><span>圆角柱体 radius=[4,4,0,0]</span></div>
+        <div class="detail-row"><span class="detail-label">价值</span><span>追踪报道趋势、比较媒体差异</span></div>
+      </div></div>
+    </div>
+    <div class="card expandable" onclick="toggleExpand(this)">
+      <h4>Kappa 分布图</h4><p>6 个区间柱状图</p>
+      <div class="tag orange" style="margin-top:.4rem">KappaChart</div>
+      <div class="expand-hint"><span class="chevron">▾</span> 展开详情</div>
+      <div class="expand-body"><div class="expand-body-inner">
+        <div class="detail-row"><span class="detail-label">数据源</span><span>coding_tasks 表的 kappa 字段</span></div>
+        <div class="detail-row"><span class="detail-label">区间</span><span>&lt;0, 0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8, 0.8-1.0</span></div>
+        <div class="detail-row"><span class="detail-label">价值</span><span>评估整体编码质量、识别低信度区间</span></div>
+      </div></div>
+    </div>
+  </div>
+  <h3 style="margin-top:1rem">热力图示例</h3>
+  <table class="heatmap">
+    <thead><tr><th></th><th>22.10</th><th>23.04</th><th>23.10</th><th>24.04</th><th>24.10</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--text);font-weight:600">NYT</td><td style="background:rgba(56,189,248,0.35)">28</td><td style="background:rgba(56,189,248,0.25)">19</td><td style="background:rgba(56,189,248,0.45)">35</td><td style="background:rgba(56,189,248,0.30)">22</td><td style="background:rgba(56,189,248,0.15)">10</td></tr>
+      <tr><td style="color:var(--text);font-weight:600">Guardian</td><td style="background:rgba(56,189,248,0.20)">14</td><td style="background:rgba(56,189,248,0.30)">22</td><td style="background:rgba(56,189,248,0.25)">18</td><td style="background:rgba(56,189,248,0.35)">27</td><td style="background:rgba(56,189,248,0.10)">6</td></tr>
+      <tr><td style="color:var(--text);font-weight:600">BBC</td><td style="background:rgba(56,189,248,0.18)">12</td><td style="background:rgba(56,189,248,0.22)">16</td><td style="background:rgba(56,189,248,0.28)">20</td><td style="background:rgba(56,189,248,0.32)">24</td><td style="background:rgba(56,189,248,0.08)">4</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ========== SLIDE 21: Data Analysis ========== -->
+<div class="slide content-slide" data-index="21" data-title="数据分析路径">
+  <div class="label">第六章 · 数据利用</div>
+  <h2>定量与定性分析路径</h2>
+  <div class="two-col">
+    <div class="col">
+      <h3 style="color:var(--accent)">定量分析</h3>
+      <div class="card expandable" onclick="toggleExpand(this)" style="margin-bottom:.6rem">
+        <h4>框架分布分析</h4><p>按节点统计频次 → 跨媒体/跨时段比较</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">卡方检验：媒体和时段是否独立。事后比较 + Cramér's V 效应量。</div></div>
+      </div>
+      <div class="card expandable" onclick="toggleExpand(this)" style="margin-bottom:.6rem">
+        <h4>情感趋势分析</h4><p>加权情感得分：positive=1, neutral=0, negative=-1</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">按媒体/时段分组统计，绘制时间序列图，识别事件驱动的情感转折点。</div></div>
+      </div>
+      <div class="card expandable" onclick="toggleExpand(this)">
+        <h4>信度统计</h4><p>Kappa 均值、分布、按节点/编码员对分析</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">追踪 Kappa 随时间变化，评估编码培训效果，识别最难编码的节点。</div></div>
+      </div>
+    </div>
+    <div class="col">
+      <h3 style="color:var(--accent4)">定性分析</h3>
+      <div class="card expandable" onclick="toggleExpand(this)" style="margin-bottom:.6rem">
+        <h4>叙事模式分析</h4><p>conflict-driven / hero-villain / data-driven 等</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">NYT/WP 偏好 conflict-driven，Guardian 偏好 human-interest，WSJ 偏好 data-driven。</div></div>
+      </div>
+      <div class="card expandable" onclick="toggleExpand(this)" style="margin-bottom:.6rem">
+        <h4>信源策略分析</h4><p>官方 vs 专家 vs 公众 vs 匿名引用比例</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">Shannon 多样性指数评估信源多样性，匿名信源是否与更负面情感相关。</div></div>
+      </div>
+      <div class="card expandable" onclick="toggleExpand(this)">
+        <h4>语言特征分析</h4><p>被动语态、比较修辞、引用类型</p>
+        <div class="expand-hint"><span class="chevron">▾</span> 展开</div>
+        <div class="expand-body"><div class="expand-body-inner">被动语态 = 隐性立场表达。"unlike Western democracies" = 他者化策略。</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 22: Triangulation ========== -->
+<div class="slide content-slide" data-index="22" data-title="三角验证">
+  <div class="label">第六章 · 数据利用</div>
+  <h2>定量与定性的三角验证</h2>
+  <div style="text-align:center;margin:1.2rem 0">
+    <div style="display:inline-flex;gap:2rem;align-items:center">
+      <div class="card" style="text-align:center;min-width:180px"><h4 style="color:var(--accent)">定量数据</h4><p>框架分布统计<br>情感趋势分析<br>Kappa 信度</p></div>
+      <div style="font-size:2rem;color:var(--text-muted)">⟷</div>
+      <div class="card" style="text-align:center;min-width:180px"><h4 style="color:var(--accent4)">定性数据</h4><p>叙事模式分析<br>信源策略分析<br>语言特征分析</p></div>
+    </div>
+    <div style="font-size:2rem;color:var(--text-muted);margin:.8rem 0">↓</div>
+    <div class="card" style="display:inline-block;text-align:center;min-width:280px"><h4 style="color:var(--accent3)">综合解释与理论建构</h4><p>三角验证：定量发现 + 定性证据 → 深度解释</p></div>
+  </div>
+  <div class="card" style="max-width:700px;margin:1rem auto">
+    <h4>示例</h4>
+    <p style="font-size:.82rem">
+      <strong>定量：</strong>NYT 的"威胁"框架占比 45%，显著高于 Guardian 的 20%<br>
+      <strong>定性：</strong>NYT 的威胁框架多采用 conflict-driven 叙事，信源以西方专家为主<br>
+      <strong>综合：</strong>NYT 通过选择特定信源和叙事策略来建构中国式现代化的"威胁"形象
+    </p>
+  </div>
+</div>
+
+<!-- ========== SLIDE 23: LIWC ========== -->
+<div class="slide content-slide" data-index="23" data-title="LIWC 情感引擎">
+  <div class="label">第七章 · 研究工具</div>
+  <h2>LIWC 情感词典引擎</h2>
+  <p style="margin-bottom:.8rem">内置 5 类 500+ 词的情感词典，支持外部 .dic 文件扩展</p>
+  <div class="card-grid cols-3" style="margin-bottom:1rem">
+    <div class="card" style="text-align:center;border-left:3px solid var(--accent3)"><h4>posemo 积极</h4><p>~200 词<br>achievement, benefit, confidence, growth</p></div>
+    <div class="card" style="text-align:center;border-left:3px solid #ef4444"><h4>negemo 消极</h4><p>~200 词<br>crisis, conflict, threat, decline, failure</p></div>
+    <div class="card" style="text-align:center;border-left:3px solid #f59e0b"><h4>anx 焦虑</h4><p>~50 词<br>concern, fear, risk, uncertainty, worry</p></div>
+    <div class="card" style="text-align:center;border-left:3px solid #ef4444"><h4>anger 愤怒</h4><p>~70 词<br>abuse, attack, hostile, outrage, punish</p></div>
+    <div class="card" style="text-align:center;border-left:3px solid #6366f1"><h4>sad 悲伤</h4><p>~50 词<br>loss, suffer, tragedy, grief, despair</p></div>
+    <div class="card" style="text-align:center;border-left:3px solid var(--accent)">
+      <h4>情感判定</h4>
+      <p style="font-family:'JetBrains Mono',monospace;font-size:.75rem">posemo / (posemo + negemo)</p>
+      <p style="font-size:.72rem;margin-top:.3rem">≥70% 强烈正面 | ≥55% 偏正面 | ≥45% 中性 | ≥30% 偏负面 | &lt;30% 强烈负面</p>
+    </div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 24: Research Toolbox ========== -->
+<div class="slide content-slide" data-index="24" data-title="研究工具箱">
+  <div class="label">第七章 · 研究工具</div>
+  <h2>平台内置研究工具箱</h2>
+  <p style="margin-bottom:.5rem;font-size:.85rem;color:var(--text-muted)">12 个研究辅助工具，点击查看详情</p>
+  <div class="card-grid cols-4" style="font-size:.78rem">
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>情感计算器</h4><p>LIWC 词典分析</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">支持外部 .dic 扩展，量化语料情感倾向，输出 posemo/negemo 比率。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>Kappa 计算器</h4><p>粘贴两列编码</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">快速验证编码员信度，支持多编码节点，输出 Kappa 值和等级。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>共现分析</h4><p>词对共现</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">窗口=5，停用词过滤，发现话语搭配模式。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>词频统计</h4><p>词数/句数/平均句长</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">语料基本特征描述，独特词数统计。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>文本清洗器</h4><p>HTML/URL/邮箱移除</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">原始文本预处理，批量清理格式残留。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>随机抽样</h4><p>带种子可复现</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">确保样本选取的可复现性，用于信度检验子集。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>时段分割器</h4><p>年/季/半年标签</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">自动生成研究时段标签，支持自定义时间窗口。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>引文生成器</h4><p>GB/T 7714/APA/MLA</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">一键生成规范引文，支持三种主流格式。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>AI 提示词包</h4><p>学术润色/翻译/摘要</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">论文写作辅助，方法论描述自动生成。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>文件命名器</h4><p>{媒体}_{日期}_{编号}.txt</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">规范化语料文件命名，便于外部分析工具导入。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>数据导出</h4><p>CSV/JSON 格式</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">导出完整字段或精简字段，支持 SPSS/Stata 导入。</div></div></div>
+    <div class="card expandable" onclick="toggleExpand(this)"><h4>ProQuest 检索</h4><p>学术数据库辅助</p><div class="expand-hint"><span class="chevron">▾</span></div><div class="expand-body"><div class="expand-body-inner">辅助文献检索，与平台文献笔记功能集成。</div></div></div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 25: AI Integration Summary ========== -->
+<div class="slide content-slide" data-index="25" data-title="AI 融合总结">
+  <div class="label">总结</div>
+  <h2>AI 技术融合全景</h2>
+  <div class="card-grid cols-4" style="font-size:.8rem">
+    <div class="card"><h4 style="color:var(--accent)">采集阶段</h4><p>智能查询生成<br>多引擎降级<br>关键词组合扩展</p></div>
+    <div class="card"><h4 style="color:var(--accent3)">处理阶段</h4><p>Readability 正文提取<br>付费墙检测<br>文本自动清洗</p></div>
+    <div class="card"><h4 style="color:var(--accent4)">分析阶段</h4><p>9 维 AI 预读<br>LIWC 词典分析<br>情感/框架/叙事/信源</p></div>
+    <div class="card"><h4 style="color:var(--accent5)">写作阶段</h4><p>引文生成<br>方法论自动生成<br>AI 提示词辅助</p></div>
+  </div>
+  <div class="card" style="max-width:700px;margin:1.2rem auto 0;text-align:center">
+    <h4 style="font-size:1.05rem">核心理念</h4>
+    <p style="font-size:1.05rem;color:var(--text);font-weight:500;margin-top:.4rem">
+      AI 是<span style="color:var(--accent)">放大器</span>，不是替代品。<br>
+      AI 处理重复性工作，人类专注于创造性工作。
+    </p>
+  </div>
+</div>
+
+<!-- ========== SLIDE 26: Tech Stack ========== -->
+<div class="slide content-slide" data-index="26" data-title="技术架构">
+  <div class="label">附录</div>
+  <h2>技术架构</h2>
+  <div class="card-grid cols-4" style="font-size:.78rem">
+    <div class="card" style="text-align:center"><h4>前端</h4><p>Next.js 14<br>TypeScript 5<br>Tailwind CSS<br>Recharts 3.8</p></div>
+    <div class="card" style="text-align:center"><h4>状态</h4><p>Zustand 5.0<br>8 个 Store<br>模块化管理</p></div>
+    <div class="card" style="text-align:center"><h4>后端</h4><p>Supabase<br>PostgreSQL<br>RLS 行级安全<br>11 个迁移</p></div>
+    <div class="card" style="text-align:center"><h4>AI</h4><p>MiMo v2.5 Pro<br>DeepSeek<br>9 维分析<br>LIWC 引擎</p></div>
+  </div>
+  <h3 style="margin-top:1.2rem">工程亮点</h3>
+  <div class="card-grid cols-3" style="font-size:.78rem">
+    <div class="card"><h4>批次架构</h4><p>绕过 Vercel 8s 超时限制</p></div>
+    <div class="card"><h4>SHA-256 去重</h4><p>O(1) URL 查重</p></div>
+    <div class="card"><h4>项目冻结</h4><p>答辩数据一致性保障</p></div>
+  </div>
+</div>
+
+<!-- ========== SLIDE 27: End ========== -->
+<div class="slide title-slide" data-index="27" data-title="Thank You">
+  <div class="label anim-item" style="margin-bottom:1rem">Thank You</div>
+  <h1><span class="grad">OutSight</span> <span style="font-weight:300;color:var(--text-muted)">2.0</span></h1>
+  <p class="subtitle anim-item" style="font-size:1.2rem;margin-top:.4rem">数据采集 · AI 分析 · 话语研究 · 协作平台</p>
+  <div class="anim-item" style="margin-top:2rem;display:flex;gap:.8rem;justify-content:center;flex-wrap:wrap">
+    <div class="badge" style="background:rgba(56,189,248,0.1);color:var(--accent)">6 家媒体</div>
+    <div class="badge" style="background:rgba(52,211,153,0.1);color:var(--accent3)">4 源采集</div>
+    <div class="badge" style="background:rgba(129,140,248,0.1);color:var(--accent2)">9 维 AI</div>
+    <div class="badge" style="background:rgba(244,114,182,0.1);color:var(--accent4)">Cohen's Kappa</div>
+  </div>
+  <p class="anim-item" style="margin-top:2.5rem;font-size:.82rem;color:var(--text-muted)">山东大学 · 话语研究协作平台 · 2026</p>
+</div>
+
+</div><!-- /slides -->
+
+<!-- Navigation -->
+<div class="nav" id="navBar">
+  <button onclick="prevSlide()" title="上一页 (←)">‹</button>
+  <div class="slide-dots" id="slideDots"></div>
+  <span class="page-info" id="pageInfo">1 / 28</span>
+  <button onclick="nextSlide()" title="下一页 (→)">›</button>
+</div>
+
+<div class="click-hint">点击任意位置翻页 · 按 ? 查看快捷键</div>
+
+<script>
+// ═══════════════════ CORE STATE ═══════════════════
+const slides = document.querySelectorAll('.slide');
+const total = slides.length;
+let current = 0;
+
+// ═══════════════════ SLIDE NAVIGATION ═══════════════════
+function showSlide(n) {
+  slides[current].classList.remove('active');
+  current = (n + total) % total;
+  slides[current].classList.add('active');
+  document.getElementById('pageInfo').textContent = `${current + 1} / ${total}`;
+  document.getElementById('progressFill').style.width = `${((current + 1) / total) * 100}%`;
+  updateDots();
+  animateCounters();
+}
+function nextSlide() { showSlide(current + 1); }
+function prevSlide() { showSlide(current - 1); }
+
+// ═══════════════════ CLICK TO ADVANCE ═══════════════════
+document.getElementById('slides').addEventListener('click', (e) => {
+  // Don't advance if clicking expandable card or interactive element
+  if (e.target.closest('.expandable') || e.target.closest('button') || e.target.closest('a') || e.target.closest('.card-glow')) return;
+  nextSlide();
+});
+
+// ═══════════════════ KEYBOARD ═══════════════════
+document.addEventListener('keydown', (e) => {
+  const overlay = document.getElementById('shortcutsOverlay');
+  const grid = document.getElementById('gridOverlay');
+  if (overlay.classList.contains('show') || grid.classList.contains('show')) {
+    if (e.key === 'Escape' || e.key === '?') { overlay.classList.remove('show'); grid.classList.remove('show'); }
+    return;
+  }
+  if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); nextSlide(); }
+  if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prevSlide(); }
+  if (e.key === 'Home') { e.preventDefault(); showSlide(0); }
+  if (e.key === 'End') { e.preventDefault(); showSlide(total - 1); }
+  if (e.key === 'f' || e.key === 'F') { toggleFullscreen(); }
+  if (e.key === '?' || (e.key === '/' && e.shiftKey)) { overlay.classList.toggle('show'); }
+  if (e.key === 'g' || e.key === 'G') { toggleGrid(); }
+});
+
+// ═══════════════════ TOUCH ═══════════════════
+let touchStartX = 0;
+document.addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
+document.addEventListener('touchend', (e) => {
+  const diff = touchStartX - e.changedTouches[0].clientX;
+  if (Math.abs(diff) > 50) { diff > 0 ? nextSlide() : prevSlide(); }
+});
+
+// ═══════════════════ DOTS ═══════════════════
+function buildDots() {
+  const container = document.getElementById('slideDots');
+  for (let i = 0; i < total; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'slide-dot' + (i === 0 ? ' active' : '');
+    dot.onclick = () => showSlide(i);
+    container.appendChild(dot);
+  }
+}
+function updateDots() {
+  document.querySelectorAll('.slide-dot').forEach((d, i) => {
+    d.classList.toggle('active', i === current);
+  });
+}
+buildDots();
+
+// ═══════════════════ THEME SYSTEM ═══════════════════
+const themes = ['dark', 'light', 'neon'];
+const themeNames = { dark: 'Dark', light: 'Light', neon: 'Neon' };
+const themeIcons = { dark: '🌙', light: '☀️', neon: '🔮' };
+let themeIndex = 0;
+
+function setTheme(name) {
+  document.documentElement.setAttribute('data-theme', name);
+  localStorage.setItem('outsight-theme', name);
+  const toast = document.getElementById('themeToast');
+  toast.textContent = themeNames[name];
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 1200);
+  document.getElementById('themeBtn').textContent = themeIcons[name];
+  // Redraw particles
+  initParticles();
+}
+
+document.getElementById('themeBtn').addEventListener('click', () => {
+  themeIndex = (themeIndex + 1) % themes.length;
+  setTheme(themes[themeIndex]);
+});
+
+// Restore saved theme
+const saved = localStorage.getItem('outsight-theme');
+if (saved && themes.includes(saved)) {
+  themeIndex = themes.indexOf(saved);
+  setTheme(saved);
+}
+
+// ═══════════════════ FULLSCREEN ═══════════════════
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+// ═══════════════════ HELP OVERLAY ═══════════════════
+document.getElementById('helpBtn').addEventListener('click', () => {
+  document.getElementById('shortcutsOverlay').classList.toggle('show');
+});
+document.getElementById('shortcutsOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('show');
+});
+
+// ═══════════════════ GRID OVERVIEW ═══════════════════
+function toggleGrid() {
+  const grid = document.getElementById('gridOverlay');
+  grid.classList.toggle('show');
+}
+function buildGrid() {
+  const container = document.getElementById('gridContainer');
+  slides.forEach((slide, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'grid-thumb' + (i === current ? ' active' : '');
+    thumb.innerHTML = `<div class="num">${String(i + 1).padStart(2, '0')}</div><div class="title">${slide.dataset.title || 'Slide ' + (i + 1)}</div>`;
+    thumb.onclick = () => { showSlide(i); document.getElementById('gridOverlay').classList.remove('show'); };
+    container.appendChild(thumb);
+  });
+}
+buildGrid();
+
+// ═══════════════════ EXPANDABLE CARDS ═══════════════════
+function toggleExpand(card) {
+  card.classList.toggle('expanded');
+}
+
+// ═══════════════════ COUNTER ANIMATION ═══════════════════
+function animateCounters() {
+  const slide = slides[current];
+  const counters = slide.querySelectorAll('[data-count]');
+  counters.forEach(el => {
+    const target = parseInt(el.dataset.count);
+    const suffix = el.dataset.suffix || '';
+    let start = 0;
+    const duration = 800;
+    const startTime = performance.now();
+    function step(now) {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3); // ease out cubic
+      const val = Math.round(eased * target);
+      el.textContent = val + suffix;
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  });
+}
+// Run on load
+animateCounters();
+
+// ═══════════════════ CARD MOUSE GLOW ═══════════════════
+document.querySelectorAll('.card').forEach(card => {
+  const glow = document.createElement('div');
+  glow.className = 'card-glow';
+  card.appendChild(glow);
+  card.addEventListener('mousemove', (e) => {
+    const rect = card.getBoundingClientRect();
+    glow.style.left = (e.clientX - rect.left) + 'px';
+    glow.style.top = (e.clientY - rect.top) + 'px';
+  });
+});
+
+// ═══════════════════ PARTICLE CANVAS ═══════════════════
+const canvas = document.getElementById('particleCanvas');
+const ctx = canvas.getContext('2d');
+let particles = [];
+const PARTICLE_COUNT = 60;
+const CONNECT_DIST = 120;
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function getParticleColor() {
+  const style = getComputedStyle(document.documentElement);
+  return style.getPropertyValue('--particle').trim() || 'rgba(56,189,248,0.3)';
+}
+function getLineColor() {
+  const style = getComputedStyle(document.documentElement);
+  return style.getPropertyValue('--particle-line').trim() || 'rgba(56,189,248,0.06)';
+}
+
+function initParticles() {
+  particles = [];
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      vx: (Math.random() - 0.5) * 0.4,
+      vy: (Math.random() - 0.5) * 0.4,
+      r: Math.random() * 1.5 + 0.5,
+    });
+  }
+}
+initParticles();
+
+function drawParticles() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const pColor = getParticleColor();
+  const lColor = getLineColor();
+
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+    if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = pColor;
+    ctx.fill();
+  });
+
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i + 1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < CONNECT_DIST) {
+        ctx.beginPath();
+        ctx.moveTo(particles[i].x, particles[i].y);
+        ctx.lineTo(particles[j].x, particles[j].y);
+        ctx.strokeStyle = lColor;
+        ctx.lineWidth = 0.5;
+        ctx.globalAlpha = 1 - dist / CONNECT_DIST;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+  requestAnimationFrame(drawParticles);
+}
+drawParticles();
+
+// ═══════════════════ INIT ═══════════════════
+document.getElementById('progressFill').style.width = `${(1 / total) * 100}%`;
+</script>
+</body>
+</html>
