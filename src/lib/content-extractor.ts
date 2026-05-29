@@ -1,5 +1,6 @@
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
+import { cleanHtml, htmlToPlainText, cleanText } from "./text-cleaner";
 
 export interface ExtractionResult {
   /** Cleaned HTML of the main article node */
@@ -137,10 +138,10 @@ export async function extractContent(url: string, options?: {
     let fullText: string | null = null;
 
     if (parsed) {
-      content = parsed.content;
-      // Extract plain text from Readability content
-      const textDom = new JSDOM(parsed.content ?? "");
-      fullText = (textDom.window.document.body.textContent ?? "").replace(/\s{3,}/g, "\n\n").trim();
+      // Clean HTML: remove social embeds, ad blocks
+      content = cleanHtml(parsed.content ?? "");
+      // Convert cleaned HTML to structured plain text
+      fullText = htmlToPlainText(content);
     }
 
     // Fallback: if Readability gives nothing, use body text
@@ -151,6 +152,9 @@ export async function extractContent(url: string, options?: {
     if (!fullText || fullText.length < 50) {
       return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: "insufficient text extracted" };
     }
+
+    // Final text cleaning: copyright truncation + whitespace normalization
+    fullText = cleanText(fullText);
 
     const { author, date } = extractMeta(doc);
     const wordCount = fullText.split(/\s+/).filter(Boolean).length;
