@@ -15,7 +15,6 @@ import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { StatusBadge } from "@/components/articles/status-badge";
 import { SyncPanel } from "@/components/articles/sync-panel";
 import { ContentCompletionPanel } from "@/components/articles/content-completion-panel";
-import { PeopleDailyPanel } from "@/components/articles/people-daily-panel";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS, ARTICLE_STATUS_LABELS } from "@/lib/constants";
 import type { Article, ArticleStatus } from "@/types/database";
 import { FolderOpen, Plus, Upload, X } from "lucide-react";
@@ -217,9 +216,6 @@ export default function ProjectsPage() {
 
       {/* Content Completion Panel */}
       <ContentCompletionPanel onComplete={fetchArticles} />
-
-      {/* People's Daily Test Panel */}
-      <PeopleDailyPanel />
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">

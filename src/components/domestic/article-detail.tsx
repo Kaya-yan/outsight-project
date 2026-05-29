@@ -1,0 +1,423 @@
+"use client";
+
+import { useDomesticStore } from "@/stores/domestic-store";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { ArrowLeft, Brain, Loader2 } from "lucide-react";
+
+// ── Dimension display components ──
+
+function FrameDisplay({ data }: { data: Record<string, unknown> }) {
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400">主框架</span>
+        <span className="text-sm font-medium text-[#4A90A4]">{data.primary_frame as string}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400">类型</span>
+        <span className="text-xs px-2 py-0.5 rounded bg-[#2D3436] text-gray-300">{data.frame_type as string}</span>
+        <span className="text-xs text-gray-500">置信度 {((data.confidence as number) * 100).toFixed(0)}%</span>
+      </div>
+      {(data.framing_strategies as string[])?.length > 0 && (
+        <div>
+          <span className="text-xs text-gray-400">框架策略</span>
+          <ul className="mt-1 space-y-0.5">
+            {(data.framing_strategies as string[]).map((s, i) => (
+              <li key={i} className="text-xs text-gray-300 pl-2 border-l-2 border-[#4A90A4]/30">{s}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {(data.key_evidence as string[])?.length > 0 && (
+        <div>
+          <span className="text-xs text-gray-400">原文证据</span>
+          <div className="mt-1 flex flex-wrap gap-1">
+            {(data.key_evidence as string[]).map((e, i) => (
+              <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#0D0F10] rounded text-gray-400 italic">&quot;{e}&quot;</span>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiscourseDisplay({ data }: { data: Record<string, unknown> }) {
+  const dist = data.source_distribution as Record<string, number>;
+  const entries = Object.entries(dist ?? {});
+  const max = Math.max(...entries.map(([, v]) => v), 1);
+  const labels: Record<string, string> = {
+    party_government: "党政", expert: "专家", enterprise: "企业", public: "民众", foreign_media: "外媒",
+  };
+  return (
+    <div className="space-y-2">
+      <div className="space-y-1">
+        {entries.map(([key, val]) => (
+          <div key={key} className="flex items-center gap-2">
+            <span className="text-xs text-gray-400 w-10 shrink-0">{labels[key] ?? key}</span>
+            <div className="flex-1 bg-[#2D3436] rounded-full h-2">
+              <div className="bg-[#4A90A4] h-2 rounded-full" style={{ width: `${(val / max) * 100}%` }} />
+            </div>
+            <span className="text-xs text-gray-500 w-6 text-right">{val}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex gap-4 text-xs text-gray-400">
+        <span>直接引语: {data.direct_quotes as number}</span>
+        <span>间接引语: {data.indirect_quotes as number}</span>
+        <span>领导人讲话: {data.leader_speech_count as number}</span>
+      </div>
+      {(data.leader_speech_examples as string[])?.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {(data.leader_speech_examples as string[]).map((e, i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-[#0D0F10] rounded text-gray-400 italic">&quot;{e}&quot;</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PolicyToolDisplay({ data }: { data: Record<string, unknown> }) {
+  const tools = data.tools as { type: string; description: string; evidence: string }[] | undefined;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400">主导类型</span>
+        <span className="text-xs px-2 py-0.5 rounded bg-[#2D3436] text-[#4A90A4]">{data.dominant_type as string}</span>
+      </div>
+      {tools && tools.length > 0 ? (
+        <div className="space-y-1.5">
+          {tools.map((t, i) => (
+            <div key={i} className="p-2 bg-[#0D0F10] rounded text-xs">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="px-1.5 py-0.5 rounded bg-[#2D3436] text-gray-300">{t.type}</span>
+                <span className="text-gray-200">{t.description}</span>
+              </div>
+              <span className="text-gray-500 italic">&quot;{t.evidence}&quot;</span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <span className="text-xs text-gray-500">未识别到具体政策工具</span>
+      )}
+    </div>
+  );
+}
+
+function SentimentDisplay({ data }: { data: Record<string, unknown> }) {
+  const polarityColors: Record<string, string> = {
+    positive: "text-emerald-400", neutral: "text-gray-300", negative: "text-red-400",
+  };
+  const polarityLabels: Record<string, string> = {
+    positive: "正面", neutral: "中性", negative: "负面",
+  };
+  const intensity = data.intensity as number;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3">
+        <span className={`text-lg font-bold ${polarityColors[data.polarity as string] ?? "text-gray-300"}`}>
+          {polarityLabels[data.polarity as string] ?? (data.polarity as string)}
+        </span>
+        <div className="flex gap-0.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-sm ${i < intensity ? "bg-[#4A90A4]" : "bg-[#2D3436]"}`}
+            />
+          ))}
+        </div>
+        <span className="text-xs text-gray-500">强度 {intensity}/5</span>
+      </div>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-gray-400">情感对象</span>
+        <span className="text-gray-200">{data.target as string}</span>
+      </div>
+      {(data.keywords as string[])?.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {(data.keywords as string[]).map((k, i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#2D3436] text-gray-300">{k}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntertextualityDisplay({ data }: { data: Record<string, unknown> }) {
+  const categories = [
+    { key: "policy_documents", label: "政策文件", nameKey: "name" },
+    { key: "leader_speeches", label: "领导人讲话", nameKey: "speaker" },
+    { key: "historical_events", label: "历史事件", nameKey: "event" },
+    { key: "foreign_media_refs", label: "外媒引用", nameKey: "source" },
+    { key: "classical_refs", label: "古典文献", nameKey: "text" },
+  ];
+  return (
+    <div className="space-y-2">
+      {categories.map((cat) => {
+        const items = data[cat.key] as Record<string, string>[] | undefined;
+        if (!items || items.length === 0) return null;
+        return (
+          <div key={cat.key}>
+            <span className="text-xs text-gray-400">{cat.label} ({items.length})</span>
+            <div className="mt-1 space-y-1">
+              {items.map((item, i) => (
+                <div key={i} className="text-xs flex items-start gap-2">
+                  <span className="text-gray-200">{item[cat.nameKey]}</span>
+                  <span className="text-gray-500 italic">&quot;{item.evidence}&quot;</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+      {categories.every((cat) => !(data[cat.key] as unknown[])?.length) && (
+        <span className="text-xs text-gray-500">未检测到互文引用</span>
+      )}
+    </div>
+  );
+}
+
+function SyntaxDisplay({ data }: { data: Record<string, unknown> }) {
+  const formalityLabels = ["", "口语化", "非正式", "中等", "正式", "高度正式"];
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+        <div className="flex justify-between">
+          <span className="text-gray-400">平均句长</span>
+          <span className="text-gray-200">{data.avg_sentence_length as number} 字</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-400">被动句比例</span>
+          <span className="text-gray-200">{((data.passive_sentence_ratio as number) * 100).toFixed(1)}%</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-400">政治术语密度</span>
+          <span className="text-gray-200">{(data.political_term_density as number).toFixed(1)}/百字</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-gray-400">数字使用频率</span>
+          <span className="text-gray-200">{(data.number_usage_frequency as number).toFixed(1)}/百字</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-gray-400">正式度</span>
+        <div className="flex gap-0.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className={`w-3 h-3 rounded-sm ${i < (data.formality_score as number) ? "bg-[#4A90A4]" : "bg-[#2D3436]"}`}
+            />
+          ))}
+        </div>
+        <span className="text-xs text-gray-500">{formalityLabels[data.formality_score as number]}</span>
+      </div>
+    </div>
+  );
+}
+
+function NarrativeDisplay({ data }: { data: Record<string, unknown> }) {
+  const voiceLabels: Record<string, string> = {
+    omniscient: "全知叙述", reporter: "记者视角", quoted: "引语叙述", mixed: "混合视角",
+  };
+  const examples = data.narrative_examples as { type: string; evidence: string }[] | undefined;
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs text-gray-400">宏观</span>
+          <span className="text-sm text-[#4A90A4]">{((data.macro_narrative_ratio as number) * 100).toFixed(0)}%</span>
+        </div>
+        <div className="flex-1 bg-[#2D3436] rounded-full h-2 flex overflow-hidden">
+          <div className="bg-[#4A90A4] h-2" style={{ width: `${(data.macro_narrative_ratio as number) * 100}%` }} />
+          <div className="bg-emerald-500/60 h-2 flex-1" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm text-emerald-400">{((data.micro_narrative_ratio as number) * 100).toFixed(0)}%</span>
+          <span className="text-xs text-gray-400">微观</span>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-gray-400">叙事声音</span>
+        <span className="px-2 py-0.5 rounded bg-[#2D3436] text-gray-200">
+          {voiceLabels[data.narrative_voice as string] ?? (data.narrative_voice as string)}
+        </span>
+      </div>
+      {examples && examples.length > 0 && (
+        <div className="space-y-1">
+          {examples.map((ex, i) => (
+            <div key={i} className="text-xs flex items-start gap-2">
+              <span className={`px-1 py-0.5 rounded text-[10px] ${ex.type === "macro" ? "bg-[#4A90A4]/20 text-[#4A90A4]" : "bg-emerald-500/20 text-emerald-400"}`}>
+                {ex.type === "macro" ? "宏观" : "微观"}
+              </span>
+              <span className="text-gray-400 italic">&quot;{ex.evidence}&quot;</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SpatialDisplay({ data }: { data: Record<string, unknown> }) {
+  const gl = data.governance_level as Record<string, number>;
+  const gs = data.geographic_scope as Record<string, number>;
+  const ur = data.urban_rural as Record<string, number>;
+  const locations = data.key_locations as string[] | undefined;
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <span className="text-gray-400 block mb-1">治理层级</span>
+          <div className="flex gap-2">
+            <span className="text-gray-200">中央 {gl?.central ?? 0}</span>
+            <span className="text-gray-200">地方 {gl?.local ?? 0}</span>
+          </div>
+        </div>
+        <div>
+          <span className="text-gray-400 block mb-1">地理范围</span>
+          <div className="flex gap-2">
+            <span className="text-gray-200">国内 {gs?.domestic ?? 0}</span>
+            <span className="text-gray-200">国际 {gs?.international ?? 0}</span>
+          </div>
+        </div>
+        <div>
+          <span className="text-gray-400 block mb-1">城乡指向</span>
+          <div className="flex gap-2">
+            <span className="text-gray-200">城市 {ur?.urban ?? 0}</span>
+            <span className="text-gray-200">农村 {ur?.rural ?? 0}</span>
+            <span className="text-gray-200">中性 {ur?.neutral ?? 0}</span>
+          </div>
+        </div>
+      </div>
+      {locations && locations.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {locations.map((loc, i) => (
+            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-[#2D3436] text-gray-300">{loc}</span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Dimension wrapper ──
+
+type DimComponent = { key: string; label: string; sub: string; color: string; Component: React.FC<{ data: Record<string, unknown> }> };
+
+const DIMENSIONS: DimComponent[] = [
+  { key: "frame", label: "议题框架", sub: "Entman", color: "#4A90A4", Component: FrameDisplay },
+  { key: "discourse_actors", label: "话语主体", sub: "van Dijk", color: "#6C5CE7", Component: DiscourseDisplay },
+  { key: "policy_tools", label: "政策工具", sub: "Rothwell & Zegveld", color: "#00B894", Component: PolicyToolDisplay },
+  { key: "sentiment", label: "情感极性", sub: "Pang & Lee", color: "#E17055", Component: SentimentDisplay },
+  { key: "intertextuality", label: "互文性", sub: "Kristeva", color: "#FDCB6E", Component: IntertextualityDisplay },
+  { key: "syntax_formality", label: "句法正式度", sub: "Halliday", color: "#E84393", Component: SyntaxDisplay },
+  { key: "narrative", label: "叙事视角", sub: "Genette", color: "#00CEC9", Component: NarrativeDisplay },
+  { key: "spatial", label: "地域指向", sub: "Soja", color: "#A29BFE", Component: SpatialDisplay },
+];
+
+// ── Main Detail Component ──
+
+export function ArticleDetail() {
+  const activeArticle = useDomesticStore((s) => s.activeArticle);
+  const isLoadingDetail = useDomesticStore((s) => s.isLoadingDetail);
+  const clearActiveArticle = useDomesticStore((s) => s.clearActiveArticle);
+  const triggerAnalysis = useDomesticStore((s) => s.triggerAnalysis);
+
+  if (isLoadingDetail) {
+    return (
+      <Card className="border-[#3D4446] bg-[#1A1D1E]">
+        <CardContent className="p-8 flex items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-[#4A90A4]" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!activeArticle) return null;
+
+  const ai = (activeArticle.metadata as Record<string, unknown>)?.domestic_ai_analysis as Record<string, unknown> | undefined;
+  const hasAnalysis = !!ai;
+  const analyzedAt = ai?.analyzed_at as string | undefined;
+
+  return (
+    <div className="space-y-4">
+      {/* Back Button */}
+      <button
+        onClick={clearActiveArticle}
+        className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-200 transition-colors"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" />
+        返回列表
+      </button>
+
+      {/* Article Header */}
+      <Card className="border-[#3D4446] bg-[#1A1D1E]">
+        <CardContent className="p-4 space-y-3">
+          <h2 className="text-base font-medium text-gray-100 leading-relaxed">
+            {activeArticle.title}
+          </h2>
+          <div className="flex items-center gap-3 text-xs text-gray-400">
+            <span>{activeArticle.media}</span>
+            <span>{activeArticle.publish_date}</span>
+            <span>{activeArticle.word_count} 字</span>
+            {activeArticle.author ? <span>{activeArticle.author}</span> : null}
+          </div>
+          {!hasAnalysis && (
+            <Button
+              onClick={() => triggerAnalysis(activeArticle.id)}
+              size="sm"
+              className="bg-[#4A90A4] hover:bg-[#5BA1B5] text-white text-xs h-7"
+            >
+              <Brain className="h-3.5 w-3.5 mr-1" />
+              执行 8 维度 AI 分析
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Full Text */}
+      <Card className="border-[#3D4446] bg-[#1A1D1E]">
+        <CardContent className="p-4">
+          <h3 className="text-xs text-gray-400 mb-2">正文</h3>
+          <div className="text-xs text-gray-300 leading-6 max-h-60 overflow-y-auto whitespace-pre-wrap">
+            {activeArticle.full_text}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 8-Dimension AI Analysis */}
+      {hasAnalysis && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          {DIMENSIONS.map(({ key, label, sub, color, Component }) => {
+            const dimData = ai[key] as Record<string, unknown> | null;
+            return (
+              <Card key={key} className="border-[#3D4446] bg-[#1A1D1E]">
+                <CardContent className="p-4 space-y-2">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-1 h-4 rounded-full" style={{ backgroundColor: color }} />
+                    <span className="text-xs font-medium text-gray-200">{label}</span>
+                    <span className="text-[10px] text-gray-500">{sub}</span>
+                  </div>
+                  {dimData ? (
+                    <Component data={dimData} />
+                  ) : (
+                    <span className="text-xs text-gray-500">分析失败或无数据</span>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Analyzed timestamp */}
+      {analyzedAt ? (
+        <p className="text-[10px] text-gray-600 text-right">
+          分析于 {new Date(analyzedAt).toLocaleString("zh-CN")}
+        </p>
+      ) : null}
+    </div>
+  );
+}
