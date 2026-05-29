@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getMediaStrategy, MEDIA_STRATEGY_LABEL, type MediaStrategy } from "@/lib/media-strategy";
@@ -40,6 +40,12 @@ export function ContentCompletionPanel({ onComplete }: ContentCompletionPanelPro
   const [fetching, setFetching] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [paused, setPaused] = useState(false);
+
+  // Batch cleaning state
+  const [cleaning, setCleaning] = useState(false);
+  const [cleanProgress, setCleanProgress] = useState({ cleaned: 0, skipped: 0, total: 0 });
+  const [cleanSource, setCleanSource] = useState<string>("");
+  const cleanTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStats = useCallback(async () => {
     setLoading(true);
@@ -118,6 +124,81 @@ export function ContentCompletionPanel({ onComplete }: ContentCompletionPanelPro
 
   const pauseFetch = useCallback(() => {
     setPaused(true);
+  }, []);
+
+  // ── Batch cleaning ──
+  const runCleanBatch = useCallback(async (source: string) => {
+    const params = new URLSearchParams({ limit: "50" });
+    if (source) params.set("source", source);
+
+    try {
+      const res = await fetch(`/api/articles/batch-clean?${params}`);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (err) {
+      console.error("[CompletionPanel] Clean batch failed:", err);
+      return null;
+    }
+  }, []);
+
+  const startCleaning = useCallback(async () => {
+    setCleaning(true);
+    setCleanProgress({ cleaned: 0, skipped: 0, total: 0 });
+
+    // First batch
+    const result = await runCleanBatch(cleanSource);
+    if (!result) {
+      setCleaning(false);
+      return;
+    }
+
+    setCleanProgress({
+      cleaned: result.cleaned,
+      skipped: result.skipped,
+      total: result.cleaned + result.skipped,
+    });
+
+    if (result.done) {
+      setCleaning(false);
+      await fetchStats();
+      onComplete?.();
+      return;
+    }
+
+    // Poll every 2s for remaining batches
+    cleanTimerRef.current = setInterval(async () => {
+      const batch = await runCleanBatch(cleanSource);
+      if (!batch) return;
+
+      setCleanProgress((prev) => ({
+        cleaned: prev.cleaned + batch.cleaned,
+        skipped: prev.skipped + batch.skipped,
+        total: prev.total + batch.cleaned + batch.skipped,
+      }));
+
+      if (batch.done) {
+        if (cleanTimerRef.current) clearInterval(cleanTimerRef.current);
+        cleanTimerRef.current = null;
+        setCleaning(false);
+        await fetchStats();
+        onComplete?.();
+      }
+    }, 2000);
+  }, [cleanSource, runCleanBatch, fetchStats, onComplete]);
+
+  const stopCleaning = useCallback(() => {
+    if (cleanTimerRef.current) {
+      clearInterval(cleanTimerRef.current);
+      cleanTimerRef.current = null;
+    }
+    setCleaning(false);
+  }, []);
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (cleanTimerRef.current) clearInterval(cleanTimerRef.current);
+    };
   }, []);
 
   if (loading && !stats) {
@@ -288,6 +369,57 @@ export function ContentCompletionPanel({ onComplete }: ContentCompletionPanelPro
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Batch cleaning section */}
+        <div className="border-t border-[#E2E5E9] pt-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-medium text-[#2D3436]">全文清洗</h3>
+            <div className="flex items-center gap-2">
+              <select
+                value={cleanSource}
+                onChange={(e) => setCleanSource(e.target.value)}
+                disabled={cleaning}
+                className="h-8 rounded-md border border-[#E2E5E9] bg-white px-2 text-xs"
+              >
+                <option value="">全部媒体</option>
+                {MEDIA_OUTLETS.map((m) => (
+                  <option key={m.value} value={m.value}>{m.label}</option>
+                ))}
+              </select>
+              {cleaning ? (
+                <Button
+                  onClick={stopCleaning}
+                  variant="outline"
+                  size="sm"
+                  className="h-8 text-xs"
+                >
+                  停止
+                </Button>
+              ) : (
+                <Button
+                  onClick={startCleaning}
+                  size="sm"
+                  className="h-8 text-xs bg-[#6366f1] hover:bg-[#5558e6] text-white"
+                >
+                  清洗已有全文
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {cleaning && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-xs text-[#7F8A93]">
+                <span>清洗进度</span>
+                <span>已清洗 {cleanProgress.cleaned} 篇 · 跳过 {cleanProgress.skipped} 篇</span>
+              </div>
+              <div className="h-2 bg-[#E2E5E9] rounded-full overflow-hidden">
+                <div className="h-full bg-[#6366f1] transition-all duration-300 animate-pulse" style={{ width: "100%" }} />
+              </div>
+              <div className="text-[10px] text-[#7F8A93]">每批次处理 50 篇，2 秒间隔，字数下降超 80% 的文章会标记为待审阅</div>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>
