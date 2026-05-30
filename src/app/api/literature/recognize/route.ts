@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
+import { callMimoStream } from "@/lib/ai/mimo-client";
 
 const SYSTEM_PROMPT = `You are a research literature parser. Extract structured metadata from raw reading notes text.
 Return ONLY valid JSON with these fields (use null for missing, empty array for no items):
@@ -40,41 +39,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "文本过短，请粘贴至少20字的笔记内容" }, { status: 400 });
   }
 
-  const apiKey = process.env.MIMO_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: "AI 服务未配置" }, { status: 500 });
-  }
-
   try {
-    const res = await fetch(`${MIMO_BASE}/v1/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "mimo-v2.5-pro",
-        max_tokens: 2048,
-        system: SYSTEM_PROMPT,
-        messages: [
-          { role: "user", content: text.slice(0, 4000) },
-        ],
-      }),
-      signal: AbortSignal.timeout(25000),
+    const result = await callMimoStream(SYSTEM_PROMPT, text.slice(0, 4000), {
+      maxTokens: 2048,
+      timeoutMs: 25000,
     });
-
-    if (!res.ok) {
-      return NextResponse.json({ error: "AI 识别服务暂不可用" }, { status: 502 });
+    if (!result.text) {
+      return NextResponse.json({ error: `AI 识别失败: ${result.error ?? "无返回"}` }, { status: 502 });
     }
 
-    const json = await res.json();
-    const content = json.content?.[0]?.text;
-    if (!content) {
-      return NextResponse.json({ error: "AI 未返回有效结果" }, { status: 500 });
-    }
-
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(result.text);
 
     // Normalize: ensure array fields are arrays
     return NextResponse.json({

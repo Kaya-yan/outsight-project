@@ -3,61 +3,12 @@
  * Each dimension has a specific theoretical grounding and operational definition.
  */
 
-// ── callLLM helper ──
+import { callMimoStream, type MimoResult } from "@/lib/ai/mimo-client";
 
-const BASE_URL = process.env.MIMO_BASE_URL || "https://token-plan-cn.xiaomimimo.com/anthropic";
-const API_KEY = process.env.MIMO_API_KEY || "";
-
-interface LLMResult {
-  text: string | null;
-  error: string | null;
-}
+type LLMResult = MimoResult;
 
 async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512): Promise<LLMResult> {
-  if (!API_KEY) return { text: null, error: "MIMO_API_KEY 未配置" };
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const res = await fetch(`${BASE_URL}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": API_KEY,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "mimo-v2.5-pro",
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [
-            { role: "user", content: userPrompt },
-          ],
-        }),
-        signal: AbortSignal.timeout(90000),
-      });
-
-      if (!res.ok) {
-        const errBody = await res.text().catch(() => "");
-        if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
-          continue;
-        }
-        return { text: null, error: `API ${res.status}: ${errBody.slice(0, 100)}` };
-      }
-
-      const data = await res.json();
-      const content = data.content?.[0]?.text ?? null;
-      if (!content) return { text: null, error: "API 返回空内容" };
-      return { text: content, error: null };
-    } catch (err) {
-      if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
-        continue;
-      }
-      return { text: null, error: err instanceof Error ? err.message : "请求失败" };
-    }
-  }
-  return { text: null, error: "重试耗尽" };
+  return callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 90000 });
 }
 
 function parseJSON<T>(text: string | null): T | null {

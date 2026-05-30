@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
+import { callMimoStream } from "@/lib/ai/mimo-client";
 
 const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
-const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
 
 // ── types ──
 interface DictPhonetic {
@@ -70,7 +70,6 @@ function classifyPhonetics(phonetics: DictPhonetic[]): PhoneticsResult {
 async function translateDefinitions(
   definitionsByPos: Record<string, string[]>,
   examples: string[],
-  apiKey: string,
 ): Promise<{
   definitionsZh: Record<string, string[]>;
   examplesZh: string[];
@@ -95,30 +94,14 @@ Output format:
 }`;
 
   try {
-    const res = await fetch(`${MIMO_BASE}/v1/messages`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": apiKey,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "mimo-v2.5-pro",
-        max_tokens: 2048,
-        system: "You are a professional English-Chinese dictionary translator. Output only valid JSON, no explanation.",
-        messages: [
-          { role: "user", content: prompt },
-        ],
-      }),
-      signal: AbortSignal.timeout(20000),
-    });
+    const result = await callMimoStream(
+      "You are a professional English-Chinese dictionary translator. Output only valid JSON, no explanation.",
+      prompt,
+      { maxTokens: 2048, timeoutMs: 20000 },
+    );
+    if (!result.text) return null;
 
-    if (!res.ok) return null;
-    const json = await res.json();
-    const content = json.content?.[0]?.text;
-    if (!content) return null;
-
-    const parsed = JSON.parse(content);
+    const parsed = JSON.parse(result.text);
     return {
       definitionsZh: parsed.definitions_by_pos ?? {},
       examplesZh: parsed.examples_zh ?? [],
@@ -188,7 +171,6 @@ export async function POST(request: Request) {
       const translated = await translateDefinitions(
         definitionsByPos,
         rawExamples,
-        apiKey,
       );
       if (translated) {
         definitionsZh = translated.definitionsZh;

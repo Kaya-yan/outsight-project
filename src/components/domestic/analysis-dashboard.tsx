@@ -1,82 +1,50 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Info } from "lucide-react";
 
-// ── SVG Word Cloud ──
+// ── Tag-Style Word Cloud ──
 
 function WordCloud({ words }: { words: { word: string; count: number }[] }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-
   if (words.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
 
-  const maxCount = words[0]?.count ?? 1;
-  const minCount = words[words.length - 1]?.count ?? 1;
+  const max = words[0]?.count ?? 1;
+  const min = words[Math.min(words.length - 1, 39)]?.count ?? 1;
 
-  const placed: { word: string; x: number; y: number; size: number; color: string; count: number }[] = [];
-  const colorStops = ["#1B4D5C", "#2D6A7A", "#3A7D8F", "#4A90A4", "#6BA8B8", "#8DC0CC", "#A8D4DD"];
-
-  const cx = 300, cy = 150;
-  let angle = 0, radius = 0;
-
-  for (const w of words.slice(0, 40)) {
-    const ratio = minCount === maxCount ? 0.5 : (w.count - minCount) / (maxCount - minCount);
-    const fontSize = 10 + ratio * 22;
-    const textWidth = w.word.length * fontSize * 0.6;
-
-    let x = cx + radius * Math.cos(angle);
-    let y = cy + radius * Math.sin(angle);
-
-    let attempts = 0;
-    while (attempts < 100) {
-      let collides = false;
-      for (const p of placed) {
-        const dx = Math.abs(x - p.x);
-        const dy = Math.abs(y - p.y);
-        if (dx < (textWidth + p.word.length * p.size * 0.6) / 2 + 4 &&
-            dy < (fontSize + p.size) / 2 + 2) {
-          collides = true;
-          break;
-        }
-      }
-      if (!collides) break;
-      angle += 0.3;
-      radius += 2;
-      x = cx + radius * Math.cos(angle);
-      y = cy + radius * Math.sin(angle);
-      attempts++;
-    }
-
-    const colorIdx = Math.min(colorStops.length - 1, Math.floor(ratio * (colorStops.length - 1)));
-    placed.push({ word: w.word, x, y, size: fontSize, color: colorStops[colorIdx], count: w.count });
-
-    angle += 0.8;
-    radius += 3;
-  }
+  const palette = [
+    { bg: "#E8F4F8", fg: "#1B4D5C", border: "#B8DDE6" },
+    { bg: "#EBF5F0", fg: "#1A5C3A", border: "#C4E0D3" },
+    { bg: "#F0EDF8", fg: "#4A3B8F", border: "#D4CDEF" },
+    { bg: "#FDF4ED", fg: "#8B5E3C", border: "#F0D9C0" },
+    { bg: "#FDEDE8", fg: "#8B3A3A", border: "#F0C4BA" },
+    { bg: "#EDF2F8", fg: "#2C5282", border: "#C4D5E8" },
+    { bg: "#F5EDF8", fg: "#6B3FA0", border: "#DDCDEF" },
+  ];
 
   return (
-    <div ref={containerRef} className="relative w-full h-[300px] overflow-hidden">
-      <svg width="600" height="300" viewBox="0 0 600 300" className="w-full h-full">
-        {placed.map((p, i) => (
-          <text
-            key={i}
-            x={p.x}
-            y={p.y}
-            fontSize={p.size}
-            fill={p.color}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            className="cursor-pointer hover:opacity-60 transition-opacity duration-200"
-            style={{ fontFamily: "system-ui, sans-serif", fontWeight: p.size > 20 ? 600 : 400 }}
+    <div className="flex flex-wrap gap-1.5 items-center justify-center py-2">
+      {words.slice(0, 40).map((w, i) => {
+        const ratio = min === max ? 0.5 : (w.count - min) / (max - min);
+        const sizeClass = ratio > 0.8 ? "text-base font-bold px-3 py-1"
+          : ratio > 0.6 ? "text-sm font-semibold px-2.5 py-0.5"
+          : ratio > 0.4 ? "text-xs font-medium px-2 py-0.5"
+          : ratio > 0.2 ? "text-[11px] px-1.5 py-0.5"
+          : "text-[10px] px-1.5 py-0.5";
+        const c = palette[i % palette.length];
+        return (
+          <span
+            key={w.word}
+            className={`inline-block rounded-full cursor-default transition-all duration-200 hover:scale-105 hover:shadow-sm border ${sizeClass}`}
+            style={{ backgroundColor: c.bg, color: c.fg, borderColor: c.border }}
+            title={`${w.word}: ${w.count}次 (${(ratio * 100).toFixed(0)}%)`}
           >
-            <title>{p.word}: {p.count}次</title>
-            {p.word}
-          </text>
-        ))}
-      </svg>
+            {w.word}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -283,31 +251,37 @@ function MetricTooltip({ children, text }: { children: React.ReactNode; text: st
   );
 }
 
-// ── Heat Map for Character Frequency ──
+// ── Character Treemap ──
 
-function CharHeatMap({ chars }: { chars: { char: string; count: number }[] }) {
+function CharTreemap({ chars }: { chars: { char: string; count: number }[] }) {
   if (chars.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const max = chars[0]?.count ?? 1;
 
+  const colorStops = [
+    { threshold: 0.85, bg: "#1B4D5C", fg: "#ffffff" },
+    { threshold: 0.7, bg: "#2D6A7A", fg: "#ffffff" },
+    { threshold: 0.55, bg: "#3A7D8F", fg: "#ffffff" },
+    { threshold: 0.4, bg: "#4A90A4", fg: "#ffffff" },
+    { threshold: 0.25, bg: "#7AB8C9", fg: "#ffffff" },
+    { threshold: 0.15, bg: "#A8D4DD", fg: "#1B4D5C" },
+    { threshold: 0, bg: "#D4EBF0", fg: "#2D6A7A" },
+  ];
+
   return (
     <div className="flex flex-wrap gap-1">
-      {chars.slice(0, 30).map((c, i) => {
-        const intensity = c.count / max;
-        const bg = `rgba(74, 144, 164, ${0.1 + intensity * 0.6})`;
-        const fontSize = 12 + intensity * 10;
+      {chars.slice(0, 24).map((c) => {
+        const ratio = c.count / max;
+        const stop = colorStops.find((s) => ratio >= s.threshold)!;
+        const size = ratio > 0.7 ? "w-14 h-14 text-xl"
+          : ratio > 0.4 ? "w-12 h-12 text-lg"
+          : ratio > 0.2 ? "w-10 h-10 text-base"
+          : "w-9 h-9 text-sm";
         return (
           <span
             key={c.char}
-            className="inline-flex items-center justify-center rounded cursor-default hover:brightness-110 transition-all"
-            style={{
-              width: `${fontSize + 10}px`,
-              height: `${fontSize + 10}px`,
-              backgroundColor: bg,
-              fontSize: `${fontSize}px`,
-              fontFamily: "serif",
-              color: intensity > 0.5 ? "#fff" : "#2D3436",
-            }}
-            title={`${c.char}: ${c.count}次`}
+            className={`inline-flex items-center justify-center rounded-lg cursor-default transition-all hover:scale-105 hover:shadow-md ${size}`}
+            style={{ backgroundColor: stop.bg, color: stop.fg, fontFamily: "serif" }}
+            title={`${c.char}: ${c.count}次 (${(ratio * 100).toFixed(0)}%)`}
           >
             {c.char}
           </span>
@@ -554,8 +528,8 @@ export function AnalysisDashboard() {
 
         <Card className="border-[#E2E5E9]">
           <CardContent className="p-4">
-            <SectionTitle title="高频字热力图" subtitle={`Top ${stats.topChars?.length ?? 0} chars`} />
-            <CharHeatMap chars={stats.topChars ?? []} />
+            <SectionTitle title="高频字方阵" subtitle={`Top ${stats.topChars?.length ?? 0} chars`} />
+            <CharTreemap chars={stats.topChars ?? []} />
           </CardContent>
         </Card>
       </div>

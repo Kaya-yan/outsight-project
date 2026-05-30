@@ -1,52 +1,12 @@
-const MAX_RETRIES = 3;
+import { callMimoStream } from "@/lib/ai/mimo-client";
 
 async function callLLM(
   systemPrompt: string,
   userPrompt: string,
   maxTokens = 512,
 ): Promise<string | null> {
-  const apiKey = process.env.MIMO_API_KEY;
-  const baseUrl = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
-  if (!apiKey) return null;
-
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const res = await fetch(`${baseUrl}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "mimo-v2.5-pro",
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [
-            { role: "user", content: userPrompt },
-          ],
-        }),
-        signal: AbortSignal.timeout(60000),
-      });
-
-      if (!res.ok) {
-        if (attempt < MAX_RETRIES - 1) {
-          await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-          continue;
-        }
-        return null;
-      }
-
-      const json = await res.json();
-      return json.content?.[0]?.text?.trim() ?? null;
-    } catch {
-      if (attempt < MAX_RETRIES - 1) {
-        await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
-      }
-    }
-  }
-
-  return null;
+  const result = await callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 60000 });
+  return result.text;
 }
 
 /**

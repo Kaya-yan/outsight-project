@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-
-const MIMO_BASE = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
+import { callMimoStream } from "@/lib/ai/mimo-client";
 
 const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specializing in discourse analysis and media studies. Translate the given English news text into Chinese with the following requirements:
 
@@ -11,47 +10,11 @@ const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specia
 5. Output ONLY the Chinese translation, no explanations, no notes, no prefixes.`;
 
 async function callTranslate(text: string): Promise<string | null> {
-  const apiKey = process.env.MIMO_API_KEY;
-  if (!apiKey) return null;
-
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(`${MIMO_BASE}/v1/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model: "mimo-v2.5-pro",
-          max_tokens: Math.min(Math.ceil(text.length * 1.5), 2048),
-          system: TRANSLATION_SYSTEM_PROMPT,
-          messages: [
-            { role: "user", content: text },
-          ],
-        }),
-        signal: AbortSignal.timeout(25000),
-      });
-
-      if (!res.ok) {
-        if (attempt < 1) {
-          await new Promise((r) => setTimeout(r, 1000));
-          continue;
-        }
-        return null;
-      }
-
-      const json = await res.json();
-      return json.content?.[0]?.text?.trim() ?? null;
-    } catch {
-      if (attempt < 1) {
-        await new Promise((r) => setTimeout(r, 1000));
-      }
-    }
-  }
-
-  return null;
+  const result = await callMimoStream(TRANSLATION_SYSTEM_PROMPT, text, {
+    maxTokens: Math.min(Math.ceil(text.length * 1.5), 2048),
+    timeoutMs: 25000,
+  });
+  return result.text;
 }
 
 export async function POST(request: Request) {
