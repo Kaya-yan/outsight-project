@@ -8,7 +8,7 @@ import { callMimoStream, type MimoResult } from "@/lib/ai/mimo-client";
 type LLMResult = MimoResult;
 
 async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512): Promise<LLMResult> {
-  return callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 90000 });
+  return callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 45000 });
 }
 
 function parseJSON<T>(text: string | null): T | null {

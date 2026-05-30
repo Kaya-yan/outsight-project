@@ -77,6 +77,15 @@ interface DomesticStoreState {
   activeArticle: DomesticArticle | null;
   isLoadingDetail: boolean;
 
+  // Analysis progress
+  analysisProgress: {
+    phase: "idle" | "analyzing" | "done" | "error";
+    current: number;
+    total: number;
+    currentDimension: string;
+    errors: Record<string, string | null>;
+  };
+
   // Stats
   stats: DomesticStats | null;
   isLoadingStats: boolean;
@@ -147,6 +156,7 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
   isCollecting: false,
   activeArticle: null,
   isLoadingDetail: false,
+  analysisProgress: { phase: "idle", current: 0, total: 8, currentDimension: "", errors: {} },
   stats: null,
   isLoadingStats: false,
 
@@ -294,24 +304,94 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
     }
   },
 
-  clearActiveArticle: () => set({ activeArticle: null }),
+  clearActiveArticle: () => set({ activeArticle: null, analysisProgress: { phase: "idle", current: 0, total: 8, currentDimension: "", errors: {} } }),
 
   triggerAnalysis: async (id) => {
-    set({ isLoadingDetail: true });
+    set({
+      isLoadingDetail: true,
+      analysisProgress: { phase: "analyzing", current: 0, total: 8, currentDimension: "", errors: {} },
+    });
+
     try {
       const res = await fetch("/api/domestic/analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ articleId: id }),
       });
-      if (res.ok) {
-        get().fetchArticle(id);
-      } else {
-        const json = await res.json();
-        set({ error: json.error ?? "分析失败" });
+
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        set({
+          isLoadingDetail: false,
+          analysisProgress: { phase: "error", current: 0, total: 8, currentDimension: "", errors: {} },
+          error: (json as Record<string, string>).error ?? "分析失败",
+        });
+        return;
       }
+
+      const reader = res.body?.getReader();
+      if (!reader) { set({ isLoadingDetail: false }); return; }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          try {
+            const evt = JSON.parse(line.slice(6)) as Record<string, unknown>;
+
+            if (evt.phase === "analyzing") {
+              set((s) => ({
+                analysisProgress: {
+                  ...s.analysisProgress,
+                  phase: "analyzing",
+                  current: evt.current as number,
+                  total: evt.total as number,
+                  currentDimension: evt.dimension as string,
+                },
+              }));
+            } else if (evt.phase === "dimension_done") {
+              set((s) => ({
+                analysisProgress: {
+                  ...s.analysisProgress,
+                  current: evt.current as number,
+                  errors: evt.error
+                    ? { ...s.analysisProgress.errors, [evt.dimension as string]: evt.error as string }
+                    : s.analysisProgress.errors,
+                },
+              }));
+            } else if (evt.phase === "done") {
+              set((s) => ({
+                isLoadingDetail: false,
+                analysisProgress: { ...s.analysisProgress, phase: "done" },
+              }));
+            } else if (evt.phase === "error") {
+              set({
+                isLoadingDetail: false,
+                analysisProgress: { phase: "error", current: 0, total: 8, currentDimension: "", errors: {} },
+                error: (evt.error as string) ?? "分析失败",
+              });
+            }
+          } catch { /* ignore malformed SSE */ }
+        }
+      }
+
+      // Refresh article to get updated metadata
+      get().fetchArticle(id);
     } catch {
-      set({ error: "网络连接失败" });
+      set({
+        isLoadingDetail: false,
+        analysisProgress: { phase: "error", current: 0, total: 8, currentDimension: "", errors: {} },
+        error: "网络连接失败",
+      });
     }
   },
 

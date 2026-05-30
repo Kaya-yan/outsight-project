@@ -24,7 +24,7 @@ export async function callMimoStream(
   if (!API_KEY) return { text: null, error: "MIMO_API_KEY 未配置" };
 
   const maxTokens = opts?.maxTokens ?? 512;
-  const timeoutMs = opts?.timeoutMs ?? 90000;
+  const timeoutMs = opts?.timeoutMs ?? 45000;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {

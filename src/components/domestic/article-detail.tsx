@@ -319,13 +319,25 @@ const DIMENSIONS: DimComponent[] = [
 
 // ── Main Detail Component ──
 
+const DIM_LABELS: Record<string, string> = {
+  frame: "议题框架",
+  discourse_actors: "话语主体",
+  policy_tools: "政策工具",
+  sentiment: "情感极性",
+  intertextuality: "互文性",
+  syntax_formality: "句法正式度",
+  narrative: "叙事视角",
+  spatial: "地域指向",
+};
+
 export function ArticleDetail() {
   const activeArticle = useDomesticStore((s) => s.activeArticle);
   const isLoadingDetail = useDomesticStore((s) => s.isLoadingDetail);
+  const analysisProgress = useDomesticStore((s) => s.analysisProgress);
   const clearActiveArticle = useDomesticStore((s) => s.clearActiveArticle);
   const triggerAnalysis = useDomesticStore((s) => s.triggerAnalysis);
 
-  if (isLoadingDetail) {
+  if (isLoadingDetail && analysisProgress.phase === "idle") {
     return (
       <Card className="border-[#E2E5E9]">
         <CardContent className="p-8 flex items-center justify-center">
@@ -364,7 +376,7 @@ export function ArticleDetail() {
             <span>{activeArticle.word_count} 字</span>
             {activeArticle.author ? <span>{activeArticle.author}</span> : null}
           </div>
-          {!hasAnalysis && (
+          {!hasAnalysis && analysisProgress.phase === "idle" && (
             <Button
               onClick={() => triggerAnalysis(activeArticle.id)}
               size="sm"
@@ -373,6 +385,48 @@ export function ArticleDetail() {
               <Brain className="h-3.5 w-3.5 mr-1" />
               执行 8 维度 AI 分析
             </Button>
+          )}
+          {analysisProgress.phase === "analyzing" && (
+            <div className="space-y-2 p-3 bg-[#F7F8FA] rounded-lg border border-[#E2E5E9]">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-[#4A90A4]" />
+                <span className="text-xs text-[#2D3436]">
+                  正在分析 {analysisProgress.current}/{analysisProgress.total}
+                  {analysisProgress.currentDimension && ` · ${DIM_LABELS[analysisProgress.currentDimension] ?? analysisProgress.currentDimension}`}
+                </span>
+              </div>
+              <div className="w-full bg-[#E2E5E9] rounded-full h-1.5">
+                <div
+                  className="h-full bg-[#4A90A4] rounded-full transition-all duration-500"
+                  style={{ width: `${(analysisProgress.current / analysisProgress.total) * 100}%` }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {DIMENSIONS.map((d) => {
+                  const done = analysisProgress.current > DIMENSIONS.findIndex((x) => x.key === d.key);
+                  const isCurrent = analysisProgress.currentDimension === d.key;
+                  const hasError = analysisProgress.errors[d.key];
+                  return (
+                    <span
+                      key={d.key}
+                      className={`text-[9px] px-1.5 py-0.5 rounded ${
+                        hasError ? "bg-[#E17055]/10 text-[#E17055]"
+                        : done ? "bg-[#00B894]/10 text-[#00B894]"
+                        : isCurrent ? "bg-[#4A90A4]/10 text-[#4A90A4] animate-pulse"
+                        : "bg-[#E2E5E9] text-[#95A5A6]"
+                      }`}
+                    >
+                      {d.label}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {analysisProgress.phase === "done" && !hasAnalysis && (
+            <div className="text-xs text-[#00B894] flex items-center gap-1">
+              分析完成，正在刷新...
+            </div>
           )}
         </CardContent>
       </Card>
