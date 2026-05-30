@@ -1,50 +1,99 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
+import cloud from "d3-cloud";
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Info } from "lucide-react";
 
-// ── Tag-Style Word Cloud ──
+// ── D3-Cloud Word Cloud ──
+
+interface CloudWord {
+  text: string;
+  size: number;
+  count: number;
+  x?: number;
+  y?: number;
+  rotate?: number;
+}
+
+const WC_COLORS = ["#1B4D5C", "#2D6A7A", "#3A7D8F", "#4A90A4", "#5DA3B5", "#6BA8B8", "#8DC0CC"];
 
 function WordCloud({ words }: { words: { word: string; count: number }[] }) {
+  const [placed, setPlaced] = useState<CloudWord[]>([]);
+  const [dims, setDims] = useState({ w: 600, h: 300 });
+
+  const layoutCloud = useCallback((input: { word: string; count: number }[], containerWidth: number) => {
+    if (input.length === 0) return;
+
+    const max = input[0]?.count ?? 1;
+    const min = input[Math.min(input.length - 1, 39)]?.count ?? 1;
+    const w = Math.max(400, containerWidth);
+    const h = Math.max(200, Math.round(w * 0.45));
+
+    const cloudWords: CloudWord[] = input.slice(0, 45).map((d) => ({
+      text: d.word,
+      count: d.count,
+      size: min === max ? 18 : 10 + ((d.count - min) / (max - min)) * 30,
+    }));
+
+    cloud()
+      .size([w, h])
+      .words(cloudWords)
+      .padding(3)
+      .rotate(() => (Math.random() > 0.7 ? (Math.random() > 0.5 ? 90 : -90) : 0))
+      .font("system-ui, -apple-system, sans-serif")
+      .fontSize((d) => (d as CloudWord).size)
+      .spiral("archimedean")
+      .on("end", (output) => {
+        setPlaced(output as CloudWord[]);
+        setDims({ w, h });
+      })
+      .start();
+  }, []);
+
+  useEffect(() => {
+    const container = document.getElementById("wordcloud-container");
+    const containerWidth = container?.clientWidth ?? 600;
+    layoutCloud(words, containerWidth);
+  }, [words, layoutCloud]);
+
   if (words.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
-
-  const max = words[0]?.count ?? 1;
-  const min = words[Math.min(words.length - 1, 39)]?.count ?? 1;
-
-  const palette = [
-    { bg: "#E8F4F8", fg: "#1B4D5C", border: "#B8DDE6" },
-    { bg: "#EBF5F0", fg: "#1A5C3A", border: "#C4E0D3" },
-    { bg: "#F0EDF8", fg: "#4A3B8F", border: "#D4CDEF" },
-    { bg: "#FDF4ED", fg: "#8B5E3C", border: "#F0D9C0" },
-    { bg: "#FDEDE8", fg: "#8B3A3A", border: "#F0C4BA" },
-    { bg: "#EDF2F8", fg: "#2C5282", border: "#C4D5E8" },
-    { bg: "#F5EDF8", fg: "#6B3FA0", border: "#DDCDEF" },
-  ];
+  if (placed.length === 0) {
+    return (
+      <div id="wordcloud-container" className="w-full h-[280px] flex items-center justify-center">
+        <div className="h-4 w-4 border-2 border-[#E2E5E9] border-t-[#4A90A4] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-wrap gap-1.5 items-center justify-center py-2">
-      {words.slice(0, 40).map((w, i) => {
-        const ratio = min === max ? 0.5 : (w.count - min) / (max - min);
-        const sizeClass = ratio > 0.8 ? "text-base font-bold px-3 py-1"
-          : ratio > 0.6 ? "text-sm font-semibold px-2.5 py-0.5"
-          : ratio > 0.4 ? "text-xs font-medium px-2 py-0.5"
-          : ratio > 0.2 ? "text-[11px] px-1.5 py-0.5"
-          : "text-[10px] px-1.5 py-0.5";
-        const c = palette[i % palette.length];
-        return (
-          <span
-            key={w.word}
-            className={`inline-block rounded-full cursor-default transition-all duration-200 hover:scale-105 hover:shadow-sm border ${sizeClass}`}
-            style={{ backgroundColor: c.bg, color: c.fg, borderColor: c.border }}
-            title={`${w.word}: ${w.count}次 (${(ratio * 100).toFixed(0)}%)`}
-          >
-            {w.word}
-          </span>
-        );
-      })}
+    <div id="wordcloud-container" className="w-full overflow-hidden">
+      <svg width={dims.w} height={dims.h} viewBox={`0 0 ${dims.w} ${dims.h}`} className="w-full h-auto">
+        <g transform={`translate(${dims.w / 2},${dims.h / 2})`}>
+          {placed.map((w, i) => (
+            <text
+              key={w.text}
+              x={w.x}
+              y={w.y}
+              fontSize={w.size}
+              fill={WC_COLORS[i % WC_COLORS.length]}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              transform={`rotate(${w.rotate ?? 0})`}
+              className="cursor-default hover:opacity-60 transition-opacity duration-150"
+              style={{
+                fontFamily: "system-ui, -apple-system, sans-serif",
+                fontWeight: w.size > 24 ? 700 : w.size > 16 ? 600 : 400,
+              }}
+            >
+              <title>{w.text}: {w.count}次</title>
+              {w.text}
+            </text>
+          ))}
+        </g>
+      </svg>
     </div>
   );
 }

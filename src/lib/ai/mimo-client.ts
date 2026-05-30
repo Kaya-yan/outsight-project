@@ -48,7 +48,12 @@ export async function callMimoStream(
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
         if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+          // Respect Retry-After header for 429, otherwise use longer backoff
+          const retryAfter = res.headers.get("Retry-After");
+          const waitMs = retryAfter
+            ? parseInt(retryAfter, 10) * 1000
+            : (attempt + 1) * 5000; // 5s, 10s
+          await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
         return { text: null, error: `API ${res.status}: ${errBody.slice(0, 100)}` };
@@ -90,7 +95,7 @@ export async function callMimoStream(
 
       if (!hasContent || !fullText.trim()) {
         if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
           continue;
         }
         return { text: null, error: "API 返回空内容" };
@@ -99,7 +104,7 @@ export async function callMimoStream(
       return { text: fullText.trim(), error: null };
     } catch (err) {
       if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, (attempt + 1) * 2000));
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
         continue;
       }
       return { text: null, error: err instanceof Error ? err.message : "请求失败" };

@@ -355,19 +355,16 @@ export interface DomesticAiAnalysis {
 }
 
 export async function runDomesticAiPipeline(text: string): Promise<DomesticAiAnalysis> {
-  const [
-    frame, discourse_actors, policy_tools, sentiment,
-    intertextuality, syntax_formality, narrative, spatial,
-  ] = await Promise.all([
-    analyzeFrame(text),
-    analyzeDiscourseActors(text),
-    analyzePolicyTools(text),
-    analyzeSentimentZh(text),
-    analyzeIntertextuality(text),
-    analyzeSyntaxFormality(text),
-    analyzeNarrativePerspective(text),
-    analyzeSpatialReference(text),
-  ]);
+  // Run sequentially to avoid API rate limiting (429).
+  // Each dimension takes ~5-8s, total ~40-60s for 8 dimensions.
+  const frame = await analyzeFrame(text);
+  const discourse_actors = await analyzeDiscourseActors(text);
+  const policy_tools = await analyzePolicyTools(text);
+  const sentiment = await analyzeSentimentZh(text);
+  const intertextuality = await analyzeIntertextuality(text);
+  const syntax_formality = await analyzeSyntaxFormality(text);
+  const narrative = await analyzeNarrativePerspective(text);
+  const spatial = await analyzeSpatialReference(text);
 
   return {
     frame: frame.data,
