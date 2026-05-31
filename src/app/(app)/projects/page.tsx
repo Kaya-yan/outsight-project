@@ -393,7 +393,7 @@ export default function ProjectsPage() {
 
       {/* Status Flow Dialog */}
       {statusFlowArticle && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/20"
             onClick={() => setStatusFlowArticle(null)}
@@ -433,7 +433,7 @@ export default function ProjectsPage() {
 
       {/* Create Modal */}
       {showCreate && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/20"
             onClick={() => setShowCreate(false)}
@@ -462,7 +462,7 @@ export default function ProjectsPage() {
 
       {/* Edit Modal */}
       {editingArticle && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/20"
             onClick={() => setEditingArticle(null)}
@@ -492,7 +492,7 @@ export default function ProjectsPage() {
 
       {/* Upload Modal */}
       {showUpload && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center">
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div
             className="absolute inset-0 bg-black/20"
             onClick={() => setShowUpload(false)}

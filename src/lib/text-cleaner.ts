@@ -184,6 +184,70 @@ export function htmlToPlainText(html: string): string {
 }
 
 /**
+ * Strip ALL HTML tags and decode entities. Use as final safety net on any text
+ * that might still contain residual HTML.
+ */
+export function stripHtmlTags(text: string): string {
+  if (!text) return text;
+
+  let cleaned = text;
+
+  // Remove script/style blocks entirely (including content)
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, "");
+  cleaned = cleaned.replace(/<style[\s\S]*?<\/style>/gi, "");
+
+  // Remove all remaining HTML tags (self-closing, with attributes, etc.)
+  cleaned = cleaned.replace(/<\/?[a-zA-Z][^>]*\/?>/g, "");
+  // Also catch malformed tags like </a > or < br/ >
+  cleaned = cleaned.replace(/<\/?\s*[a-zA-Z][^>]*>/g, "");
+
+  // Decode common HTML entities
+  const entities: Record<string, string> = {
+    "&amp;": "&",
+    "&lt;": "<",
+    "&gt;": ">",
+    "&quot;": '"',
+    "&#39;": "'",
+    "&apos;": "'",
+    "&nbsp;": " ",
+    "&ensp;": " ",
+    "&emsp;": " ",
+    "&thinsp;": " ",
+    "&hellip;": "…",
+    "&mdash;": "—",
+    "&ndash;": "–",
+    "&lsquo;": "‘",
+    "&rsquo;": "’",
+    "&ldquo;": "“",
+    "&rdquo;": "”",
+    "&bull;": "•",
+    "&middot;": "·",
+    "&copy;": "©",
+    "&reg;": "®",
+    "&trade;": "™",
+  };
+  for (const [entity, char] of Object.entries(entities)) {
+    cleaned = cleaned.replaceAll(entity, char);
+  }
+  // Numeric entities: &#123; and &#x1F;
+  cleaned = cleaned.replace(/&#(\d+);/g, (_, code) => {
+    try { return String.fromCodePoint(parseInt(code, 10)); } catch { return ""; }
+  });
+  cleaned = cleaned.replace(/&#x([0-9a-fA-F]+);/g, (_, code) => {
+    try { return String.fromCodePoint(parseInt(code, 16)); } catch { return ""; }
+  });
+
+  // Clean up residual attribute-like fragments that leaked through
+  cleaned = cleaned.replace(/\b(data-[a-z-]+|class|id|style|href|src|alt|title|role|aria-[a-z-]+)\s*=\s*"[^"]*"/gi, "");
+
+  // Collapse whitespace
+  cleaned = cleaned.replace(/[ \t]+/g, " ");
+  cleaned = cleaned.replace(/\n{3,}/g, "\n\n");
+
+  return cleaned.trim();
+}
+
+/**
  * Clean plain text: copyright truncation + whitespace normalization.
  */
 export function cleanText(text: string): string {

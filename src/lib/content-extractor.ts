@@ -1,6 +1,6 @@
 import { JSDOM } from "jsdom";
 import { Readability } from "@mozilla/readability";
-import { cleanHtml, htmlToPlainText, cleanText } from "./text-cleaner";
+import { cleanHtml, htmlToPlainText, cleanText, stripHtmlTags } from "./text-cleaner";
 
 export interface ExtractionResult {
   /** Cleaned HTML of the main article node */
@@ -153,8 +153,8 @@ export async function extractContent(url: string, options?: {
       return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: "insufficient text extracted" };
     }
 
-    // Final text cleaning: copyright truncation + whitespace normalization
-    fullText = cleanText(fullText);
+    // Final text cleaning: copyright truncation + whitespace normalization + HTML strip
+    fullText = cleanText(stripHtmlTags(fullText));
 
     const { author, date } = extractMeta(doc);
     const wordCount = fullText.split(/\s+/).filter(Boolean).length;

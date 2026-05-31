@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { cleanHtml, cleanText, htmlToPlainText } from "@/lib/text-cleaner";
+import { cleanHtml, cleanText, htmlToPlainText, stripHtmlTags } from "@/lib/text-cleaner";
 
 /**
  * GET /api/articles/batch-clean
@@ -18,17 +18,21 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
   const source = searchParams.get("source") ?? undefined;
+  const force = searchParams.get("force") === "true";
 
-  // Query articles with existing full text that have NOT been cleaned yet
-  // Exclude: metadata->>'cleaned_at' IS NOT NULL
+  // Query articles with existing full text
+  // Unless force=true, skip already-cleaned articles (metadata->>'cleaned_at' IS NOT NULL)
   let query = supabase
     .from("articles")
     .select("id, title, media, full_text, content, word_count, metadata")
     .not("full_text", "is", null)
     .in("full_text_status", ["complete", "partial"])
-    .or("metadata->>cleaned_at.is.null,metadata.is.null")
     .order("updated_at", { ascending: true })
     .limit(limit);
+
+  if (!force) {
+    query = query.or("metadata->>cleaned_at.is.null,metadata.is.null");
+  }
 
   if (source) {
     query = query.eq("media", source);
@@ -56,8 +60,9 @@ export async function GET(request: Request) {
     const oldFullText = article.full_text ?? "";
     const oldWordCount = article.word_count ?? oldFullText.split(/\s+/).filter(Boolean).length;
 
-    // Clean full_text
-    const newFullText = cleanText(oldFullText);
+    // Clean full_text: strip HTML tags first, then normalize whitespace
+    const strippedText = stripHtmlTags(oldFullText);
+    const newFullText = cleanText(strippedText);
     const newWordCount = newFullText.split(/\s+/).filter(Boolean).length;
 
     // Clean content (HTML) if present
@@ -116,8 +121,11 @@ export async function GET(request: Request) {
     .from("articles")
     .select("id", { count: "exact", head: true })
     .not("full_text", "is", null)
-    .in("full_text_status", ["complete", "partial"])
-    .or("metadata->>cleaned_at.is.null,metadata.is.null");
+    .in("full_text_status", ["complete", "partial"]);
+
+  if (!force) {
+    remainingQuery = remainingQuery.or("metadata->>cleaned_at.is.null,metadata.is.null");
+  }
 
   if (source) {
     remainingQuery = remainingQuery.eq("media", source);

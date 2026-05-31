@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { JSDOM } from "jsdom";
-import { cleanHtml, htmlToPlainText, cleanText } from "@/lib/text-cleaner";
+import { cleanHtml, htmlToPlainText, cleanText, stripHtmlTags } from "@/lib/text-cleaner";
 import { getAdapter } from "@/lib/domestic/media-adapters";
 
 /**
@@ -142,6 +142,7 @@ async function extractArticleContent(
     const cleanedHtml = cleanHtml(contentHtml);
     let fullText = htmlToPlainText(cleanedHtml);
     fullText = cleanText(fullText);
+    fullText = stripHtmlTags(fullText); // Final safety net: strip any residual HTML
 
     if (fullText.length < 30) return { title, fullText: "", author: null, charCount: 0, error: "清洗后文本过短" };
 

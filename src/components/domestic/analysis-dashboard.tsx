@@ -7,38 +7,61 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Info } from "lucide-react";
 
-// ── D3-Cloud Word Cloud ──
+// ── D3-Cloud Word Cloud (Academic Style) ──
 
 interface CloudWord {
   text: string;
   size: number;
   count: number;
+  rank: number;
   x?: number;
   y?: number;
   rotate?: number;
 }
 
-const WC_COLORS = ["#1B4D5C", "#2D6A7A", "#3A7D8F", "#4A90A4", "#5DA3B5", "#6BA8B8", "#8DC0CC"];
+/** Deep blue academic gradient: dark (#1e3a5f) for high rank → light (#8ecae6) for low rank */
+function wcColor(rank: number, total: number): string {
+  const stops = [
+    { r: 0, c: [30, 58, 95] },    // #1e3a5f
+    { r: 0.3, c: [42, 90, 128] },  // #2a5a80
+    { r: 0.6, c: [67, 140, 170] }, // #438caa
+    { r: 1, c: [142, 202, 230] },  // #8ecae6
+  ];
+  const t = total > 1 ? rank / (total - 1) : 0;
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].r && t <= stops[i + 1].r) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const localT = hi.r === lo.r ? 0 : (t - lo.r) / (hi.r - lo.r);
+  const r = Math.round(lo.c[0] + (hi.c[0] - lo.c[0]) * localT);
+  const g = Math.round(lo.c[1] + (hi.c[1] - lo.c[1]) * localT);
+  const b = Math.round(lo.c[2] + (hi.c[2] - lo.c[2]) * localT);
+  return `rgb(${r},${g},${b})`;
+}
 
 function WordCloud({ words }: { words: { word: string; count: number }[] }) {
   const [placed, setPlaced] = useState<CloudWord[]>([]);
   const [dims, setDims] = useState({ w: 600, h: 300 });
+  const [hovered, setHovered] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const cancelledRef = useRef(false);
+
+  const totalCount = words.reduce((s, w) => s + w.count, 0);
 
   useEffect(() => {
     if (words.length === 0) return;
 
     const max = words[0]?.count ?? 1;
-    const min = words[Math.min(words.length - 1, 39)]?.count ?? 1;
+    const min = words[Math.min(words.length - 1, 59)]?.count ?? 1;
     const containerWidth = containerRef.current?.clientWidth ?? 600;
     const w = Math.max(400, containerWidth);
-    const h = Math.max(200, Math.round(w * 0.45));
+    const h = Math.max(220, Math.round(w * 0.42));
 
-    const cloudWords: CloudWord[] = words.slice(0, 45).map((d) => ({
+    const cloudWords: CloudWord[] = words.slice(0, 60).map((d, i) => ({
       text: d.word,
       count: d.count,
-      size: min === max ? 18 : 10 + ((d.count - min) / (max - min)) * 30,
+      rank: i,
+      size: min === max ? 16 : 11 + ((d.count - min) / (max - min)) * 34,
     }));
 
     cancelledRef.current = false;
@@ -46,9 +69,9 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
     cloud()
       .size([w, h])
       .words(cloudWords)
-      .padding(3)
-      .rotate(() => (Math.random() > 0.7 ? (Math.random() > 0.5 ? 90 : -90) : 0))
-      .font("system-ui, -apple-system, sans-serif")
+      .padding(2)
+      .rotate(() => (Math.random() > 0.8 ? (Math.random() > 0.5 ? 90 : -90) : 0))
+      .font('"Noto Serif SC", "SimSun", "STSong", "Source Han Serif SC", serif')
       .fontSize((d) => (d as CloudWord).size)
       .spiral("archimedean")
       .on("end", (output) => {
@@ -66,37 +89,66 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
   if (placed.length === 0) {
     return (
       <div ref={containerRef} className="w-full h-[280px] flex items-center justify-center">
-        <div className="h-4 w-4 border-2 border-[#E2E5E9] border-t-[#4A90A4] rounded-full animate-spin" />
+        <div className="h-4 w-4 border-2 border-[#E2E5E9] border-t-[#1e3a5f] rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div ref={containerRef} className="w-full overflow-hidden">
+    <div ref={containerRef} className="w-full overflow-hidden relative">
       <svg width={dims.w} height={dims.h} viewBox={`0 0 ${dims.w} ${dims.h}`} className="w-full h-auto" role="img" aria-label="高频词云">
+        <defs>
+          <filter id="wcShadow" x="-5%" y="-5%" width="110%" height="110%">
+            <feDropShadow dx="0" dy="1" stdDeviation="0.5" floodOpacity="0.08" />
+          </filter>
+        </defs>
         <g transform={`translate(${dims.w / 2},${dims.h / 2})`}>
-          {placed.map((w, i) => (
-            <text
-              key={w.text}
-              x={w.x}
-              y={w.y}
-              fontSize={w.size}
-              fill={WC_COLORS[i % WC_COLORS.length]}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              transform={`rotate(${w.rotate ?? 0})`}
-              className="cursor-default hover:opacity-60 transition-opacity duration-150"
-              style={{
-                fontFamily: "system-ui, -apple-system, sans-serif",
-                fontWeight: w.size > 24 ? 700 : w.size > 16 ? 600 : 400,
-              }}
-            >
-              <title>{w.text}: {w.count}次</title>
-              {w.text}
-            </text>
-          ))}
+          {placed.map((w) => {
+            const pct = totalCount > 0 ? ((w.count / totalCount) * 100).toFixed(1) : "0";
+            const isHovered = hovered === w.text;
+            return (
+              <text
+                key={w.text}
+                x={w.x}
+                y={w.y}
+                fontSize={w.size}
+                fill={wcColor(w.rank, placed.length)}
+                textAnchor="middle"
+                dominantBaseline="middle"
+                transform={`rotate(${w.rotate ?? 0})`}
+                opacity={hovered && !isHovered ? 0.35 : 1}
+                className="cursor-default transition-opacity duration-200"
+                filter={isHovered ? undefined : "url(#wcShadow)"}
+                style={{
+                  fontFamily: '"Noto Serif SC", "SimSun", "STSong", "Source Han Serif SC", serif',
+                  fontWeight: w.size > 26 ? 700 : w.size > 18 ? 600 : 400,
+                  fontStyle: w.size > 26 ? "normal" : "normal",
+                }}
+                onMouseEnter={() => setHovered(w.text)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {w.text}
+              </text>
+            );
+          })}
         </g>
       </svg>
+      {/* Hover tooltip */}
+      {hovered && (() => {
+        const w = placed.find((p) => p.text === hovered);
+        if (!w) return null;
+        const pct = totalCount > 0 ? ((w.count / totalCount) * 100).toFixed(1) : "0";
+        return (
+          <div className="absolute top-3 right-3 bg-white/95 backdrop-blur border border-[#E2E5E9] rounded-lg shadow-md px-3 py-2 text-xs pointer-events-none z-20">
+            <div className="font-semibold text-[#1e3a5f] text-sm" style={{ fontFamily: '"Noto Serif SC", serif' }}>{w.text}</div>
+            <div className="text-[#7F8A93] mt-0.5">
+              词频 <span className="text-[#2D3436] font-medium tabular-nums">{w.count}</span>
+              <span className="mx-1.5">·</span>
+              占比 <span className="text-[#2D3436] font-medium tabular-nums">{pct}%</span>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
@@ -271,7 +323,7 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
       </svg>
       {/* Tooltip */}
       {hoverIdx !== null && data[hoverIdx] && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-white border border-[#E2E5E9] rounded shadow-sm px-2 py-1 text-[10px] pointer-events-none z-10">
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-white border border-[#E2E5E9] rounded shadow-sm px-2 py-1 text-[10px] pointer-events-none z-20">
           <span className="text-[#7F8A93]">{data[hoverIdx].date}</span>
           <span className="text-[#2D3436] font-medium ml-1">{data[hoverIdx].count} 篇</span>
         </div>
@@ -308,39 +360,76 @@ function MetricTooltip({ children, text }: { children: React.ReactNode; text: st
   );
 }
 
-// ── Character Treemap ──
+// ── Character Bubble Array (Academic Style) ──
 
-function CharTreemap({ chars }: { chars: { char: string; count: number }[] }) {
+/** Teal gradient: deep (#0d3b4d) for high freq → light (#c8e6ec) for low freq */
+function charBg(ratio: number): string {
+  const stops = [
+    { t: 0.85, c: [13, 59, 77] },   // #0d3b4d
+    { t: 0.6, c: [26, 100, 120] },   // #1a6478
+    { t: 0.4, c: [55, 145, 165] },   // #3791a5
+    { t: 0.2, c: [110, 190, 205] },  // #6ebecd
+    { t: 0, c: [200, 230, 236] },    // #c8e6ec
+  ];
+  let lo = stops[stops.length - 1], hi = stops[0];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (ratio >= stops[i + 1].t && ratio <= stops[i].t) { lo = stops[i + 1]; hi = stops[i]; break; }
+  }
+  const range = hi.t - lo.t || 1;
+  const localT = (ratio - lo.t) / range;
+  const r = Math.round(lo.c[0] + (hi.c[0] - lo.c[0]) * localT);
+  const g = Math.round(lo.c[1] + (hi.c[1] - lo.c[1]) * localT);
+  const b = Math.round(lo.c[2] + (hi.c[2] - lo.c[2]) * localT);
+  return `rgb(${r},${g},${b})`;
+}
+
+function CharBubbleArray({ chars }: { chars: { char: string; count: number }[] }) {
+  const [hovered, setHovered] = useState<string | null>(null);
   if (chars.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const max = chars[0]?.count ?? 1;
-
-  const colorStops = [
-    { threshold: 0.85, bg: "#1B4D5C", fg: "#ffffff" },
-    { threshold: 0.7, bg: "#2D6A7A", fg: "#ffffff" },
-    { threshold: 0.55, bg: "#3A7D8F", fg: "#ffffff" },
-    { threshold: 0.4, bg: "#4A90A4", fg: "#ffffff" },
-    { threshold: 0.25, bg: "#7AB8C9", fg: "#ffffff" },
-    { threshold: 0.15, bg: "#A8D4DD", fg: "#1B4D5C" },
-    { threshold: 0, bg: "#D4EBF0", fg: "#2D6A7A" },
-  ];
+  const totalCount = chars.reduce((s, c) => s + c.count, 0);
 
   return (
-    <div className="flex flex-wrap gap-1">
-      {chars.slice(0, 24).map((c) => {
+    <div className="flex flex-wrap gap-2 items-end">
+      {chars.slice(0, 30).map((c) => {
         const ratio = c.count / max;
-        const stop = colorStops.find((s) => ratio >= s.threshold)!;
-        const size = ratio > 0.7 ? "w-14 h-14 text-xl"
-          : ratio > 0.4 ? "w-12 h-12 text-lg"
-          : ratio > 0.2 ? "w-10 h-10 text-base"
-          : "w-9 h-9 text-sm";
+        const pct = totalCount > 0 ? ((c.count / totalCount) * 100).toFixed(1) : "0";
+        // Font size: 48px (top) → 14px (bottom)
+        const fontSize = Math.round(14 + ratio * 34);
+        // Padding scales with ratio
+        const pad = Math.round(4 + ratio * 10);
+        const bg = charBg(ratio);
+        const fg = ratio > 0.35 ? "#ffffff" : "#1a3a4d";
+        const isHovered = hovered === c.char;
+
         return (
           <span
             key={c.char}
-            className={`inline-flex items-center justify-center rounded-lg cursor-default transition-all hover:scale-105 hover:shadow-md ${size}`}
-            style={{ backgroundColor: stop.bg, color: stop.fg, fontFamily: "serif" }}
-            title={`${c.char}: ${c.count}次 (${(ratio * 100).toFixed(0)}%)`}
+            className="inline-flex items-center justify-center rounded-xl cursor-default transition-all duration-200"
+            style={{
+              fontSize: `${fontSize}px`,
+              lineHeight: 1,
+              padding: `${pad}px ${pad + 2}px`,
+              backgroundColor: bg,
+              color: fg,
+              fontFamily: '"Noto Serif SC", "SimSun", "STSong", serif',
+              fontWeight: ratio > 0.5 ? 700 : ratio > 0.25 ? 600 : 400,
+              boxShadow: isHovered
+                ? `0 4px 16px rgba(13,59,77,0.25), 0 0 0 2px rgba(13,59,77,0.15)`
+                : ratio > 0.5
+                  ? "0 2px 8px rgba(13,59,77,0.15)"
+                  : "0 1px 3px rgba(13,59,77,0.08)",
+              transform: isHovered ? "scale(1.15)" : "scale(1)",
+            }}
+            onMouseEnter={() => setHovered(c.char)}
+            onMouseLeave={() => setHovered(null)}
           >
             {c.char}
+            {isHovered && (
+              <span className="absolute -top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-[#0d3b4d] text-white text-[10px] px-2 py-0.5 rounded shadow-md pointer-events-none z-20">
+                {c.char} · {c.count}次 · {pct}%
+              </span>
+            )}
           </span>
         );
       })}
@@ -585,8 +674,8 @@ export function AnalysisDashboard() {
 
         <Card className="border-[#E2E5E9]">
           <CardContent className="p-4">
-            <SectionTitle title="高频字方阵" subtitle={`Top ${stats.topChars?.length ?? 0} chars`} />
-            <CharTreemap chars={stats.topChars ?? []} />
+            <SectionTitle title="高频字气泡" subtitle={`Top ${stats.topChars?.length ?? 0} chars`} />
+            <CharBubbleArray chars={stats.topChars ?? []} />
           </CardContent>
         </Card>
       </div>

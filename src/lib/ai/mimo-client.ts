@@ -7,6 +7,8 @@ const BASE_URL = process.env.MIMO_BASE_URL || "https://token-plan-cn.xiaomimimo.
 const API_KEY = process.env.MIMO_API_KEY || "";
 const MODEL = "mimo-v2.5-pro";
 
+const LOG_PREFIX = "[MIMO]";
+
 export interface MimoResult {
   text: string | null;
   error: string | null;
@@ -21,13 +23,19 @@ export async function callMimoStream(
   userPrompt: string,
   opts?: { maxTokens?: number; timeoutMs?: number },
 ): Promise<MimoResult> {
-  if (!API_KEY) return { text: null, error: "MIMO_API_KEY 未配置" };
+  if (!API_KEY) {
+    console.error(`${LOG_PREFIX} API key not configured`);
+    return { text: null, error: "MIMO_API_KEY 未配置" };
+  }
 
   const maxTokens = opts?.maxTokens ?? 512;
   const timeoutMs = opts?.timeoutMs ?? 45000;
 
+  console.log(`${LOG_PREFIX} Request: model=${MODEL}, maxTokens=${maxTokens}, timeout=${timeoutMs}ms, systemLen=${systemPrompt.length}, userLen=${userPrompt.length}`);
+
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      const reqStart = Date.now();
       const res = await fetch(`${BASE_URL}/v1/messages`, {
         method: "POST",
         headers: {
@@ -45,14 +53,18 @@ export async function callMimoStream(
         signal: AbortSignal.timeout(timeoutMs),
       });
 
+      console.log(`${LOG_PREFIX} Response: status=${res.status}, attempt=${attempt + 1}, latency=${Date.now() - reqStart}ms`);
+
       if (!res.ok) {
         const errBody = await res.text().catch(() => "");
+        console.error(`${LOG_PREFIX} HTTP error ${res.status}: ${errBody.slice(0, 500)}`);
         if (attempt < 2) {
           // Respect Retry-After header for 429, otherwise use longer backoff
           const retryAfter = res.headers.get("Retry-After");
           const waitMs = retryAfter
             ? parseInt(retryAfter, 10) * 1000
             : (attempt + 1) * 5000; // 5s, 10s
+          console.warn(`${LOG_PREFIX} Retrying in ${waitMs}ms (attempt ${attempt + 2}/3)`);
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
         }
@@ -61,7 +73,10 @@ export async function callMimoStream(
 
       // Collect streamed text
       const reader = res.body?.getReader();
-      if (!reader) return { text: null, error: "无法读取响应流" };
+      if (!reader) {
+        console.error(`${LOG_PREFIX} No response body reader available`);
+        return { text: null, error: "无法读取响应流" };
+      }
 
       const decoder = new TextDecoder();
       let buffer = "";
@@ -90,6 +105,7 @@ export async function callMimoStream(
             // Handle API error events (rate limit, content policy, etc.)
             if (parsed.type === "error") {
               const errMsg = parsed.error?.message ?? parsed.message ?? "API stream error";
+              console.error(`${LOG_PREFIX} SSE error event: ${errMsg}`);
               return { text: null, error: errMsg };
             }
           } catch {
@@ -99,20 +115,27 @@ export async function callMimoStream(
       }
 
       if (!hasContent || !fullText.trim()) {
+        console.warn(`${LOG_PREFIX} Empty content: hasContent=${hasContent}, fullTextLen=${fullText.length}, attempt=${attempt + 1}`);
         if (attempt < 2) {
           await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
           continue;
         }
+        console.error(`${LOG_PREFIX} All 3 attempts returned empty content`);
         return { text: null, error: "API 返回空内容" };
       }
 
-      return { text: fullText.trim(), error: null };
+      const resultText = fullText.trim();
+      console.log(`${LOG_PREFIX} Success: textLen=${resultText.length}, latency=${Date.now() - reqStart}ms`);
+      return { text: resultText, error: null };
     } catch (err) {
+      const errMsg = err instanceof Error ? err.message : "请求失败";
+      const errName = err instanceof Error ? err.name : "Unknown";
+      console.error(`${LOG_PREFIX} Exception (attempt ${attempt + 1}): name=${errName}, message=${errMsg}`);
       if (attempt < 2) {
         await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
         continue;
       }
-      return { text: null, error: err instanceof Error ? err.message : "请求失败" };
+      return { text: null, error: errMsg };
     }
   }
 

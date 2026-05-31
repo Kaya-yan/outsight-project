@@ -66,6 +66,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "文章正文过短，无法分析" }, { status: 400 });
   }
 
+  console.log(`[Analyze] Start: articleId=${articleId}, textLen=${article.full_text.length}, title="${article.full_text.slice(0, 30)}..."`);
+
   const encoder = new TextEncoder();
   let clientDisconnected = false;
 
@@ -89,9 +91,12 @@ export async function POST(request: Request) {
         if (clientDisconnected) break;
 
         send({ phase: "analyzing", dimension: dim.key, current: completed + 1, total: DIMENSIONS.length });
+        const dimStart = Date.now();
 
         try {
           const result = await dim.fn(article.full_text);
+          const dimMs = Date.now() - dimStart;
+          console.log(`[Analyze] ${dim.key}: status=${result.data ? "ok" : "failed"}, error=${result.error ?? "none"}, truncated=${result.truncated ?? false}, latency=${dimMs}ms`);
           if (clientDisconnected) break;
 
           results[dim.key] = result.data;
@@ -166,9 +171,11 @@ export async function POST(request: Request) {
         .eq("id", articleId);
 
       if (updateErr) {
+        console.error(`[Analyze] Save failed: ${updateErr.message}`);
         send({ phase: "error", error: "保存分析结果失败" });
       } else {
         const successCount = Object.values(results).filter((v) => v !== null).length;
+        console.log(`[Analyze] Done: success=${successCount}/${DIMENSIONS.length}, failed=${DIMENSIONS.length - successCount}`);
         send({
           phase: "done",
           analysis,

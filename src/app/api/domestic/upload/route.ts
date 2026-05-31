@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { stripHtmlTags, cleanText } from "@/lib/text-cleaner";
 
 /**
  * POST /api/domestic/upload
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
   }
   if (!media?.trim()) return NextResponse.json({ error: "请选择来源媒体" }, { status: 400 });
 
-  const cleanedText = fullText.trim();
+  const cleanedText = cleanText(stripHtmlTags(fullText));
   const charCount = cleanedText.replace(/\s/g, "").length;
 
   // Generate URL hash (use provided URL or a synthetic one)
