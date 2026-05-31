@@ -52,16 +52,21 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
     if (words.length === 0) return;
 
     const max = words[0]?.count ?? 1;
-    const min = words[Math.min(words.length - 1, 59)]?.count ?? 1;
+    const min = words[Math.min(words.length - 1, 39)]?.count ?? 1;
     const containerWidth = containerRef.current?.clientWidth ?? 600;
     const w = Math.max(400, containerWidth);
     const h = Math.max(220, Math.round(w * 0.42));
 
-    const cloudWords: CloudWord[] = words.slice(0, 60).map((d, i) => ({
+    // Logarithmic font mapping: 14px (min) → 48px (max)
+    const logMin = Math.log(Math.max(min, 1));
+    const logMax = Math.log(Math.max(max, 2));
+    const logRange = logMax - logMin || 1;
+
+    const cloudWords: CloudWord[] = words.slice(0, 40).map((d, i) => ({
       text: d.word,
       count: d.count,
       rank: i,
-      size: min === max ? 16 : 11 + ((d.count - min) / (max - min)) * 34,
+      size: min === max ? 22 : 14 + ((Math.log(Math.max(d.count, 1)) - logMin) / logRange) * 34,
     }));
 
     cancelledRef.current = false;
@@ -437,6 +442,95 @@ function CharBubbleArray({ chars }: { chars: { char: string; count: number }[] }
   );
 }
 
+// ── Word Length Distribution Chart ──
+
+function WordLengthDistChart({ dist }: { dist: { mono: number; bi: number; tri: number; multi: number } | undefined }) {
+  if (!dist) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
+  const items = [
+    { label: "单字", count: dist.mono, color: "#8ecae6" },
+    { label: "双字", count: dist.bi, color: "#4A90A4" },
+    { label: "三字", count: dist.tri, color: "#2a5a80" },
+    { label: "多字", count: dist.multi, color: "#1e3a5f" },
+  ];
+  const max = Math.max(...items.map((d) => d.count), 1);
+  const total = items.reduce((s, d) => s + d.count, 0);
+
+  return (
+    <div className="space-y-2">
+      {items.map((d) => {
+        const pct = (d.count / max) * 100;
+        const ratio = total > 0 ? ((d.count / total) * 100).toFixed(1) : "0";
+        return (
+          <div key={d.label} className="flex items-center gap-2">
+            <span className="text-[10px] text-[#7F8A93] w-8 text-right">{d.label}</span>
+            <div className="flex-1 bg-[#F0F2F5] rounded-full h-3 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{ width: `${pct}%`, background: d.color }}
+              />
+            </div>
+            <span className="text-[10px] text-[#636E72] w-10 text-right tabular-nums">{d.count}</span>
+            <span className="text-[9px] text-[#BDC3C7] w-10 text-right">{ratio}%</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Histogram Chart (sentence length) ──
+
+function HistogramChart({ data }: { data: { range: string; count: number }[] }) {
+  if (data.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
+  const max = Math.max(...data.map((d) => d.count), 1);
+
+  return (
+    <div className="flex items-end gap-2 h-28">
+      {data.map((d, i) => {
+        const pct = (d.count / max) * 100;
+        return (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1">
+            <span className="text-[9px] text-[#7F8A93] tabular-nums">{d.count}</span>
+            <div
+              className="w-full rounded-t transition-all hover:brightness-110"
+              style={{
+                height: `${Math.max(pct, 2)}%`,
+                background: `linear-gradient(to top, #1e3a5f, #4a8ab5)`,
+              }}
+            />
+            <span className="text-[9px] text-[#95A5A6] whitespace-nowrap">{d.range}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Trigram List ──
+
+function TrigramList({ trigrams }: { trigrams: { trigram: string; count: number }[] }) {
+  if (trigrams.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
+  const max = trigrams[0]?.count ?? 1;
+
+  return (
+    <div className="grid grid-cols-2 gap-x-3 gap-y-1">
+      {trigrams.slice(0, 20).map((t, i) => {
+        const pct = (t.count / max) * 100;
+        return (
+          <div key={t.trigram} className="flex items-center gap-2">
+            <span className="text-[10px] text-[#95A5A6] w-4 text-right">{i + 1}</span>
+            <span className="text-xs font-mono text-[#2D3436] w-20 truncate">{t.trigram}</span>
+            <div className="flex-1 bg-[#F0F2F5] rounded-full h-1.5 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-[#6C5CE7] to-[#a29bfe]" style={{ width: `${pct}%` }} />
+            </div>
+            <span className="text-[9px] text-[#95A5A6] w-5 text-right tabular-nums">{t.count}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Bigram Network (simplified) ──
 
 function BigramList({ bigrams }: { bigrams: { bigram: string; count: number }[] }) {
@@ -687,6 +781,66 @@ export function AnalysisDashboard() {
           <BigramList bigrams={stats.topBigrams ?? []} />
         </CardContent>
       </Card>
+
+      {/* ── Row 8: Lexical + Readability Metrics ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <StatCard
+          label="平均词长"
+          value={`${stats.avgWordLength}字`}
+          sub="字符/词"
+          color="#2a5a80"
+        />
+        <StatCard
+          label="连接词密度"
+          value={`${stats.connectiveDensity}‰`}
+          sub="per 1000 words"
+          color="#E17055"
+        />
+        <StatCard
+          label="可读性指数"
+          value={stats.readabilityIndex}
+          sub="中文可读性"
+          color="#6C5CE7"
+        />
+        <StatCard
+          label="平均句长"
+          value={`${stats.sentenceMetrics?.avgLength ?? 0}字`}
+          sub={`σ=${stats.sentenceMetrics?.stdDev ?? 0}`}
+          color="#00B894"
+        />
+        <StatCard
+          label="句子总数"
+          value={stats.sentenceMetrics?.count ?? 0}
+          color="#4A90A4"
+        />
+      </div>
+
+      {/* ── Row 9: Word Length Dist + Sentence Histogram ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-4">
+            <SectionTitle title="词长分布" subtitle="按字数分组" />
+            <WordLengthDistChart dist={stats.wordLengthDist} />
+          </CardContent>
+        </Card>
+
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-4">
+            <SectionTitle title="句长分布" subtitle={`μ=${stats.sentenceMetrics?.avgLength ?? 0}, σ=${stats.sentenceMetrics?.stdDev ?? 0}`} />
+            <HistogramChart data={stats.sentenceMetrics?.histogram ?? []} />
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Row 10: Trigrams ── */}
+      {stats.topTrigrams && stats.topTrigrams.length > 0 && (
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-4">
+            <SectionTitle title="高频三字组合" subtitle={`Top ${stats.topTrigrams.length} trigrams`} />
+            <TrigramList trigrams={stats.topTrigrams} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

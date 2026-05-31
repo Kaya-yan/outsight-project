@@ -52,6 +52,17 @@ export interface DomesticStats {
   ttr: number;
   sttr: number;
   lexicalDensity: number;
+  avgWordLength: number;
+  wordLengthDist: { mono: number; bi: number; tri: number; multi: number };
+  sentenceMetrics: {
+    avgLength: number;
+    stdDev: number;
+    count: number;
+    histogram: { range: string; count: number }[];
+  };
+  readabilityIndex: number;
+  connectiveDensity: number;
+  topTrigrams: { trigram: string; count: number }[];
 }
 
 // ── Store ──

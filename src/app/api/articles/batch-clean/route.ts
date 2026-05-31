@@ -8,10 +8,10 @@ import { cleanHtml, cleanText, htmlToPlainText, stripHtmlTags } from "@/lib/text
  *   limit   — batch size (default 50, max 200)
  *   source  — optional media filter
  *   mode    — "html" (default): detect articles with HTML residue in full_text
- *             "uncleaned": only articles without cleaned_at (legacy behavior)
- *             "force": all articles with full_text (re-clean everything)
+ *             "force": re-clean ALL articles (ignore html_cleaned flag)
  *
- * Detects HTML residue via Supabase `ilike` on common tag patterns.
+ * HTML detection is done in-code (regex), not via SQL ilike — avoids false positives.
+ * Uses metadata.html_cleaned to track which articles have been processed.
  * Safety: if word count drops >80%, marks metadata.needs_review instead of overwriting.
  */
 export async function GET(request: Request) {
@@ -23,8 +23,9 @@ export async function GET(request: Request) {
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
   const source = searchParams.get("source") ?? undefined;
   const mode = searchParams.get("mode") ?? "html";
+  const force = mode === "force";
 
-  // ── Build query based on mode ──
+  // ── Fetch articles with full_text ──
   let query = supabase
     .from("articles")
     .select("id, title, media, full_text, content, word_count, metadata")
@@ -32,29 +33,9 @@ export async function GET(request: Request) {
     .order("updated_at", { ascending: true })
     .limit(limit);
 
-  if (mode === "html") {
-    // Detect HTML residue: full_text contains common HTML tag patterns
-    // Supabase `or()` with `ilike` — each condition targets a distinct HTML signature
-    query = query.or(
-      "full_text.ilike.%<a %," +       // <a href=...
-      "full_text.ilike.%</a>%," +       // </a>
-      "full_text.ilike.%<p>%," +        // <p>
-      "full_text.ilike.%</p>%," +       // </p>
-      "full_text.ilike.%<em>%," +       // <em>
-      "full_text.ilike.%<span %," +     // <span class=...
-      "full_text.ilike.%href=%," +      // href= (attribute leak)
-      "full_text.ilike.%data-%," +      // data-link-name= etc.
-      "full_text.ilike.%<br%," +        // <br> or <br/>
-      "full_text.ilike.%<div %"         // <div class=...
-    );
-  } else if (mode === "force") {
-    // All articles with full_text — no additional filter
-    query = query.in("full_text_status", ["complete", "partial", "missing", "paywalled", "manual_uploaded"]);
-  } else {
-    // Legacy: only articles without cleaned_at
-    query = query
-      .in("full_text_status", ["complete", "partial"])
-      .or("metadata->>cleaned_at.is.null,metadata.is.null");
+  // Unless force mode, skip already-cleaned articles
+  if (!force) {
+    query = query.or("metadata->>html_cleaned.is.null,metadata->>html_cleaned.eq.false");
   }
 
   if (source) {
@@ -75,6 +56,7 @@ export async function GET(request: Request) {
 
   console.log(`[BatchClean] Processing batch of ${articles.length} articles (mode=${mode})`);
 
+  // ── Process each article ──
   let cleaned = 0;
   let skipped = 0;
   const now = new Date().toISOString();
@@ -83,21 +65,22 @@ export async function GET(request: Request) {
     const oldFullText = article.full_text ?? "";
     const oldWordCount = article.word_count ?? oldFullText.split(/\s+/).filter(Boolean).length;
 
-    // Quick check: does this article actually have HTML residue?
-    // (The `or` query may match false positives like "a < b" in math text)
-    const hasHtml = /<[a-zA-Z][^>]*>/.test(oldFullText) || /\bhref\s*=/.test(oldFullText);
-    if (!hasHtml) {
-      // No HTML detected — just mark as cleaned and skip
+    // Detect HTML residue in code (not SQL) — avoids ilike false positives
+    const hasHtml = /<[a-zA-Z][^>]*>/.test(oldFullText) || /\bhref\s*=/.test(oldFullText) || /data-[a-z-]+=/.test(oldFullText);
+
+    if (!hasHtml && !force) {
+      // No HTML detected — mark as cleaned so it won't be re-fetched
       const existingMeta = (article.metadata as Record<string, unknown>) ?? {};
       await supabase
         .from("articles")
-        .update({ metadata: { ...existingMeta, cleaned_at: now, skip_reason: "no_html_detected" } })
+        .update({ metadata: { ...existingMeta, html_cleaned: true, cleaned_at: now, skip_reason: "no_html" } })
         .eq("id", article.id);
       skipped++;
+      console.log(`[BatchClean] SKIP ${article.id} "${article.title?.slice(0, 30)}" (no HTML)`);
       continue;
     }
 
-    // Clean full_text: strip HTML tags first, then normalize whitespace
+    // Strip HTML + clean text
     const strippedText = stripHtmlTags(oldFullText);
     const newFullText = cleanText(strippedText);
     const newWordCount = newFullText.split(/\s+/).filter(Boolean).length;
@@ -131,7 +114,7 @@ export async function GET(request: Request) {
         .update({ metadata: metaUpdate })
         .eq("id", article.id);
 
-      console.log(`[BatchClean] SKIP ${article.id} "${article.title?.slice(0, 30)}" words ${oldWordCount}→${newWordCount} (drop ${(dropRatio * 100).toFixed(0)}%)`);
+      console.log(`[BatchClean] REVIEW ${article.id} "${article.title?.slice(0, 30)}" words ${oldWordCount}→${newWordCount} (drop ${(dropRatio * 100).toFixed(0)}%)`);
       skipped++;
     } else {
       // Apply cleaned text
@@ -154,31 +137,14 @@ export async function GET(request: Request) {
     }
   }
 
-  // Count remaining articles matching the same criteria
+  // ── Count remaining unprocessed articles ──
   let remainingQuery = supabase
     .from("articles")
     .select("id", { count: "exact", head: true })
     .not("full_text", "is", null);
 
-  if (mode === "html") {
-    remainingQuery = remainingQuery.or(
-      "full_text.ilike.%<a %," +
-      "full_text.ilike.%</a>%," +
-      "full_text.ilike.%<p>%," +
-      "full_text.ilike.%</p>%," +
-      "full_text.ilike.%<em>%," +
-      "full_text.ilike.%<span %," +
-      "full_text.ilike.%href=%," +
-      "full_text.ilike.%data-%," +
-      "full_text.ilike.%<br%," +
-      "full_text.ilike.%<div %"
-    );
-  } else if (mode === "force") {
-    // no additional filter
-  } else {
-    remainingQuery = remainingQuery
-      .in("full_text_status", ["complete", "partial"])
-      .or("metadata->>cleaned_at.is.null,metadata.is.null");
+  if (!force) {
+    remainingQuery = remainingQuery.or("metadata->>html_cleaned.is.null,metadata->>html_cleaned.eq.false");
   }
 
   if (source) {
