@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("articles")
-    .select("*", { count: "exact" })
+    .select("id,title,url,media,source_type,publish_date,word_count,author,status,metadata,created_at", { count: "exact" })
     .eq("source", "domestic_media")
     .order("publish_date", { ascending: false })
     .range(from, to);

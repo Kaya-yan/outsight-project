@@ -6,6 +6,8 @@ import { STOPWORDS_ZH } from "@/lib/stopwords-zh";
 /**
  * GET /api/domestic/stats?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
  * Aggregate statistics for domestic media articles.
+ *
+ * Two-phase query: basic stats (no full_text) + word analysis (limited subset).
  */
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -16,16 +18,17 @@ export async function GET(request: Request) {
   const dateFrom = searchParams.get("dateFrom");
   const dateTo = searchParams.get("dateTo");
 
-  let query = supabase
+  // Phase 1: Basic stats (no full_text, lightweight)
+  let baseQuery = supabase
     .from("articles")
-    .select("id, media, publish_date, word_count, full_text, metadata")
+    .select("id, media, publish_date, word_count, metadata")
     .eq("source", "domestic_media")
     .order("publish_date", { ascending: false });
 
-  if (dateFrom) query = query.gte("publish_date", dateFrom);
-  if (dateTo) query = query.lte("publish_date", dateTo);
+  if (dateFrom) baseQuery = baseQuery.gte("publish_date", dateFrom);
+  if (dateTo) baseQuery = baseQuery.lte("publish_date", dateTo);
 
-  const { data: articles, error } = await query.limit(500);
+  const { data: articles, error } = await baseQuery.limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -66,13 +69,19 @@ export async function GET(request: Request) {
   const sentimentDistribution = Array.from(sentimentMap.entries())
     .map(([polarity, count]) => ({ polarity, count }));
 
-  // Word frequency, char frequency, bigram frequency, TTR
+  // Phase 2: Word analysis (fetch full_text for limited subset)
+  const sampleIds = articles.slice(0, 100).map((a) => a.id);
+  const { data: textSamples } = await supabase
+    .from("articles")
+    .select("full_text")
+    .in("id", sampleIds);
+
   const wordFreq = new Map<string, number>();
   const bigramFreq = new Map<string, number>();
   const allWords: string[] = [];
   const charFreq = new Map<string, number>();
 
-  for (const a of articles) {
+  for (const a of textSamples ?? []) {
     if (!a.full_text) continue;
 
     // Character frequency
@@ -108,11 +117,11 @@ export async function GET(request: Request) {
     .map(([bigram, count]) => ({ bigram, count }))
     .sort((a, b) => b.count - a.count).slice(0, 20);
 
-  // TTR (Type-Token Ratio) — vocabulary richness
+  // TTR (Type-Token Ratio)
   const uniqueWords = new Set(allWords);
   const ttr = allWords.length > 0 ? uniqueWords.size / allWords.length : 0;
 
-  // STTR (Standardized TTR) — average TTR over 1000-word windows
+  // STTR (Standardized TTR)
   let sttrSum = 0;
   let sttrWindows = 0;
   const windowSize = 1000;
@@ -124,9 +133,9 @@ export async function GET(request: Request) {
   }
   const sttr = sttrWindows > 0 ? sttrSum / sttrWindows : ttr;
 
-  // Lexical density = content words / total words (approximate: words with length >= 2)
+  // Lexical density
   const contentWords = allWords.length;
-  const totalTokens = articles.reduce((sum, a) => sum + (a.full_text?.length || 0), 0);
+  const totalTokens = (textSamples ?? []).reduce((sum, a) => sum + (a.full_text?.length || 0), 0);
   const lexicalDensity = totalTokens > 0 ? contentWords / totalTokens : 0;
 
   return NextResponse.json({

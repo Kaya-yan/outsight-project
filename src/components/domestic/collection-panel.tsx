@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MEDIA_ADAPTERS } from "@/lib/domestic/media-adapters";
-import { Play, Search, X, ChevronDown, ChevronUp, AlertCircle } from "lucide-react";
+import { Play, Search, X, ChevronDown, ChevronUp, AlertCircle, RotateCcw } from "lucide-react";
 
 export function CollectionPanel() {
   const { startCollect, isCollecting, collectProgress } = useDomesticStore();
@@ -186,9 +186,20 @@ export function CollectionPanel() {
                 {collectProgress.phase === "done" && "完成"}
                 {collectProgress.phase === "error" && "出错"}
               </span>
-              {collectProgress.currentTitle && (
-                <span className="text-[#7F8A93] truncate max-w-[200px]">{collectProgress.currentTitle}</span>
-              )}
+              <div className="flex items-center gap-2">
+                {collectProgress.phase === "error" && !isCollecting && (
+                  <button
+                    onClick={handleStart}
+                    className="flex items-center gap-1 text-xs text-[#4A90A4] hover:text-[#3D7D8F] transition-colors"
+                  >
+                    <RotateCcw className="h-3 w-3" />
+                    重试
+                  </button>
+                )}
+                {collectProgress.currentTitle && (
+                  <span className="text-[#7F8A93] truncate max-w-[200px]">{collectProgress.currentTitle}</span>
+                )}
+              </div>
             </div>
 
             {/* Log */}

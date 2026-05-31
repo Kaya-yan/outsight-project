@@ -160,6 +160,9 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
   stats: null,
   isLoadingStats: false,
 
+  // AbortController for cancelling superseded fetch requests
+  _articlesAbort: null as AbortController | null,
+
   // ── List ──
   setFilter: (key, value) => {
     set((s) => ({ filters: { ...s.filters, [key]: value }, page: 1, selectedIds: [] }));
@@ -178,16 +181,23 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
 
   fetchArticles: async () => {
     const { filters, page, pageSize } = get();
-    set({ isLoading: true, error: null });
+
+    // Cancel any in-flight request
+    const prev = get()._articlesAbort;
+    if (prev) prev.abort();
+    const controller = new AbortController();
+    set({ _articlesAbort: controller, isLoading: true, error: null });
+
     try {
-      const res = await fetch(buildQuery(filters, page, pageSize));
+      const res = await fetch(buildQuery(filters, page, pageSize), { signal: controller.signal });
       const json = await res.json();
       if (res.ok) {
         set({ articles: json.data ?? [], total: json.total ?? 0 });
       } else {
         set({ error: json.error ?? "加载失败" });
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return; // cancelled, ignore
       set({ error: "网络连接失败" });
     } finally {
       set({ isLoading: false });
@@ -405,7 +415,9 @@ export const useDomesticStore = create<DomesticStoreState>((set, get) => ({
       const res = await fetch(`/api/domestic/stats?${params.toString()}`);
       const json = await res.json();
       if (res.ok) set({ stats: json });
-    } catch { /* silent */ } finally {
+    } catch {
+      set({ error: "统计数据加载失败" });
+    } finally {
       set({ isLoadingStats: false });
     }
   },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import cloud from "d3-cloud";
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,20 +23,25 @@ const WC_COLORS = ["#1B4D5C", "#2D6A7A", "#3A7D8F", "#4A90A4", "#5DA3B5", "#6BA8
 function WordCloud({ words }: { words: { word: string; count: number }[] }) {
   const [placed, setPlaced] = useState<CloudWord[]>([]);
   const [dims, setDims] = useState({ w: 600, h: 300 });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const cancelledRef = useRef(false);
 
-  const layoutCloud = useCallback((input: { word: string; count: number }[], containerWidth: number) => {
-    if (input.length === 0) return;
+  useEffect(() => {
+    if (words.length === 0) return;
 
-    const max = input[0]?.count ?? 1;
-    const min = input[Math.min(input.length - 1, 39)]?.count ?? 1;
+    const max = words[0]?.count ?? 1;
+    const min = words[Math.min(words.length - 1, 39)]?.count ?? 1;
+    const containerWidth = containerRef.current?.clientWidth ?? 600;
     const w = Math.max(400, containerWidth);
     const h = Math.max(200, Math.round(w * 0.45));
 
-    const cloudWords: CloudWord[] = input.slice(0, 45).map((d) => ({
+    const cloudWords: CloudWord[] = words.slice(0, 45).map((d) => ({
       text: d.word,
       count: d.count,
       size: min === max ? 18 : 10 + ((d.count - min) / (max - min)) * 30,
     }));
+
+    cancelledRef.current = false;
 
     cloud()
       .size([w, h])
@@ -47,30 +52,28 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
       .fontSize((d) => (d as CloudWord).size)
       .spiral("archimedean")
       .on("end", (output) => {
-        setPlaced(output as CloudWord[]);
-        setDims({ w, h });
+        if (!cancelledRef.current) {
+          setPlaced(output as CloudWord[]);
+          setDims({ w, h });
+        }
       })
       .start();
-  }, []);
 
-  useEffect(() => {
-    const container = document.getElementById("wordcloud-container");
-    const containerWidth = container?.clientWidth ?? 600;
-    layoutCloud(words, containerWidth);
-  }, [words, layoutCloud]);
+    return () => { cancelledRef.current = true; };
+  }, [words]);
 
   if (words.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   if (placed.length === 0) {
     return (
-      <div id="wordcloud-container" className="w-full h-[280px] flex items-center justify-center">
+      <div ref={containerRef} className="w-full h-[280px] flex items-center justify-center">
         <div className="h-4 w-4 border-2 border-[#E2E5E9] border-t-[#4A90A4] rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <div id="wordcloud-container" className="w-full overflow-hidden">
-      <svg width={dims.w} height={dims.h} viewBox={`0 0 ${dims.w} ${dims.h}`} className="w-full h-auto">
+    <div ref={containerRef} className="w-full overflow-hidden">
+      <svg width={dims.w} height={dims.h} viewBox={`0 0 ${dims.w} ${dims.h}`} className="w-full h-auto" role="img" aria-label="高频词云">
         <g transform={`translate(${dims.w / 2},${dims.h / 2})`}>
           {placed.map((w, i) => (
             <text
@@ -175,7 +178,7 @@ function DonutChart({ data }: { data: { polarity: string; count: number }[] }) {
 
   return (
     <div className="flex items-center gap-5">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="shrink-0" role="img" aria-label="情感极性分布">
         {segments.map((s, i) => (
           <path key={i} d={s.path} fill={s.color} className="hover:opacity-80 transition-opacity cursor-pointer">
             <title>{labels[s.polarity] ?? s.polarity}: {s.count} ({((s.count / total) * 100).toFixed(0)}%)</title>
@@ -219,7 +222,7 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
 
   return (
     <div className="relative">
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="w-full h-auto">
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="w-full h-auto" role="img" aria-label="采集日期分布">
         {/* Grid */}
         {[0, 0.25, 0.5, 0.75, 1].map((ratio) => (
           <line key={ratio} x1={pad} y1={h - pad - ratio * (h - pad * 2)} x2={w - pad} y2={h - pad - ratio * (h - pad * 2)} stroke="#E2E5E9" strokeWidth={1} />
@@ -286,13 +289,18 @@ function MetricTooltip({ children, text }: { children: React.ReactNode; text: st
       {children}
       <span
         className="cursor-help text-[#95A5A6] hover:text-[#7F8A93]"
+        tabIndex={0}
+        role="button"
+        aria-label={text}
         onMouseEnter={() => setShow(true)}
         onMouseLeave={() => setShow(false)}
+        onFocus={() => setShow(true)}
+        onBlur={() => setShow(false)}
       >
         <Info className="h-3 w-3" />
       </span>
       {show && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal">
+        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal" role="tooltip">
           {text}
         </span>
       )}

@@ -26,6 +26,7 @@ function parseJSON<T>(text: string | null): T | null {
 export interface DimResult<T> {
   data: T | null;
   error: string | null;
+  truncated?: boolean;
 }
 
 async function runDimension<T>(
@@ -33,11 +34,12 @@ async function runDimension<T>(
   text: string,
   maxTokens = 512,
 ): Promise<DimResult<T>> {
+  const truncated = text.length > 4000;
   const result = await callLLM(systemPrompt, text.slice(0, 4000), maxTokens);
-  if (result.error) return { data: null, error: result.error };
+  if (result.error) return { data: null, error: result.error, truncated };
   const parsed = parseJSON<T>(result.text);
-  if (!parsed) return { data: null, error: `JSON 解析失败: ${result.text?.slice(0, 80)}` };
-  return { data: parsed, error: null };
+  if (!parsed) return { data: null, error: `JSON 解析失败: ${result.text?.slice(0, 80)}`, truncated };
+  return { data: parsed, error: null, truncated };
 }
 
 // ──────────────────────────────────────────────────────────

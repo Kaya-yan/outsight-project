@@ -87,6 +87,11 @@ export async function callMimoStream(
               fullText += parsed.delta.text;
               hasContent = true;
             }
+            // Handle API error events (rate limit, content policy, etc.)
+            if (parsed.type === "error") {
+              const errMsg = parsed.error?.message ?? parsed.message ?? "API stream error";
+              return { text: null, error: errMsg };
+            }
           } catch {
             // skip malformed chunks
           }

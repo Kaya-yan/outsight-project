@@ -4,6 +4,20 @@ import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Brain, Loader2 } from "lucide-react";
+import { Component, type ComponentType } from "react";
+
+// ── Safe wrapper for dimension displays ──
+
+function SafeDimDisplay({ data, Component: Comp }: { data: Record<string, unknown>; Component: ComponentType<{ data: Record<string, unknown> }> }) {
+  try {
+    if (!data || typeof data !== "object") {
+      return <span className="text-xs text-[#E67E22]">数据格式异常</span>;
+    }
+    return <Comp data={data} />;
+  } catch {
+    return <span className="text-xs text-[#E67E22]">渲染失败，数据可能不完整</span>;
+  }
+}
 
 // ── Dimension display components ──
 
@@ -457,7 +471,7 @@ export function ArticleDetail() {
                     <span className="text-[10px] text-[#95A5A6]">{sub}</span>
                   </div>
                   {dimData ? (
-                    <Component data={dimData} />
+                    <SafeDimDisplay data={dimData} Component={Component} />
                   ) : (
                     <div className="text-xs">
                       <span className="text-[#E67E22]">分析失败</span>

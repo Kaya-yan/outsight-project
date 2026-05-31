@@ -265,22 +265,28 @@ export async function POST(request: Request) {
         let skipped = 0;
         let failed = 0;
 
-        // Pre-fetch existing data for dedup
+        // Pre-fetch existing data for dedup (URLs, titles, and hashes)
         send({ log: "加载已有数据用于去重..." });
         const existingUrls = new Set<string>();
         const existingTitles: string[] = [];
+        const existingHashes = new Set<string>();
         const { data: existing } = await supabase
           .from("articles")
-          .select("url, title")
+          .select("url, title, url_hash")
           .eq("source", "domestic_media")
           .limit(2000);
         if (existing) {
           for (const e of existing) {
             existingUrls.add(e.url);
             existingTitles.push(e.title);
+            if (e.url_hash) existingHashes.add(e.url_hash);
           }
         }
-        send({ log: `已加载 ${existingUrls.size} 条去重记录` });
+        send({
+          log: existingUrls.size >= 2000
+            ? `已加载 ${existingUrls.size} 条去重记录（已达上限，部分旧文章可能未纳入去重）`
+            : `已加载 ${existingUrls.size} 条去重记录`,
+        });
 
         // Track skip reasons for summary
         const skipReasons: Record<string, number> = {};
@@ -305,15 +311,9 @@ export async function POST(request: Request) {
             continue;
           }
 
-          // Hash dedup
+          // Hash dedup (in-memory check, no DB query)
           const urlHash = await sha256(article.url);
-          const { data: hashExists } = await supabase
-            .from("articles")
-            .select("id")
-            .eq("url_hash", urlHash)
-            .maybeSingle();
-
-          if (hashExists) {
+          if (existingHashes.has(urlHash)) {
             skipReasons["Hash重复"] = (skipReasons["Hash重复"] || 0) + 1;
             skipped++;
             continue;
@@ -379,6 +379,7 @@ export async function POST(request: Request) {
 
           existingUrls.add(article.url);
           existingTitles.push(article.title);
+          existingHashes.add(urlHash);
           collected++;
           send({ log: `  ✓ ${article.title.slice(0, 40)} (${extracted.charCount}字)` });
 

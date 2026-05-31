@@ -15,7 +15,7 @@ import {
 
 interface DimDef {
   key: keyof Omit<DomesticAiAnalysis, "analyzed_at" | "errors">;
-  fn: (text: string) => Promise<{ data: unknown; error: string | null }>;
+  fn: (text: string) => Promise<{ data: unknown; error: string | null; truncated?: boolean }>;
 }
 
 const DIMENSIONS: DimDef[] = [
@@ -67,11 +67,17 @@ export async function POST(request: Request) {
   }
 
   const encoder = new TextEncoder();
+  let clientDisconnected = false;
+
   const stream = new ReadableStream({
     async start(controller) {
       const send = (data: Record<string, unknown>) => {
-        controller.enqueue(encoder.encode(sseEvent(data)));
+        if (clientDisconnected) return;
+        try { controller.enqueue(encoder.encode(sseEvent(data))); } catch { /* stream closed */ }
       };
+
+      // Detect client disconnect
+      request.signal.addEventListener("abort", () => { clientDisconnected = true; });
 
       send({ phase: "start", total: DIMENSIONS.length });
 
@@ -80,10 +86,14 @@ export async function POST(request: Request) {
       let completed = 0;
 
       for (const dim of DIMENSIONS) {
+        if (clientDisconnected) break;
+
         send({ phase: "analyzing", dimension: dim.key, current: completed + 1, total: DIMENSIONS.length });
 
         try {
           const result = await dim.fn(article.full_text);
+          if (clientDisconnected) break;
+
           results[dim.key] = result.data;
           errors[dim.key] = result.error;
           completed++;
@@ -93,6 +103,7 @@ export async function POST(request: Request) {
             dimension: dim.key,
             status: result.data ? "ok" : "failed",
             error: result.error,
+            truncated: result.truncated ?? false,
             current: completed,
             total: DIMENSIONS.length,
           });
@@ -109,6 +120,12 @@ export async function POST(request: Request) {
             total: DIMENSIONS.length,
           });
         }
+      }
+
+      // If client disconnected, skip saving
+      if (clientDisconnected) {
+        controller.close();
+        return;
       }
 
       // Build final analysis
@@ -134,8 +151,13 @@ export async function POST(request: Request) {
         },
       };
 
-      // Save to database
-      const existingMeta = (article.metadata as Record<string, unknown>) ?? {};
+      // Save to database — re-fetch metadata to avoid race condition
+      const { data: freshArticle } = await supabase
+        .from("articles")
+        .select("metadata")
+        .eq("id", articleId)
+        .single();
+      const existingMeta = ((freshArticle?.metadata ?? article.metadata) as Record<string, unknown>) ?? {};
       const updatedMeta = { ...existingMeta, domestic_ai_analysis: analysis };
 
       const { error: updateErr } = await supabase
