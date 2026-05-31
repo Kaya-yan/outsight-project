@@ -3,8 +3,9 @@
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Brain, Loader2 } from "lucide-react";
-import { Component, type ComponentType } from "react";
+import { ArrowLeft, Brain, BarChart3, Loader2 } from "lucide-react";
+import { useState, Component, type ComponentType } from "react";
+import { LinguisticProfile } from "./linguistic-profile";
 
 // ── Safe wrapper for dimension displays ──
 
@@ -344,12 +345,15 @@ const DIM_LABELS: Record<string, string> = {
   spatial: "地域指向",
 };
 
+type DetailTab = "ai" | "linguistic";
+
 export function ArticleDetail() {
   const activeArticle = useDomesticStore((s) => s.activeArticle);
   const isLoadingDetail = useDomesticStore((s) => s.isLoadingDetail);
   const analysisProgress = useDomesticStore((s) => s.analysisProgress);
   const clearActiveArticle = useDomesticStore((s) => s.clearActiveArticle);
   const triggerAnalysis = useDomesticStore((s) => s.triggerAnalysis);
+  const [detailTab, setDetailTab] = useState<DetailTab>("linguistic");
 
   if (isLoadingDetail && analysisProgress.phase === "idle") {
     return (
@@ -455,8 +459,41 @@ export function ArticleDetail() {
         </CardContent>
       </Card>
 
-      {/* 8-Dimension AI Analysis */}
-      {hasAnalysis && (
+      {/* Tab Switcher */}
+      <div className="flex gap-1 border-b border-[#E2E5E9]">
+        <button
+          onClick={() => setDetailTab("linguistic")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+            detailTab === "linguistic"
+              ? "border-[#1e3a5f] text-[#1e3a5f]"
+              : "border-transparent text-[#7F8A93] hover:text-[#2D3436]"
+          }`}
+        >
+          <BarChart3 className="h-3.5 w-3.5" />
+          语言学画像
+        </button>
+        <button
+          onClick={() => setDetailTab("ai")}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+            detailTab === "ai"
+              ? "border-[#4A90A4] text-[#4A90A4]"
+              : "border-transparent text-[#7F8A93] hover:text-[#2D3436]"
+          }`}
+        >
+          <Brain className="h-3.5 w-3.5" />
+          AI 分析
+          {hasAnalysis && <span className="w-1.5 h-1.5 rounded-full bg-[#00B894]" />}
+          {!hasAnalysis && analysisProgress.phase === "analyzing" && <span className="w-1.5 h-1.5 rounded-full bg-[#4A90A4] animate-pulse" />}
+        </button>
+      </div>
+
+      {/* Tab Content: Linguistic Profile */}
+      {detailTab === "linguistic" && (
+        <LinguisticProfile articleId={activeArticle.id} />
+      )}
+
+      {/* Tab Content: 8-Dimension AI Analysis */}
+      {detailTab === "ai" && hasAnalysis && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {DIMENSIONS.map(({ key, label, sub, color, Component }) => {
             const dimData = ai[key] as Record<string, unknown> | null;
@@ -485,8 +522,24 @@ export function ArticleDetail() {
         </div>
       )}
 
+      {/* AI tab: no analysis yet */}
+      {detailTab === "ai" && !hasAnalysis && analysisProgress.phase === "idle" && (
+        <Card className="border-[#E2E5E9]">
+          <CardContent className="p-6 flex flex-col items-center gap-3">
+            <Brain className="h-8 w-8 text-[#4A90A4]" />
+            <p className="text-sm text-[#7F8A93]">尚未执行 AI 分析</p>
+            <button
+              onClick={() => triggerAnalysis(activeArticle.id)}
+              className="px-4 py-2 bg-[#4A90A4] text-white text-xs rounded-md hover:bg-[#5BA1B5] transition-colors"
+            >
+              执行 8 维度 AI 分析
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Analyzed timestamp */}
-      {analyzedAt ? (
+      {detailTab === "ai" && analyzedAt ? (
         <p className="text-[10px] text-[#95A5A6] text-right">
           分析于 {new Date(analyzedAt).toLocaleString("zh-CN")}
         </p>

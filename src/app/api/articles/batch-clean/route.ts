@@ -4,10 +4,14 @@ import { cleanHtml, cleanText, htmlToPlainText, stripHtmlTags } from "@/lib/text
 
 /**
  * GET /api/articles/batch-clean
- * Query: limit (default 50), source (optional media filter)
+ * Query:
+ *   limit   — batch size (default 50, max 200)
+ *   source  — optional media filter
+ *   mode    — "html" (default): detect articles with HTML residue in full_text
+ *             "uncleaned": only articles without cleaned_at (legacy behavior)
+ *             "force": all articles with full_text (re-clean everything)
  *
- * Batch-cleans existing full_text using text-cleaner.ts.
- * Uses metadata.cleaned_at to skip already-cleaned articles.
+ * Detects HTML residue via Supabase `ilike` on common tag patterns.
  * Safety: if word count drops >80%, marks metadata.needs_review instead of overwriting.
  */
 export async function GET(request: Request) {
@@ -18,20 +22,39 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const limit = Math.min(parseInt(searchParams.get("limit") ?? "50", 10), 200);
   const source = searchParams.get("source") ?? undefined;
-  const force = searchParams.get("force") === "true";
+  const mode = searchParams.get("mode") ?? "html";
 
-  // Query articles with existing full text
-  // Unless force=true, skip already-cleaned articles (metadata->>'cleaned_at' IS NOT NULL)
+  // ── Build query based on mode ──
   let query = supabase
     .from("articles")
     .select("id, title, media, full_text, content, word_count, metadata")
     .not("full_text", "is", null)
-    .in("full_text_status", ["complete", "partial"])
     .order("updated_at", { ascending: true })
     .limit(limit);
 
-  if (!force) {
-    query = query.or("metadata->>cleaned_at.is.null,metadata.is.null");
+  if (mode === "html") {
+    // Detect HTML residue: full_text contains common HTML tag patterns
+    // Supabase `or()` with `ilike` — each condition targets a distinct HTML signature
+    query = query.or(
+      "full_text.ilike.%<a %," +       // <a href=...
+      "full_text.ilike.%</a>%," +       // </a>
+      "full_text.ilike.%<p>%," +        // <p>
+      "full_text.ilike.%</p>%," +       // </p>
+      "full_text.ilike.%<em>%," +       // <em>
+      "full_text.ilike.%<span %," +     // <span class=...
+      "full_text.ilike.%href=%," +      // href= (attribute leak)
+      "full_text.ilike.%data-%," +      // data-link-name= etc.
+      "full_text.ilike.%<br%," +        // <br> or <br/>
+      "full_text.ilike.%<div %"         // <div class=...
+    );
+  } else if (mode === "force") {
+    // All articles with full_text — no additional filter
+    query = query.in("full_text_status", ["complete", "partial", "missing", "paywalled", "manual_uploaded"]);
+  } else {
+    // Legacy: only articles without cleaned_at
+    query = query
+      .in("full_text_status", ["complete", "partial"])
+      .or("metadata->>cleaned_at.is.null,metadata.is.null");
   }
 
   if (source) {
@@ -41,16 +64,16 @@ export async function GET(request: Request) {
   const { data: articles, error } = await query;
 
   if (error) {
-    console.error("[BatchClean] Query error:", error.message);
+    console.error(`[BatchClean] Query error (mode=${mode}):`, error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!articles || articles.length === 0) {
-    console.log("[BatchClean] No articles to clean, done=true");
+    console.log(`[BatchClean] No articles to clean (mode=${mode}), done=true`);
     return NextResponse.json({ cleaned: 0, skipped: 0, total: 0, remaining: 0, done: true });
   }
 
-  console.log(`[BatchClean] Processing batch of ${articles.length} articles`);
+  console.log(`[BatchClean] Processing batch of ${articles.length} articles (mode=${mode})`);
 
   let cleaned = 0;
   let skipped = 0;
@@ -59,6 +82,20 @@ export async function GET(request: Request) {
   for (const article of articles) {
     const oldFullText = article.full_text ?? "";
     const oldWordCount = article.word_count ?? oldFullText.split(/\s+/).filter(Boolean).length;
+
+    // Quick check: does this article actually have HTML residue?
+    // (The `or` query may match false positives like "a < b" in math text)
+    const hasHtml = /<[a-zA-Z][^>]*>/.test(oldFullText) || /\bhref\s*=/.test(oldFullText);
+    if (!hasHtml) {
+      // No HTML detected — just mark as cleaned and skip
+      const existingMeta = (article.metadata as Record<string, unknown>) ?? {};
+      await supabase
+        .from("articles")
+        .update({ metadata: { ...existingMeta, cleaned_at: now, skip_reason: "no_html_detected" } })
+        .eq("id", article.id);
+      skipped++;
+      continue;
+    }
 
     // Clean full_text: strip HTML tags first, then normalize whitespace
     const strippedText = stripHtmlTags(oldFullText);
@@ -79,6 +116,7 @@ export async function GET(request: Request) {
     const metaUpdate: Record<string, unknown> = {
       ...existingMeta,
       cleaned_at: now,
+      html_cleaned: true,
     };
 
     if (dropRatio > 0.8 && oldWordCount > 100) {
@@ -116,15 +154,31 @@ export async function GET(request: Request) {
     }
   }
 
-  // Count remaining uncleaned articles with same filter
+  // Count remaining articles matching the same criteria
   let remainingQuery = supabase
     .from("articles")
     .select("id", { count: "exact", head: true })
-    .not("full_text", "is", null)
-    .in("full_text_status", ["complete", "partial"]);
+    .not("full_text", "is", null);
 
-  if (!force) {
-    remainingQuery = remainingQuery.or("metadata->>cleaned_at.is.null,metadata.is.null");
+  if (mode === "html") {
+    remainingQuery = remainingQuery.or(
+      "full_text.ilike.%<a %," +
+      "full_text.ilike.%</a>%," +
+      "full_text.ilike.%<p>%," +
+      "full_text.ilike.%</p>%," +
+      "full_text.ilike.%<em>%," +
+      "full_text.ilike.%<span %," +
+      "full_text.ilike.%href=%," +
+      "full_text.ilike.%data-%," +
+      "full_text.ilike.%<br%," +
+      "full_text.ilike.%<div %"
+    );
+  } else if (mode === "force") {
+    // no additional filter
+  } else {
+    remainingQuery = remainingQuery
+      .in("full_text_status", ["complete", "partial"])
+      .or("metadata->>cleaned_at.is.null,metadata.is.null");
   }
 
   if (source) {
@@ -134,7 +188,7 @@ export async function GET(request: Request) {
   const { count: remaining } = await remainingQuery;
   const remainingVal = remaining ?? 0;
 
-  console.log(`[BatchClean] Batch done: cleaned=${cleaned}, skipped=${skipped}, remaining=${remainingVal}`);
+  console.log(`[BatchClean] Batch done (mode=${mode}): cleaned=${cleaned}, skipped=${skipped}, remaining=${remainingVal}`);
 
   return NextResponse.json({
     cleaned,
@@ -142,5 +196,6 @@ export async function GET(request: Request) {
     total: articles.length,
     remaining: remainingVal,
     done: remainingVal === 0,
+    mode,
   });
 }

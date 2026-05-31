@@ -352,7 +352,7 @@ function MetricTooltip({ children, text }: { children: React.ReactNode; text: st
         <Info className="h-3 w-3" />
       </span>
       {show && (
-        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal" role="tooltip">
+        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal" role="tooltip">
           {text}
         </span>
       )}
