@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import cloud from "d3-cloud";
 import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
@@ -337,14 +338,36 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
   );
 }
 
-// ── Metric Card with tooltip ──
+// ── Metric Card with tooltip (Portal-based) ──
 
 function MetricTooltip({ children, text }: { children: React.ReactNode; text: string }) {
   const [show, setShow] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const triggerRef = useRef<HTMLSpanElement>(null);
+
+  const updatePos = useCallback(() => {
+    const el = triggerRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    setPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+  }, []);
+
+  useEffect(() => {
+    if (!show) return;
+    updatePos();
+    window.addEventListener("scroll", updatePos, true);
+    window.addEventListener("resize", updatePos);
+    return () => {
+      window.removeEventListener("scroll", updatePos, true);
+      window.removeEventListener("resize", updatePos);
+    };
+  }, [show, updatePos]);
+
   return (
-    <span className="relative inline-flex items-center gap-1">
+    <span className="inline-flex items-center gap-1">
       {children}
       <span
+        ref={triggerRef}
         className="cursor-help text-[#95A5A6] hover:text-[#7F8A93]"
         tabIndex={0}
         role="button"
@@ -356,10 +379,15 @@ function MetricTooltip({ children, text }: { children: React.ReactNode; text: st
       >
         <Info className="h-3 w-3" />
       </span>
-      {show && (
-        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1.5 px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-50 whitespace-normal" role="tooltip">
+      {show && createPortal(
+        <span
+          className="fixed px-2.5 py-1.5 text-[10px] leading-4 text-[#2D3436] bg-white border border-[#E2E5E9] rounded shadow-md w-56 z-[9999] whitespace-normal pointer-events-none"
+          style={{ top: pos.top, left: pos.left, transform: "translateX(-50%)" }}
+          role="tooltip"
+        >
           {text}
-        </span>
+        </span>,
+        document.body,
       )}
     </span>
   );
