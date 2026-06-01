@@ -498,7 +498,7 @@ export function ArticleDetail() {
       )}
 
       {/* Tab Content: 8-Dimension AI Analysis */}
-      {detailTab === "ai" && hasAnalysis && (
+      {SHOW_DOMESTIC_AI_ANALYSIS && detailTab === "ai" && hasAnalysis && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {DIMENSIONS.map(({ key, label, sub, color, Component }) => {
             const dimData = ai[key] as Record<string, unknown> | null;
@@ -528,7 +528,7 @@ export function ArticleDetail() {
       )}
 
       {/* AI tab: no analysis yet */}
-      {detailTab === "ai" && !hasAnalysis && analysisProgress.phase === "idle" && (
+      {SHOW_DOMESTIC_AI_ANALYSIS && detailTab === "ai" && !hasAnalysis && analysisProgress.phase === "idle" && (
         <Card className="border-[#E2E5E9]">
           <CardContent className="p-6 flex flex-col items-center gap-3">
             <Brain className="h-8 w-8 text-[#4A90A4]" />
@@ -544,7 +544,7 @@ export function ArticleDetail() {
       )}
 
       {/* Analyzed timestamp */}
-      {detailTab === "ai" && analyzedAt ? (
+      {SHOW_DOMESTIC_AI_ANALYSIS && detailTab === "ai" && analyzedAt ? (
         <p className="text-[10px] text-[#95A5A6] text-right">
           分析于 {new Date(analyzedAt).toLocaleString("zh-CN")}
         </p>
