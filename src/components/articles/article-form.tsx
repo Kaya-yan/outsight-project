@@ -57,7 +57,6 @@ export function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: Artic
       author: author.trim() || undefined,
       abstract: abstract.trim() || undefined,
       full_text: content.trim() || undefined,
-      content: content.trim() || undefined,
       keywords: keywords
         ? keywords.split(",").map((k) => k.trim()).filter(Boolean)
         : undefined,

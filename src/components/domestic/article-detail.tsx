@@ -347,6 +347,9 @@ const DIM_LABELS: Record<string, string> = {
 
 type DetailTab = "ai" | "linguistic";
 
+// Feature flag: hide AI 8-dimension analysis until MiMo API content policy is resolved
+const SHOW_DOMESTIC_AI_ANALYSIS = false;
+
 export function ArticleDetail() {
   const activeArticle = useDomesticStore((s) => s.activeArticle);
   const isLoadingDetail = useDomesticStore((s) => s.isLoadingDetail);
@@ -394,7 +397,7 @@ export function ArticleDetail() {
             <span>{activeArticle.word_count} 字</span>
             {activeArticle.author ? <span>{activeArticle.author}</span> : null}
           </div>
-          {!hasAnalysis && analysisProgress.phase === "idle" && (
+          {SHOW_DOMESTIC_AI_ANALYSIS && !hasAnalysis && analysisProgress.phase === "idle" && (
             <Button
               onClick={() => triggerAnalysis(activeArticle.id)}
               size="sm"
@@ -404,7 +407,7 @@ export function ArticleDetail() {
               执行 8 维度 AI 分析
             </Button>
           )}
-          {analysisProgress.phase === "analyzing" && (
+          {SHOW_DOMESTIC_AI_ANALYSIS && analysisProgress.phase === "analyzing" && (
             <div className="space-y-2 p-3 bg-[#F7F8FA] rounded-lg border border-[#E2E5E9]">
               <div className="flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-[#4A90A4]" />
@@ -441,7 +444,7 @@ export function ArticleDetail() {
               </div>
             </div>
           )}
-          {analysisProgress.phase === "done" && !hasAnalysis && (
+          {SHOW_DOMESTIC_AI_ANALYSIS && analysisProgress.phase === "done" && !hasAnalysis && (
             <div className="text-xs text-[#00B894] flex items-center gap-1">
               分析完成，正在刷新...
             </div>
@@ -472,19 +475,21 @@ export function ArticleDetail() {
           <BarChart3 className="h-3.5 w-3.5" />
           语言学画像
         </button>
-        <button
-          onClick={() => setDetailTab("ai")}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
-            detailTab === "ai"
-              ? "border-[#4A90A4] text-[#4A90A4]"
-              : "border-transparent text-[#7F8A93] hover:text-[#2D3436]"
-          }`}
-        >
-          <Brain className="h-3.5 w-3.5" />
-          AI 分析
-          {hasAnalysis && <span className="w-1.5 h-1.5 rounded-full bg-[#00B894]" />}
-          {!hasAnalysis && analysisProgress.phase === "analyzing" && <span className="w-1.5 h-1.5 rounded-full bg-[#4A90A4] animate-pulse" />}
-        </button>
+        {SHOW_DOMESTIC_AI_ANALYSIS && (
+          <button
+            onClick={() => setDetailTab("ai")}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 -mb-px transition-colors ${
+              detailTab === "ai"
+                ? "border-[#4A90A4] text-[#4A90A4]"
+                : "border-transparent text-[#7F8A93] hover:text-[#2D3436]"
+            }`}
+          >
+            <Brain className="h-3.5 w-3.5" />
+            AI 分析
+            {hasAnalysis && <span className="w-1.5 h-1.5 rounded-full bg-[#00B894]" />}
+            {!hasAnalysis && analysisProgress.phase === "analyzing" && <span className="w-1.5 h-1.5 rounded-full bg-[#4A90A4] animate-pulse" />}
+          </button>
+        )}
       </div>
 
       {/* Tab Content: Linguistic Profile */}

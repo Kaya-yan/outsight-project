@@ -8,6 +8,15 @@ const MIMO_API_KEY = process.env.MIMO_API_KEY;
 const MIMO_BASE_URL = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
 const MIMO_MODEL = "mimo-v2.5-pro";
 
+// ── Precompiled easter egg matchers ──
+interface EasterEggMatcher { isChinese: boolean; keyword: string; pattern?: RegExp; response: string }
+const EASTER_EGG_MATCHERS: EasterEggMatcher[] = Object.entries(EASTER_EGGS).map(([keyword, response]) => {
+  const isChinese = /[一-鿿]/.test(keyword);
+  return isChinese
+    ? { isChinese, keyword, response }
+    : { isChinese, keyword, pattern: new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"), response };
+});
+
 // ── Project plan summary cache ──
 let cachedPlanSummary: string | null = null;
 
@@ -174,14 +183,11 @@ export async function POST(request: Request) {
 
   const input = message.trim();
 
-  // ── Step 1: Easter egg check ──
-  for (const [keyword, response] of Object.entries(EASTER_EGGS)) {
-    const isChinese = /[一-鿿]/.test(keyword);
-    const matched = isChinese
-      ? input.includes(keyword)              // \b doesn't work for Chinese chars
-      : new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(input);
+  // ── Step 1: Easter egg check (precompiled matchers) ──
+  for (const m of EASTER_EGG_MATCHERS) {
+    const matched = m.isChinese ? input.includes(m.keyword) : m.pattern!.test(input);
     if (matched) {
-      return NextResponse.json({ response, type: "easter_egg" });
+      return NextResponse.json({ response: m.response, type: "easter_egg" });
     }
   }
 
