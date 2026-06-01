@@ -174,10 +174,13 @@ export async function POST(request: Request) {
 
   const input = message.trim();
 
-  // ── Step 1: Easter egg check (word boundary matching) ──
+  // ── Step 1: Easter egg check ──
   for (const [keyword, response] of Object.entries(EASTER_EGGS)) {
-    const pattern = new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
-    if (pattern.test(input)) {
+    const isChinese = /[一-鿿]/.test(keyword);
+    const matched = isChinese
+      ? input.includes(keyword)              // \b doesn't work for Chinese chars
+      : new RegExp(`\\b${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(input);
+    if (matched) {
       return NextResponse.json({ response, type: "easter_egg" });
     }
   }
