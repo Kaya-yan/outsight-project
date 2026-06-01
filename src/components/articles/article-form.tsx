@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import type { Article } from "@/types/database";
 
 interface ArticleFormProps {
@@ -24,8 +25,11 @@ export function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: Artic
   const [language, setLanguage] = useState(article?.language ?? "en");
   const [author, setAuthor] = useState(article?.author ?? "");
   const [abstract, setAbstract] = useState(article?.abstract ?? "");
-  const [content, setContent] = useState(article?.content ?? article?.full_text ?? "");
+  // Prefer full_text (cleaned plain text) over content (raw HTML)
+  const [content, setContent] = useState(article?.full_text ?? article?.content ?? "");
   const [keywords, setKeywords] = useState((article?.keywords ?? []).join(", "));
+  const [showRawHtml, setShowRawHtml] = useState(false);
+  const hasRawHtml = !!(article?.content && article.content !== article.full_text);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -52,6 +56,7 @@ export function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: Artic
       language,
       author: author.trim() || undefined,
       abstract: abstract.trim() || undefined,
+      full_text: content.trim() || undefined,
       content: content.trim() || undefined,
       keywords: keywords
         ? keywords.split(",").map((k) => k.trim()).filter(Boolean)
@@ -199,6 +204,23 @@ export function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: Artic
           className="flex w-full rounded-md border border-[#E2E5E9] bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90A4] resize-none font-mono"
           placeholder="粘贴或上传全文..."
         />
+        {hasRawHtml && (
+          <div className="mt-1.5">
+            <button
+              type="button"
+              onClick={() => setShowRawHtml(!showRawHtml)}
+              className="flex items-center gap-1 text-[10px] text-[#95A5A6] hover:text-[#636E72] transition-colors"
+            >
+              {showRawHtml ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              查看原始 HTML
+            </button>
+            {showRawHtml && (
+              <pre className="mt-1.5 max-h-40 overflow-auto rounded-md bg-[#F7F8FA] border border-[#E2E5E9] p-3 text-[10px] text-[#7F8A93] font-mono whitespace-pre-wrap break-all">
+                {article?.content}
+              </pre>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-3 pt-2">
