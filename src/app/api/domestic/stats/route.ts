@@ -126,6 +126,10 @@ export async function GET(request: Request) {
     const filtered: string[] = [];
     for (const w of words) {
       if (w.length < 2 || STOPWORDS_ZH.has(w)) continue;
+      // Filter words containing digits (年份/日期/数字串不应参与搭配)
+      if (/\d/.test(w)) continue;
+      // Filter words containing punctuation or special symbols
+      if (/[，。！？；：""''（）【】《》、·—…　@#$%^&*<>\/\\|`~_+=]/.test(w)) continue;
       wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
       filtered.push(w);
       allWords.push(w);
@@ -146,8 +150,9 @@ export async function GET(request: Request) {
     for (let i = 0; i < filtered.length - 1; i++) {
       const w1 = filtered[i], w2 = filtered[i + 1];
       const bg = w1 + w2;
-      // Filter: no pure digits, no punctuation-only, reasonable length, no stopwords at boundary
-      if (/^\d+$/.test(bg)) continue;
+      // Filter: no digits, no punctuation, reasonable length, no stopwords at boundary
+      if (/\d/.test(bg)) continue;
+      if (/[，。！？；：""''（）【】《》、·—…]/.test(bg)) continue;
       if (bg.length < 3 || bg.length > 12) continue;
       if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2)) continue;
       bigramFreq.set(bg, (bigramFreq.get(bg) || 0) + 1);
@@ -157,8 +162,10 @@ export async function GET(request: Request) {
     for (let i = 0; i < filtered.length - 2; i++) {
       const w1 = filtered[i], w2 = filtered[i + 1], w3 = filtered[i + 2];
       const tg = w1 + w2 + w3;
-      if (/^\d+$/.test(tg)) continue;
-      if (tg.length < 4 || tg.length > 15) continue;
+      // Filter: no digits, no punctuation, tightened length 6-12
+      if (/\d/.test(tg)) continue;
+      if (/[，。！？；：""''（）【】《》、·—…]/.test(tg)) continue;
+      if (tg.length < 6 || tg.length > 12) continue;
       if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2) || STOPWORDS_ZH.has(w3)) continue;
       trigramFreq.set(tg, (trigramFreq.get(tg) || 0) + 1);
     }
