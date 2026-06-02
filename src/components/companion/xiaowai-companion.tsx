@@ -6,14 +6,14 @@ import { XiaoWaiMobile } from "./xiaowai-mobile";
 import { TerminalPanel } from "./terminal-panel";
 import { useBreathing, useBlink, useEyeTracking, useIsMobile } from "./companion-hooks";
 import { miniBarStyle, panelStyle } from "./companion-styles";
-import { TERMINAL, EDGE_INSET } from "./companion-config";
+import { TERMINAL } from "./companion-config";
 import type { OrbState } from "./companion-config";
 
 const POS_KEY = "companion-position";
 
 interface Position { x: number; y: number }
 
-function loadPosition(isExpanded: boolean): Position | null {
+function loadPosition(): Position | null {
   try {
     const raw = localStorage.getItem(POS_KEY);
     if (!raw) return null;
@@ -39,16 +39,19 @@ export function XiaoWaiCompanion() {
   const mobile = useIsMobile();
   const [orbState, setOrbState] = useState<OrbState>("idle");
   const [expanded, setExpanded] = useState(false);
-  const [clicked, setClicked] = useState(false);
 
   // Drag state
   const [position, setPosition] = useState<Position | null>(null);
+  const positionRef = useRef<Position | null>(null);
   const dragState = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number; dragging: boolean } | null>(null);
   const hasDragged = useRef(false);
 
+  // Keep ref in sync with state
+  useEffect(() => { positionRef.current = position; }, [position]);
+
   // Load saved position on mount
   useEffect(() => {
-    const saved = loadPosition(expanded);
+    const saved = loadPosition();
     if (saved) setPosition(saved);
   }, []);
 
@@ -87,18 +90,17 @@ export function XiaoWaiCompanion() {
 
   // Close panel via Escape key only
   useEffect(() => {
-    if (!clicked) return;
+    if (!expanded) return;
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
-        setClicked(false);
         setExpanded(false);
       }
     }
 
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [clicked]);
+  }, [expanded]);
 
   // ── Drag handlers ──
 
@@ -149,8 +151,8 @@ export function XiaoWaiCompanion() {
     }
 
     function onEnd() {
-      if (dragState.current?.dragging && position) {
-        savePosition(position);
+      if (dragState.current?.dragging && positionRef.current) {
+        savePosition(positionRef.current);
       }
       dragState.current = null;
       document.removeEventListener("mousemove", onMove);
@@ -163,18 +165,16 @@ export function XiaoWaiCompanion() {
     document.addEventListener("mouseup", onEnd);
     document.addEventListener("touchmove", onMove, { passive: false });
     document.addEventListener("touchend", onEnd);
-  }, [expanded, position]);
+  }, [expanded]);
 
   // Click mini bar to expand (only if not dragging)
   const handleClick = useCallback(() => {
     if (expanded || hasDragged.current) return;
-    setClicked(true);
     setExpanded(true);
   }, [expanded]);
 
   // Close button
   const handleClose = useCallback(() => {
-    setClicked(false);
     setExpanded(false);
   }, []);
 

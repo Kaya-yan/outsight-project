@@ -318,10 +318,10 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
           </g>
         ))}
         {/* X labels */}
-        {data.filter((_, i) => i % Math.max(1, Math.floor(data.length / 6)) === 0).map((d, i) => {
-          const idx = data.indexOf(d);
+        {data.map((d, i) => {
+          if (i % Math.max(1, Math.floor(data.length / 6)) !== 0) return null;
           return (
-            <text key={i} x={pad + idx * xStep} y={h - 8} textAnchor="middle" fontSize={9} fill="#95A5A6">
+            <text key={i} x={pad + i * xStep} y={h - 8} textAnchor="middle" fontSize={9} fill="#95A5A6">
               {d.date.slice(5)}
             </text>
           );

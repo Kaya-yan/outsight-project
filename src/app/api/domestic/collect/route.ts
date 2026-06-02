@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { JSDOM } from "jsdom";
 import { cleanHtml, htmlToPlainText, cleanText, stripHtmlTags } from "@/lib/text-cleaner";
 import { getAdapter } from "@/lib/domestic/media-adapters";
+import { hashUrl } from "@/lib/dedup";
 
 /**
  * POST /api/domestic/collect
@@ -30,6 +31,8 @@ interface FoundArticle {
 
 const DELAY_MS = 1200;
 
+const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
 // ── Link extraction ──
 
 async function fetchArticleLinks(
@@ -41,7 +44,7 @@ async function fetchArticleLinks(
   try {
     const res = await fetch(listUrl, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": DEFAULT_UA,
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "zh-CN,zh;q=0.9",
       },
@@ -86,7 +89,117 @@ function extractDateFromUrl(url: string): string | null {
   return null;
 }
 
-// ── Content extraction ──
+// ── Content extraction (academic boilerplate removal) ──
+
+/** Title blacklist — if title matches, reject and fall through to next priority */
+const TITLE_BLACKLIST = /导航|首页|栏目|频道|返回|网站地图|站点地图|全部分类|登录|注册/;
+
+/** Noise keyword blacklist for paragraph-level filtering */
+const NOISE_KEYWORDS = [
+  // Share buttons
+  "点击右上角", "微信好友", "朋友圈", "请使用浏览器分享", "分享功能", "发送给朋友",
+  "分享到微博", "分享到QQ", "复制链接", "扫一扫",
+  // Navigation
+  "全部导航", "网站地图", "面包屑", "返回首页", "上一页", "下一页",
+  // Recommendations
+  "推荐阅读", "相关文章", "热门推荐", "猜你喜欢", "延伸阅读", "相关推荐",
+  "更多文章", "精彩推荐", "大家都在看", "热门搜索",
+  // Templates
+  "版权所有", "免责声明", "关于我们", "联系我们", "广告服务", "投稿邮箱",
+  "互联网新闻信息服务许可证", "广播电视节目制作经营许可证",
+  // Special topics
+  "专题推荐", "国家公祭日", "全民国家安全教育日",
+];
+
+/**
+ * Extract title with priority-based fallback + blacklist filtering.
+ * Priority: h1 > og:title > meta:title > title (cleaned) > first paragraph
+ */
+function extractTitle(doc: Document): string {
+  // P1: <h1> tag (most reliable for article pages)
+  const h1 = doc.querySelector("h1");
+  if (h1) {
+    const text = (h1.textContent ?? "").trim();
+    if (text.length >= 4 && text.length <= 200 && !TITLE_BLACKLIST.test(text)) {
+      return text;
+    }
+  }
+
+  // P2: og:title meta tag
+  const ogTitle = doc.querySelector('meta[property="og:title"]');
+  if (ogTitle) {
+    const text = (ogTitle.getAttribute("content") ?? "").trim();
+    if (text.length >= 4 && text.length <= 200 && !TITLE_BLACKLIST.test(text)) {
+      return text;
+    }
+  }
+
+  // P3: meta name="title"
+  const metaTitle = doc.querySelector('meta[name="title"]');
+  if (metaTitle) {
+    const text = (metaTitle.getAttribute("content") ?? "").trim();
+    if (text.length >= 4 && text.length <= 200 && !TITLE_BLACKLIST.test(text)) {
+      return text;
+    }
+  }
+
+  // P4: <title> tag (strip site suffix like " - 人民日报")
+  const titleEl = doc.querySelector("title");
+  if (titleEl) {
+    let text = (titleEl.textContent ?? "").trim();
+    text = text.replace(/\s*[-_|—]\s*[^-_|—]{2,30}$/, "").trim(); // strip suffix
+    if (text.length >= 4 && text.length <= 200 && !TITLE_BLACKLIST.test(text)) {
+      return text;
+    }
+  }
+
+  // P5: First meaningful <p> content (first 30 chars)
+  const firstP = doc.querySelector("article p, .content p, .article p, main p");
+  if (firstP) {
+    const text = (firstP.textContent ?? "").trim();
+    if (text.length >= 10) return text.slice(0, 30) + "...";
+  }
+
+  return "";
+}
+
+/**
+ * Calculate text density of a DOM node (Kohlschütter 2010).
+ * textDensity = pureTextChars / htmlTags
+ * High density (>10) = likely content; low density (<5) = likely boilerplate.
+ */
+function textDensity(el: Element): number {
+  const text = (el.textContent ?? "").trim();
+  if (text.length === 0) return 0;
+  const html = el.innerHTML;
+  const tagCount = (html.match(/<[a-zA-Z][^>]*>/g) ?? []).length;
+  return tagCount === 0 ? text.length : text.length / tagCount;
+}
+
+/**
+ * Calculate link density of a DOM node (Trafilatura 2021).
+ * linkDensity = anchorTextChars / totalTextChars
+ * High density (>0.3) = navigation/recommendation list.
+ */
+function linkDensity(el: Element): number {
+  const totalText = (el.textContent ?? "").trim();
+  if (totalText.length === 0) return 0;
+  let anchorText = 0;
+  el.querySelectorAll("a").forEach((a) => {
+    anchorText += (a.textContent ?? "").trim().length;
+  });
+  return anchorText / totalText.length;
+}
+
+/**
+ * Check if a paragraph contains noise keywords.
+ */
+function isNoiseParagraph(text: string): boolean {
+  for (const kw of NOISE_KEYWORDS) {
+    if (text.includes(kw)) return true;
+  }
+  return false;
+}
 
 async function extractArticleContent(
   url: string,
@@ -96,7 +209,7 @@ async function extractArticleContent(
   try {
     const res = await fetch(url, {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "User-Agent": DEFAULT_UA,
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "zh-CN,zh;q=0.9",
       },
@@ -112,15 +225,27 @@ async function extractArticleContent(
     const dom = new JSDOM(html, { url });
     const doc = dom.window.document;
 
-    let title = "";
-    const titleEl = doc.querySelector("h1") || doc.querySelector(".title") || doc.querySelector("title");
-    if (titleEl) title = (titleEl.textContent?.trim() || "").replace(/\s*--.*$/, "");
+    // ── Title extraction (priority + blacklist) ──
+    const title = extractTitle(doc);
 
-    for (const sel of removeSelectors) {
+    // ── Pre-clean: remove known noise elements ──
+    const noiseSelectors = [
+      "nav", "header", "footer", "aside",
+      ".breadcrumb", ".breadcrumbs", ".nav", ".navigation", ".menu",
+      ".share", ".sharing", ".social", ".print", ".bookmark",
+      ".related", ".recommend", ".sidebar", ".widget", ".ad", ".advertisement",
+      ".comment", ".comments", "#comments",
+      ".copyright", ".disclaimer",
+      ...removeSelectors,
+    ];
+    for (const sel of noiseSelectors) {
       try { doc.querySelectorAll(sel).forEach((el) => el.remove()); } catch { /* skip */ }
     }
 
+    // ── Content extraction ──
     let contentHtml = "";
+
+    // Strategy 1: Use adapter's contentSelector
     const selectors = contentSelector.split(",").map((s) => s.trim());
     for (const sel of selectors) {
       const el = doc.querySelector(sel);
@@ -130,22 +255,60 @@ async function extractArticleContent(
       }
     }
 
+    // Strategy 2: Try semantic containers
     if (!contentHtml) {
-      const paragraphs = doc.body?.querySelectorAll("p");
-      if (paragraphs && paragraphs.length > 2) {
-        contentHtml = Array.from(paragraphs).map((p) => `<p>${p.innerHTML}</p>`).join("");
+      const semanticSelectors = ["article", "main", '[role="main"]', ".article-content", ".post-content", ".entry-content", "#content"];
+      for (const sel of semanticSelectors) {
+        const el = doc.querySelector(sel);
+        if (el && (el.textContent?.trim().length || 0) > 100) {
+          contentHtml = el.innerHTML;
+          break;
+        }
+      }
+    }
+
+    // Strategy 3: Paragraph collection with density filtering (Sun 2011)
+    if (!contentHtml) {
+      const allPs = doc.body?.querySelectorAll("p");
+      if (allPs && allPs.length > 2) {
+        const goodPs: string[] = [];
+        for (const p of Array.from(allPs)) {
+          const text = (p.textContent ?? "").trim();
+          // Filter short paragraphs and noise
+          if (text.length < 20) continue;
+          if (isNoiseParagraph(text)) continue;
+          // Filter high link-density paragraphs (navigation/recommendations)
+          if (linkDensity(p) > 0.3) continue;
+          // Filter low text-density paragraphs (buttons, labels)
+          if (textDensity(p) < 3 && text.length < 60) continue;
+          goodPs.push(`<p>${p.innerHTML}</p>`);
+        }
+        if (goodPs.length > 0) contentHtml = goodPs.join("");
       }
     }
 
     if (!contentHtml) return { title, fullText: "", author: null, charCount: 0, error: "正文提取为空" };
 
+    // ── Clean and convert ──
     const cleanedHtml = cleanHtml(contentHtml);
     let fullText = htmlToPlainText(cleanedHtml);
+
+    // ── Paragraph-level noise filtering on plain text ──
+    const paragraphs = fullText.split(/\n\n+/);
+    const filteredParagraphs = paragraphs.filter((p) => {
+      const trimmed = p.trim();
+      if (trimmed.length < 15) return false;
+      if (isNoiseParagraph(trimmed)) return false;
+      return true;
+    });
+    fullText = filteredParagraphs.join("\n\n");
+
     fullText = cleanText(fullText);
-    fullText = stripHtmlTags(fullText); // Final safety net: strip any residual HTML
+    fullText = stripHtmlTags(fullText);
 
     if (fullText.length < 30) return { title, fullText: "", author: null, charCount: 0, error: "清洗后文本过短" };
 
+    // ── Author extraction ──
     let author: string | null = null;
     const authorEl = doc.querySelector(".author") || doc.querySelector("[class*='editor']") || doc.querySelector(".source");
     if (authorEl) {
@@ -164,13 +327,6 @@ async function extractArticleContent(
 
 // ── Helpers ──
 
-async function sha256(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
 function titleSimilarity(a: string, b: string): number {
   const bigrams = (s: string) => {
     const set = new Set<string>();
@@ -181,7 +337,7 @@ function titleSimilarity(a: string, b: string): number {
   const setB = bigrams(b);
   if (setA.size === 0 || setB.size === 0) return 0;
   let intersection = 0;
-  for (const bg of setA) if (setB.has(bg)) intersection++;
+  for (const bg of Array.from(setA)) if (setB.has(bg)) intersection++;
   return intersection / (setA.size + setB.size - intersection);
 }
 
@@ -313,7 +469,7 @@ export async function POST(request: Request) {
           }
 
           // Hash dedup (in-memory check, no DB query)
-          const urlHash = await sha256(article.url);
+          const urlHash = hashUrl(article.url);
           if (existingHashes.has(urlHash)) {
             skipReasons["Hash重复"] = (skipReasons["Hash重复"] || 0) + 1;
             skipped++;

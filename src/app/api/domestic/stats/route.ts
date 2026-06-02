@@ -3,6 +3,19 @@ import { createClient } from "@/lib/supabase/server";
 import { segmentChinese, countCharFrequency } from "@/lib/domestic/chinese-segmenter";
 import { STOPWORDS_ZH } from "@/lib/stopwords-zh";
 
+// ── Module-level constants (avoid per-request allocation) ──
+
+const CONNECTIVES = new Set([
+  "因此", "然而", "但是", "所以", "因为", "由于", "虽然", "不过", "而且", "并且",
+  "同时", "此外", "另外", "总之", "由此可见", "综上所述", "换句话说", "具体来说",
+  "首先", "其次", "最后", "一方面", "另一方面", "不仅", "而且", "既", "又",
+  "无论", "不论", "只要", "只有", "除非", "即使", "尽管", "不管", "既然",
+  "于是", "从而", "进而", "继而", "随后", "接着", "然后", "之前", "之后",
+  "相反", "反之", "否则", "不然", "要不然", "倘若", "假如", "如果", "假设",
+]);
+
+const SENTENCE_END = /[。！？；\n]/g;
+
 /**
  * GET /api/domestic/stats?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
  * Aggregate statistics for domestic media articles.
@@ -37,6 +50,9 @@ export async function GET(request: Request) {
       totalArticles: 0, mediaDistribution: [], dateDistribution: [],
       avgWordCount: 0, sentimentDistribution: [], topWords: [],
       topChars: [], topBigrams: [], ttr: 0, sttr: 0, lexicalDensity: 0,
+      avgWordLength: 0, wordLengthDist: { mono: 0, bi: 0, tri: 0, multi: 0 },
+      sentenceMetrics: { avgLength: 0, stdDev: 0, count: 0, histogram: [] },
+      readabilityIndex: 0, connectiveDensity: 0, topTrigrams: [],
     });
   }
 
@@ -87,23 +103,13 @@ export async function GET(request: Request) {
   let totalWordLength = 0;
   let totalWordCount = 0;
   const wordLengthDist = { mono: 0, bi: 0, tri: 0, multi: 0 }; // 1, 2, 3, 4+ chars
-
-  // Connective words (连接词)
-  const CONNECTIVES = new Set([
-    "因此", "然而", "但是", "所以", "因为", "由于", "虽然", "不过", "而且", "并且",
-    "同时", "此外", "另外", "总之", "由此可见", "综上所述", "换句话说", "具体来说",
-    "首先", "其次", "最后", "一方面", "另一方面", "不仅", "而且", "既", "又",
-    "无论", "不论", "只要", "只有", "除非", "即使", "尽管", "不管", "既然",
-    "于是", "从而", "进而", "继而", "随后", "接着", "然后", "之前", "之后",
-    "相反", "反之", "否则", "不然", "要不然", "倘若", "假如", "如果", "假设",
-  ]);
   let connectiveCount = 0;
-
-  // Chinese sentence-ending punctuation
-  const SENTENCE_END = /[。！？；\n]/g;
+  let totalTokens = 0;
 
   for (const a of textSamples ?? []) {
     if (!a.full_text) continue;
+
+    totalTokens += a.full_text.length;
 
     // Character frequency
     const cf = countCharFrequency(a.full_text);
@@ -136,15 +142,24 @@ export async function GET(request: Request) {
       if (CONNECTIVES.has(w)) connectiveCount++;
     }
 
-    // Bigrams
+    // Bigrams (word-level, with quality filters)
     for (let i = 0; i < filtered.length - 1; i++) {
-      const bg = filtered[i] + filtered[i + 1];
+      const w1 = filtered[i], w2 = filtered[i + 1];
+      const bg = w1 + w2;
+      // Filter: no pure digits, no punctuation-only, reasonable length, no stopwords at boundary
+      if (/^\d+$/.test(bg)) continue;
+      if (bg.length < 3 || bg.length > 12) continue;
+      if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2)) continue;
       bigramFreq.set(bg, (bigramFreq.get(bg) || 0) + 1);
     }
 
-    // Trigrams
+    // Trigrams (word-level, with quality filters)
     for (let i = 0; i < filtered.length - 2; i++) {
-      const tg = filtered[i] + filtered[i + 1] + filtered[i + 2];
+      const w1 = filtered[i], w2 = filtered[i + 1], w3 = filtered[i + 2];
+      const tg = w1 + w2 + w3;
+      if (/^\d+$/.test(tg)) continue;
+      if (tg.length < 4 || tg.length > 15) continue;
+      if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2) || STOPWORDS_ZH.has(w3)) continue;
       trigramFreq.set(tg, (trigramFreq.get(tg) || 0) + 1);
     }
   }
@@ -158,10 +173,12 @@ export async function GET(request: Request) {
     .sort((a, b) => b.count - a.count).slice(0, 30);
 
   const topBigrams = Array.from(bigramFreq.entries())
+    .filter(([, count]) => count >= 2) // filter single-occurrence noise
     .map(([bigram, count]) => ({ bigram, count }))
     .sort((a, b) => b.count - a.count).slice(0, 20);
 
   const topTrigrams = Array.from(trigramFreq.entries())
+    .filter(([, count]) => count >= 2)
     .map(([trigram, count]) => ({ trigram, count }))
     .sort((a, b) => b.count - a.count).slice(0, 20);
 
@@ -183,7 +200,6 @@ export async function GET(request: Request) {
 
   // Lexical density
   const contentWords = allWords.length;
-  const totalTokens = (textSamples ?? []).reduce((sum, a) => sum + (a.full_text?.length || 0), 0);
   const lexicalDensity = totalTokens > 0 ? contentWords / totalTokens : 0;
 
   // Average word length (chars per word)
