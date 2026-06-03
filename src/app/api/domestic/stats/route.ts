@@ -34,16 +34,29 @@ export async function GET(request: Request) {
   // Phase 1: Basic stats (no full_text, lightweight)
   let baseQuery = supabase
     .from("articles")
-    .select("id, media, publish_date, word_count, metadata")
+    .select("id, media, publish_date, word_count, metadata, language, title")
     .eq("source", "domestic_media")
     .order("publish_date", { ascending: false });
 
   if (dateFrom) baseQuery = baseQuery.gte("publish_date", dateFrom);
   if (dateTo) baseQuery = baseQuery.lte("publish_date", dateTo);
 
-  const { data: articles, error } = await baseQuery.limit(500);
+  const { data: rawArticles, error } = await baseQuery.limit(500);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Language filter: exclude non-Chinese articles
+  // Primary: filter by language field; Fallback: detect English titles
+  const articles = (rawArticles ?? []).filter((a) => {
+    if (a.language && a.language !== "zh") return false;
+    // Fallback: if title is >80% ASCII letters, likely English
+    const t = a.title ?? "";
+    if (t.length > 10) {
+      const asciiLetters = (t.match(/[a-zA-Z]/g) ?? []).length;
+      if (asciiLetters / t.length > 0.8) return false;
+    }
+    return true;
+  });
 
   if (!articles || articles.length === 0) {
     return NextResponse.json({
@@ -86,11 +99,22 @@ export async function GET(request: Request) {
     .map(([polarity, count]) => ({ polarity, count }));
 
   // Phase 2: Word analysis (fetch full_text for limited subset)
+  // Re-fetch with language field for content-level filtering
   const sampleIds = articles.slice(0, 100).map((a) => a.id);
-  const { data: textSamples } = await supabase
+  const { data: rawTextSamples } = await supabase
     .from("articles")
-    .select("full_text")
+    .select("full_text, language")
     .in("id", sampleIds);
+
+  // Content-level filter: exclude articles where <50% chars are Chinese
+  const CHINESE_CHAR_RE = /[一-鿿]/g;
+  const textSamples = (rawTextSamples ?? []).filter((a) => {
+    if (!a.full_text) return false;
+    if (a.language && a.language !== "zh") return false;
+    const chineseCount = (a.full_text.match(CHINESE_CHAR_RE) ?? []).length;
+    const totalCount = a.full_text.replace(/\s/g, "").length;
+    return totalCount > 0 && chineseCount / totalCount > 0.5;
+  });
 
   const wordFreq = new Map<string, number>();
   const bigramFreq = new Map<string, number>();
