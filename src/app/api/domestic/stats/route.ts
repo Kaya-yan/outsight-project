@@ -16,6 +16,12 @@ const CONNECTIVES = new Set([
 
 const SENTENCE_END = /[。！？；\n]/g;
 
+/** Chinese character range — safe to reuse with .match() which resets lastIndex */
+const CHINESE_CHAR_RE = /[一-鿿]/g;
+
+/** Punctuation and special symbols (shared by word/bigram/trigram filters) */
+const PUNCT_RE = /[，。！？；：""''（）【】《》、·—…　@#$%^&*<>\/\\|`~_+=\-]/;
+
 /**
  * GET /api/domestic/stats?dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
  * Aggregate statistics for domestic media articles.
@@ -46,14 +52,17 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Language filter: exclude non-Chinese articles
-  // Primary: filter by language field; Fallback: detect English titles
+  // Primary: filter by language field; Fallback: detect English by title character ratio
   const articles = (rawArticles ?? []).filter((a) => {
     if (a.language && a.language !== "zh") return false;
-    // Fallback: if title is >80% ASCII letters, likely English
+    // Fallback: if title has no Chinese chars and is mostly ASCII, likely English
     const t = a.title ?? "";
-    if (t.length > 10) {
-      const asciiLetters = (t.match(/[a-zA-Z]/g) ?? []).length;
-      if (asciiLetters / t.length > 0.8) return false;
+    if (t.length >= 4) {
+      const hasChinese = (t.match(CHINESE_CHAR_RE) ?? []).length > 0;
+      if (!hasChinese) {
+        const asciiLetters = (t.match(/[a-zA-Z\s]/g) ?? []).length;
+        if (asciiLetters / t.length > 0.7) return false;
+      }
     }
     return true;
   });
@@ -107,7 +116,6 @@ export async function GET(request: Request) {
     .in("id", sampleIds);
 
   // Content-level filter: exclude articles where <50% chars are Chinese
-  const CHINESE_CHAR_RE = /[一-鿿]/g;
   const textSamples = (rawTextSamples ?? []).filter((a) => {
     if (!a.full_text) return false;
     if (a.language && a.language !== "zh") return false;
@@ -130,9 +138,7 @@ export async function GET(request: Request) {
   let connectiveCount = 0;
   let totalTokens = 0;
 
-  for (const a of textSamples ?? []) {
-    if (!a.full_text) continue;
-
+  for (const a of textSamples) {
     totalTokens += a.full_text.length;
 
     // Character frequency
@@ -153,7 +159,7 @@ export async function GET(request: Request) {
       // Filter words containing digits (年份/日期/数字串不应参与搭配)
       if (/\d/.test(w)) continue;
       // Filter words containing punctuation or special symbols
-      if (/[，。！？；：""''（）【】《》、·—…　@#$%^&*<>\/\\|`~_+=]/.test(w)) continue;
+      if (PUNCT_RE.test(w)) continue;
       wordFreq.set(w, (wordFreq.get(w) || 0) + 1);
       filtered.push(w);
       allWords.push(w);
@@ -176,7 +182,7 @@ export async function GET(request: Request) {
       const bg = w1 + w2;
       // Filter: no digits, no punctuation, reasonable length, no stopwords at boundary
       if (/\d/.test(bg)) continue;
-      if (/[，。！？；：""''（）【】《》、·—…]/.test(bg)) continue;
+      if (PUNCT_RE.test(bg)) continue;
       if (bg.length < 3 || bg.length > 12) continue;
       if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2)) continue;
       bigramFreq.set(bg, (bigramFreq.get(bg) || 0) + 1);
@@ -188,7 +194,7 @@ export async function GET(request: Request) {
       const tg = w1 + w2 + w3;
       // Filter: no digits, no punctuation, tightened length 6-12
       if (/\d/.test(tg)) continue;
-      if (/[，。！？；：""''（）【】《》、·—…]/.test(tg)) continue;
+      if (PUNCT_RE.test(tg)) continue;
       if (tg.length < 6 || tg.length > 12) continue;
       if (STOPWORDS_ZH.has(w1) || STOPWORDS_ZH.has(w2) || STOPWORDS_ZH.has(w3)) continue;
       trigramFreq.set(tg, (trigramFreq.get(tg) || 0) + 1);

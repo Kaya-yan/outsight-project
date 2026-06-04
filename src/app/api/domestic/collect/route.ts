@@ -500,6 +500,12 @@ export async function POST(request: Request) {
 
           // Insert
           send({ log: `  正在入库 (${extracted.charCount}字)...` });
+
+          // Auto-detect language: check Chinese character ratio in content
+          const chineseChars = (extracted.fullText.match(/[一-鿿]/g) ?? []).length;
+          const totalChars = extracted.fullText.replace(/\s/g, "").length;
+          const detectedLang = totalChars > 0 && chineseChars / totalChars > 0.5 ? "zh" : "en";
+
           const insertData = {
             title: extracted.title || article.title,
             url: article.url,
@@ -507,7 +513,7 @@ export async function POST(request: Request) {
             source: "domestic_media",
             media: article.mediaName,
             source_type: adapter.sourceType,
-            language: "zh" as const,
+            language: detectedLang,
             publish_date: article.date,
             full_text: extracted.fullText,
             full_text_status: "complete" as const,
