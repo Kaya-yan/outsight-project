@@ -284,7 +284,7 @@ export default function CodingWorkspacePage() {
                 id="article-content"
                 className="text-sm leading-relaxed text-[#2D3436] whitespace-pre-wrap"
               >
-                {article.content || article.full_text || "暂无正文内容"}
+                {article.full_text || article.content || "暂无正文内容"}
               </div>
             </CardContent>
           </Card>
