@@ -7,7 +7,7 @@ import { fetchNewsApiArticles } from "@/lib/newsapi-client";
 import { batchGuardCheck } from "@/lib/insert-guard";
 import { discoverArticles } from "@/lib/search-engine-client";
 import { expandSearchQueries, type KeywordTier, MEDIA_SEARCH_DOMAINS } from "@/lib/keyword-expander";
-import { TIER_1_COMBOS } from "@/lib/gdelt-keywords";
+import { TIER_1_COMBOS, TIER_2_COMBOS } from "@/lib/gdelt-keywords";
 import { autoPeriod } from "@/lib/time-filter";
 
 // ============================================================
@@ -165,15 +165,16 @@ export async function POST(request: Request) {
     }
 
     // ============================================================
-    // Source 3: GDELT (all 6 outlets × 5 periods × Tier 1 combos)
+    // Source 3: GDELT (all 6 outlets × 5 periods × Tier 1 + Tier 2 combos)
     // ============================================================
-    const gdeltTotalQueries = ALL_PERIODS.length * TIER_1_COMBOS.length;
-    console.log(`[Crawl] 开始请求 GDELT (${ALL_PERIODS.length} 时段 × 全部6媒体 × ${TIER_1_COMBOS.length} 关键词 = ${gdeltTotalQueries} 次查询)`);
+    const GDELT_COMBOS = [...TIER_1_COMBOS, ...TIER_2_COMBOS];
+    const gdeltTotalQueries = ALL_PERIODS.length * GDELT_COMBOS.length;
+    console.log(`[Crawl] 开始请求 GDELT (${ALL_PERIODS.length} 时段 × 全部6媒体 × ${GDELT_COMBOS.length} 关键词 = ${gdeltTotalQueries} 次查询)`);
 
     let gdeltQueryCount = 0;
     for (const period of ALL_PERIODS) {
-      for (let ci = 0; ci < TIER_1_COMBOS.length; ci++) {
-        const combo = TIER_1_COMBOS[ci];
+      for (let ci = 0; ci < GDELT_COMBOS.length; ci++) {
+        const combo = GDELT_COMBOS[ci];
         gdeltQueryCount++;
         const label = `[${period.value}] ${combo.label}`;
         console.log(`[Crawl] GDELT [${gdeltQueryCount}/${gdeltTotalQueries}] ${label}`);
@@ -194,7 +195,7 @@ export async function POST(request: Request) {
         console.log(`[Crawl] 当前累计 ${allArticles.length} 篇 (进度 ${progress}%)`);
 
         // Rate limit: 1500ms between queries
-        const isLast = period === ALL_PERIODS[ALL_PERIODS.length - 1] && ci === TIER_1_COMBOS.length - 1;
+        const isLast = period === ALL_PERIODS[ALL_PERIODS.length - 1] && ci === GDELT_COMBOS.length - 1;
         if (!isLast) {
           await new Promise((r) => setTimeout(r, 1500));
         }
@@ -202,13 +203,13 @@ export async function POST(request: Request) {
     }
 
     // ============================================================
-    // Source 4: Search Engine Discovery (all 6 media)
+    // Source 4: Search Engine Discovery (all 6 media, all 3 tiers)
     // ============================================================
     console.log(`[Crawl] 开始搜索引擎发现...`);
-    const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy"];
+    const searchTiers: KeywordTier[] = ["tier1_core", "tier2_policy", "tier3_issues"];
     const searchMedia = ALL_MEDIA.map((m) => m.name);
     const searchQueries = expandSearchQueries(searchTiers, searchMedia);
-    console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.length}媒体)`);
+    console.log(`[Crawl] 搜索层: ${searchQueries.length} 个查询 (${searchTiers.join(", ")} × ${searchMedia.length} 媒体)`);
 
     try {
       const { results, engineStats } = await discoverArticles({

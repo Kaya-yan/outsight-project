@@ -55,7 +55,10 @@ export async function POST(request: Request) {
       newStatus = "partial";
     }
 
-    console.log(`[Extract] Article ${articleId}: status=${newStatus}, words=${result.wordCount}, paywall=${paywall.isPaywalled}, error=${result.error ?? "none"}`);
+    console.log(`[Extract] Article ${articleId}: status=${newStatus}, words=${result.wordCount}, strategy=${result.extractionStrategy}, paywall=${paywall.isPaywalled}, error=${result.error ?? "none"}`);
+
+    // Merge extraction_strategy into existing metadata
+    const existingMeta = (article.metadata as Record<string, unknown>) ?? {};
 
     const updateData: Record<string, unknown> = {
       content: result.content ?? result.fullText ?? undefined,
@@ -64,6 +67,10 @@ export async function POST(request: Request) {
       word_count: result.wordCount ?? undefined,
       full_text_status: newStatus,
       content_fetched_at: new Date().toISOString(),
+      metadata: {
+        ...existingMeta,
+        extraction_strategy: result.extractionStrategy,
+      },
     };
 
     // Update article status based on extraction result
@@ -79,6 +86,7 @@ export async function POST(request: Request) {
       success: true,
       status: newStatus,
       wordCount: result.wordCount,
+      extractionStrategy: result.extractionStrategy,
       paywall: paywall.isPaywalled,
       matchedKeywords: paywall.matchedKeywords,
     });

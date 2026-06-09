@@ -13,6 +13,8 @@ export interface ExtractionResult {
   publishDate: string | null;
   /** Word count of fullText */
   wordCount: number | null;
+  /** Which extraction strategy produced the result */
+  extractionStrategy: string;
   /** Error message if extraction failed */
   error?: string;
 }
@@ -90,7 +92,7 @@ export async function extractContent(url: string, options?: {
     const res = await fetch(url, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; OutSight/1.0; Academic Research Tool; +https://outsight.app)",
+          "Mozilla/5.0 (compatible; OutSight/2.0; Academic Research Tool; +https://outsight.app)",
         "Accept": "text/html,application/xhtml+xml",
         "Accept-Language": "en-US,en;q=0.9",
       },
@@ -99,12 +101,12 @@ export async function extractContent(url: string, options?: {
     });
 
     if (!res.ok) {
-      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: `HTTP ${res.status}` };
+      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: `HTTP ${res.status}` };
     }
 
     const contentType = res.headers.get("content-type") ?? "";
     if (!contentType.includes("text/html") && !contentType.includes("application/xhtml")) {
-      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: `non-HTML content-type: ${contentType}` };
+      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: `non-HTML content-type: ${contentType}` };
     }
 
     // Read response body
@@ -115,18 +117,177 @@ export async function extractContent(url: string, options?: {
         html = html.slice(0, maxBytes);
       }
     } catch {
-      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: "failed to read response body" };
+      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: "failed to read response body" };
     }
 
     if (html.length < 200) {
-      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: "response too short" };
+      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: "response too short" };
     }
 
-    // Parse with JSDOM + Readability
+    // Parse with JSDOM
     const dom = new JSDOM(html, { url });
     const doc = dom.window.document;
 
-    // Remove noisy elements before Readability
+    // ── Strategy 1: Readability ──
+    const readabilityResult = tryReadability(doc, url);
+    if (readabilityResult) {
+      return readabilityResult;
+    }
+
+    // ── Strategy 2: JSON-LD articleBody ──
+    const jsonLdResult = tryJsonLdArticleBody(doc, url);
+    if (jsonLdResult) {
+      return jsonLdResult;
+    }
+
+    // ── Strategy 3: Jina AI Reader (external service) ──
+    const jinaResult = await tryJinaReader(url);
+    if (jinaResult) {
+      return jinaResult;
+    }
+
+    // ── Strategy 4: Archive.today fallback ──
+    const archiveResult = await tryArchiveToday(url);
+    if (archiveResult) {
+      return archiveResult;
+    }
+
+    // ── All strategies failed ──
+    return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: "all extraction strategies failed" };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown error";
+    return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, extractionStrategy: "none", error: msg };
+  }
+}
+
+// ── Strategy implementations ──
+
+const FAILED_RESULT = null; // sentinel for "try next strategy"
+
+function tryReadability(doc: Document, url: string): ExtractionResult | null {
+  // Clone doc to avoid mutation issues with subsequent strategies
+  const clone = doc.cloneNode(true) as Document;
+  for (const tag of ["script", "style", "noscript", "iframe", "nav", "footer"]) {
+    clone.querySelectorAll(tag).forEach((el) => el.remove());
+  }
+
+  const readability = new Readability(clone);
+  const parsed = readability.parse();
+
+  if (!parsed) return FAILED_RESULT;
+
+  let content = cleanHtml(parsed.content ?? "");
+  let fullText = htmlToPlainText(content);
+
+  if (!fullText || fullText.length < 100) return FAILED_RESULT;
+
+  fullText = cleanText(stripHtmlTags(fullText));
+
+  const { author, date } = extractMeta(doc);
+  const wordCount = fullText.split(/\s+/).filter(Boolean).length;
+
+  return {
+    content,
+    fullText,
+    author: author ?? null,
+    publishDate: date ? formatDate(date) : null,
+    wordCount,
+    extractionStrategy: "readability",
+  };
+}
+
+function tryJsonLdArticleBody(doc: Document, url: string): ExtractionResult | null {
+  try {
+    const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
+    for (const s of Array.from(scripts)) {
+      const json = JSON.parse(s.textContent || "{}");
+      const items: Record<string, unknown>[] = Array.isArray(json) ? json : [json];
+
+      for (const obj of items) {
+        if (!obj || typeof obj !== "object") continue;
+        const articleBody = obj.articleBody;
+        if (typeof articleBody === "string" && articleBody.length >= 100) {
+          const fullText = cleanText(stripHtmlTags(articleBody));
+          if (fullText.length < 50) continue;
+
+          const author = typeof obj.author === "string"
+            ? obj.author
+            : (obj.author as Record<string, unknown>)?.name as string | undefined ?? null;
+          const date = (obj.datePublished ?? obj.dateCreated) as string | undefined ?? null;
+          const wordCount = fullText.split(/\s+/).filter(Boolean).length;
+
+          return {
+            content: null,
+            fullText,
+            author,
+            publishDate: date ? formatDate(date) : null,
+            wordCount,
+            extractionStrategy: "json-ld",
+          };
+        }
+      }
+    }
+  } catch { /* JSON-LD parse failure is non-fatal */ }
+  return FAILED_RESULT;
+}
+
+async function tryJinaReader(url: string): Promise<ExtractionResult | null> {
+  try {
+    const jinaUrl = `https://r.jina.ai/${url}`;
+    const res = await fetch(jinaUrl, {
+      headers: {
+        "Accept": "text/plain",
+        "User-Agent": "OutSight/2.0 (Academic Research Tool)",
+      },
+      signal: AbortSignal.timeout(20000),
+      redirect: "follow",
+    });
+
+    if (!res.ok) return FAILED_RESULT;
+
+    const text = await res.text();
+    if (!text || text.length < 100) return FAILED_RESULT;
+
+    // Jina returns plain text/markdown; clean it
+    const fullText = cleanText(stripHtmlTags(text));
+    if (fullText.length < 50) return FAILED_RESULT;
+
+    const wordCount = fullText.split(/\s+/).filter(Boolean).length;
+
+    return {
+      content: null,
+      fullText,
+      author: null,
+      publishDate: null,
+      wordCount,
+      extractionStrategy: "jina",
+    };
+  } catch {
+    return FAILED_RESULT;
+  }
+}
+
+async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
+  try {
+    const archiveUrl = `https://archive.ph/newest/${url}`;
+    const res = await fetch(archiveUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; OutSight/2.0; Academic Research Tool)",
+        "Accept": "text/html",
+      },
+      signal: AbortSignal.timeout(20000),
+      redirect: "follow",
+    });
+
+    if (!res.ok) return FAILED_RESULT;
+
+    const html = await res.text();
+    if (!html || html.length < 500) return FAILED_RESULT;
+
+    const dom = new JSDOM(html, { url: archiveUrl });
+    const doc = dom.window.document;
+
+    // Try Readability on the archived page
     for (const tag of ["script", "style", "noscript", "iframe", "nav", "footer"]) {
       doc.querySelectorAll(tag).forEach((el) => el.remove());
     }
@@ -134,40 +295,27 @@ export async function extractContent(url: string, options?: {
     const readability = new Readability(doc);
     const parsed = readability.parse();
 
-    let content: string | null = null;
-    let fullText: string | null = null;
+    if (!parsed) return FAILED_RESULT;
 
-    if (parsed) {
-      // Clean HTML: remove social embeds, ad blocks
-      content = cleanHtml(parsed.content ?? "");
-      // Convert cleaned HTML to structured plain text
-      fullText = htmlToPlainText(content);
-    }
+    let content = cleanHtml(parsed.content ?? "");
+    let fullText = htmlToPlainText(content);
 
-    // Fallback: if Readability gives nothing, use body text
-    if (!fullText || fullText.length < 100) {
-      fullText = (doc.body.textContent ?? "").replace(/\s{3,}/g, "\n\n").trim().slice(0, 50000);
-    }
+    if (!fullText || fullText.length < 100) return FAILED_RESULT;
 
-    if (!fullText || fullText.length < 50) {
-      return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: "insufficient text extracted" };
-    }
-
-    // Final text cleaning: copyright truncation + whitespace normalization + HTML strip
     fullText = cleanText(stripHtmlTags(fullText));
 
     const { author, date } = extractMeta(doc);
     const wordCount = fullText.split(/\s+/).filter(Boolean).length;
 
     return {
-      content: content ?? fullText,
+      content,
       fullText,
       author: author ?? null,
       publishDate: date ? formatDate(date) : null,
       wordCount,
+      extractionStrategy: "archive",
     };
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown error";
-    return { content: null, fullText: null, author: null, publishDate: null, wordCount: null, error: msg };
+  } catch {
+    return FAILED_RESULT;
   }
 }

@@ -52,7 +52,7 @@ export const ACTIONS = [
   "leadership",
 ] as const;
 
-// Curated keyword combinations — 10 Tier 1 + 10 Tier 2 = 20 total
+// Curated keyword combinations — 10 Tier 1 + 20 Tier 2 = 30 total
 export const KEYWORD_COMBOS: KeywordCombo[] = [
   // === Tier 1: Core high-signal combinations (10) ===
   { query: '"Xi Jinping" AND modernization',                        label: "Xi Jinping: modernization",                        tier: 1 },
@@ -66,7 +66,8 @@ export const KEYWORD_COMBOS: KeywordCombo[] = [
   { query: '"China" AND "national security"',                       label: "China: national security",                        tier: 1 },
   { query: '"China" AND "technology innovation"',                   label: "China: technology innovation",                    tier: 1 },
 
-  // === Tier 2: Broadening / exploratory combinations (10) ===
+  // === Tier 2: Broadening / exploratory combinations (20) ===
+  // Original Tier 2
   { query: '"Xi Jinping" AND development',                          label: "Xi Jinping: development",                         tier: 2 },
   { query: '"Xi Jinping" AND "Belt and Road"',                      label: "Xi Jinping: Belt and Road",                       tier: 2 },
   { query: '"Xi Jinping" AND "foreign policy"',                     label: "Xi Jinping: foreign policy",                      tier: 2 },
@@ -77,6 +78,24 @@ export const KEYWORD_COMBOS: KeywordCombo[] = [
   { query: '"Chinese" economic growth',                             label: "Chinese: economic growth",                        tier: 2 },
   { query: '"Beijing" modernization',                               label: "Beijing: modernization",                          tier: 2 },
   { query: '"Chinese" discourse',                                   label: "Chinese: discourse",                              tier: 2 },
+
+  // Economy & Trade
+  { query: '"China" AND economy',                                   label: "China: economy",                                  tier: 2 },
+  { query: '"China" AND trade',                                     label: "China: trade",                                    tier: 2 },
+  { query: '"China" AND tariff',                                    label: "China: tariff",                                   tier: 2 },
+  { query: '"China" AND "supply chain"',                            label: "China: supply chain",                             tier: 2 },
+  { query: '"China" AND "economic reform"',                         label: "China: economic reform",                          tier: 2 },
+
+  // US-China Relations
+  { query: '"US-China" OR "Sino-American"',                         label: "US-China / Sino-American",                        tier: 2 },
+  { query: '"China" AND "United States" AND relations',             label: "China-US relations",                              tier: 2 },
+
+  // Technology & Competition
+  { query: '"China" AND technology AND competition',                label: "China: tech competition",                         tier: 2 },
+  { query: '"China" AND AI OR artificial intelligence',             label: "China: AI / artificial intelligence",             tier: 2 },
+
+  // Global South & Climate
+  { query: '"China" AND "global south"',                            label: "China: global south",                             tier: 2 },
 ];
 
 /** Get combos by tier */
