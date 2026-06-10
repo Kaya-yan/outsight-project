@@ -32,9 +32,9 @@ export async function getDashboardStats(client: Client): Promise<DashboardStats>
     recentActivityRes,
   ] = await Promise.all([
     client.from("articles").select("*", { count: "exact", head: true }).eq("is_archived", false),
-    client.from("articles").select("status").eq("is_archived", false),
-    client.from("articles").select("media").eq("is_archived", false),
-    client.from("articles").select("period").eq("is_archived", false).not("period", "is", null),
+    client.from("articles").select("status").eq("is_archived", false).limit(50000),
+    client.from("articles").select("media").eq("is_archived", false).limit(50000),
+    client.from("articles").select("period").eq("is_archived", false).not("period", "is", null).limit(50000),
     client.from("articles")
       .select("id, title, media, status, publish_date, created_at")
       .eq("is_archived", false)

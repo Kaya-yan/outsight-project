@@ -13,8 +13,8 @@ export async function GET() {
     articlesRes,
     roundsRes,
   ] = await Promise.all([
-    supabase.from("annotations").select("node_id, coder_id, confidence"),
-    supabase.from("articles").select("media, period, status").eq("is_archived", false),
+    supabase.from("annotations").select("node_id, coder_id, confidence").limit(50000),
+    supabase.from("articles").select("media, period, status").eq("is_archived", false).limit(50000),
     listRounds(supabase),
   ]);
 
