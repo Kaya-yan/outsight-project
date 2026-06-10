@@ -304,6 +304,8 @@ export default function ComparePage() {
             level1Rate: 0,
             level2Rate: 0,
             kappa: task.kappa ?? 0,
+            kappaL1: 0,
+            kappaL2: 0,
             matchedCount: 0,
             totalPairs: 0,
             coderAOnly: 0,

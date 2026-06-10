@@ -41,7 +41,8 @@ export async function runPreReadPipeline(
   if (sentiment) hint = hint ? `${hint} | ${sentiment.sentiment}` : sentiment.sentiment;
   updates.ai_framework_hint = hint || undefined;
   if (framework) updates.ai_evidence_quotes = framework.evidence;
-  updates.status = "已预读";
+  // Single atomic update — skip intermediate "已预读" to avoid partial failure window
+  updates.status = "待编码";
 
   const meta = {} as Record<string, unknown>;
   if (terms) meta.ai_terms = terms;
@@ -52,6 +53,9 @@ export async function runPreReadPipeline(
   if (tone) meta.ai_tone = tone;
   if (Object.keys(meta).length > 0) updates.metadata = meta;
 
-  await updateArticle(supabase, articleId, updates);
-  await updateArticle(supabase, articleId, { status: "待编码" });
+  const { error } = await updateArticle(supabase, articleId, updates);
+  if (error) {
+    console.error(`[PreRead] 文章 ${articleId} 预读入库失败:`, error);
+    throw new Error(`预读入库失败: ${error}`);
+  }
 }

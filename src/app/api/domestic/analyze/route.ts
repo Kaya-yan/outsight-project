@@ -85,10 +85,13 @@ export async function POST(request: Request) {
 
       const results: Record<string, unknown> = {};
       const errors: Record<string, string | null> = {};
+
+      // Parallel execution with concurrency limit of 4 (avoid API rate limiting)
+      const CONCURRENCY = 4;
       let completed = 0;
 
-      for (const dim of DIMENSIONS) {
-        if (clientDisconnected) break;
+      async function runDim(dim: DimDef) {
+        if (clientDisconnected) return;
 
         send({ phase: "analyzing", dimension: dim.key, current: completed + 1, total: DIMENSIONS.length });
         const dimStart = Date.now();
@@ -97,7 +100,6 @@ export async function POST(request: Request) {
           const result = await dim.fn(article.full_text);
           const dimMs = Date.now() - dimStart;
           console.log(`[Analyze] ${dim.key}: status=${result.data ? "ok" : "failed"}, error=${result.error ?? "none"}, truncated=${result.truncated ?? false}, latency=${dimMs}ms`);
-          if (clientDisconnected) break;
 
           results[dim.key] = result.data;
           errors[dim.key] = result.error;
@@ -125,6 +127,13 @@ export async function POST(request: Request) {
             total: DIMENSIONS.length,
           });
         }
+      }
+
+      // Process dimensions in batches of CONCURRENCY
+      for (let i = 0; i < DIMENSIONS.length; i += CONCURRENCY) {
+        if (clientDisconnected) break;
+        const batch = DIMENSIONS.slice(i, i + CONCURRENCY);
+        await Promise.allSettled(batch.map((dim) => runDim(dim)));
       }
 
       // If client disconnected, skip saving

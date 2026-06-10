@@ -39,6 +39,9 @@ function buildQuery(filters: ArticleListFilters, page: number, pageSize: number)
   return `/api/articles?${params.toString()}`;
 }
 
+/** AbortController for cancelling in-flight requests on filter change */
+let abortController: AbortController | null = null;
+
 export const useArticleStore = create<ArticleStoreState>((set, get) => ({
   filters: {},
   page: 1,
@@ -84,17 +87,24 @@ export const useArticleStore = create<ArticleStoreState>((set, get) => ({
   clearSelection: () => set({ selectedIds: [] }),
 
   fetchArticles: async () => {
+    // Cancel previous in-flight request (race condition fix)
+    abortController?.abort();
+    abortController = new AbortController();
+
     const { filters, page, pageSize } = get();
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch(buildQuery(filters, page, pageSize));
+      const res = await fetch(buildQuery(filters, page, pageSize), {
+        signal: abortController.signal,
+      });
       const json = await res.json();
       if (res.ok) {
         set({ articles: json.data ?? [], total: json.total ?? 0 });
       } else {
         set({ error: json.error ?? "加载失败" });
       }
-    } catch {
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       set({ error: "网络连接失败" });
     } finally {
       set({ isLoading: false });

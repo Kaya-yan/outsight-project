@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { createClient } from "@/lib/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
+import type { User, Session, Subscription } from "@supabase/supabase-js";
 import type { Profile } from "@/types/database";
 
 interface AuthState {
@@ -8,6 +8,7 @@ interface AuthState {
   profile: Profile | null;
   session: Session | null;
   isLoading: boolean;
+  _subscription: Subscription | null;
 
   setUser: (user: User | null) => void;
   setProfile: (profile: Profile | null) => void;
@@ -15,6 +16,7 @@ interface AuthState {
   setLoading: (isLoading: boolean) => void;
 
   hydrate: () => Promise<void>;
+  cleanup: () => void;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -24,6 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   profile: null,
   session: null,
   isLoading: true,
+  _subscription: null,
 
   setUser: (user) => set({ user }),
   setProfile: (profile) => set({ profile }),
@@ -31,6 +34,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
 
   hydrate: async () => {
+    // Unsubscribe previous listener if hydrate() is called again
+    get()._subscription?.unsubscribe();
+
     const supabase = createClient();
     try {
       const {
@@ -54,8 +60,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false });
     }
 
-    // Subscribe to auth changes
-    supabase.auth.onAuthStateChange((event, session) => {
+    // Subscribe to auth changes and store subscription for cleanup
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "SIGNED_IN" && session) {
         set({ user: session.user, session });
         supabase
@@ -68,6 +74,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ user: null, profile: null, session: null });
       }
     });
+    set({ _subscription: subscription });
+  },
+
+  cleanup: () => {
+    get()._subscription?.unsubscribe();
+    set({ _subscription: null });
   },
 
   signOut: async () => {

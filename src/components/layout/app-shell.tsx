@@ -6,11 +6,12 @@ import { Sidebar } from "./sidebar";
 import { StatusBar } from "./status-bar";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { hydrate, isLoading } = useAuthStore();
+  const { hydrate, cleanup, isLoading } = useAuthStore();
 
   useEffect(() => {
     hydrate();
-  }, [hydrate]);
+    return () => cleanup();
+  }, [hydrate, cleanup]);
 
   if (isLoading) {
     return (
