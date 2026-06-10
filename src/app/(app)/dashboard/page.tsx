@@ -140,7 +140,7 @@ export default function DashboardPage() {
           <CardContent className="p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-sm font-medium text-[#2D3436]">语料矩阵</h3>
-              <span className="text-xs text-[#7F8A93]">6 媒体 × 5 时段</span>
+              <span className="text-xs text-[#7F8A93]">6 媒体 × 7 时段</span>
             </div>
             <MediaMatrix
               mini

@@ -50,7 +50,7 @@ function emptyStats(): GuardStats {
 
 /**
  * Pre-insert check for every article entering the database:
- * 1. Verify publish_date within research period (2022-10-01 to 2024-12-31)
+ * 1. Verify publish_date within research period (2022-10-01 to 2025-12-31)
  * 2. Compute URL hash and check for duplicates in the database
  *
  * Returns a GuardResult. Caller MUST skip insertion when passed === false.

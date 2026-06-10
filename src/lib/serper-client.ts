@@ -9,7 +9,7 @@
  * Env:  SERPER_API_KEY
  *
  * Uses Google's tbs (time-based search) parameter to restrict results
- * to the research period (2022-10-01 to 2024-12-31).
+ * to the research period (2022-10-01 to 2025-12-31).
  */
 
 import type { SearchQuery } from "./keyword-expander";
@@ -52,7 +52,7 @@ export async function searchSerper(
         q,
         num: Math.min(maxResults, 25),
         // tbs: cdr:1 = custom date range, cd_min/cd_max in MM/DD/YYYY
-        tbs: "cdr:1,cd_min:10/1/2022,cd_max:12/31/2024",
+        tbs: "cdr:1,cd_min:10/1/2022,cd_max:12/31/2025",
       }),
       signal: AbortSignal.timeout(15000),
     });

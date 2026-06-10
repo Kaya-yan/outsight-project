@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       query_params: {
         batches,
         batch_total: batchTotal,
-        scope: "全部6媒体 × 5时段(2022-2024) × 3数据源 + 搜索",
+        scope: "全部6媒体 × 7时段(2022-2025) × 3数据源 + 搜索",
       },
     });
 

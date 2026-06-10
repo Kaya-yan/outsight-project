@@ -180,7 +180,7 @@ export function SyncPanel({ onSyncComplete }: SyncPanelProps) {
             <span className="text-sm text-[#2D3436]">
               {jobStatus
                 ? `任务 ${jobStatus.job_id.slice(0, 8)}... (${jobStatus.status})`
-                : "6媒体 · 5时段(2022-2024) · 4数据源 · 仅元数据"}
+                : "6媒体 · 7时段(2022-2025) · 4数据源 · 仅元数据"}
             </span>
           </div>
           <Button

@@ -12,7 +12,7 @@ import { autoPeriod } from "@/lib/time-filter";
 import { isFirecrawlAvailable, discoverLinks } from "@/lib/firecrawl-client";
 
 // ============================================================
-// All 6 media outlets × 5 research periods
+// All 6 media outlets × 7 research periods (2022-2025)
 // ============================================================
 const ALL_MEDIA = [
   { name: "NYT", domains: "nytimes.com" },
@@ -172,7 +172,7 @@ export async function POST(request: Request) {
     }
 
     // ============================================================
-    // Source 3: GDELT (all 6 outlets × 5 periods × Tier 1 + Tier 2 combos)
+    // Source 3: GDELT (all 6 outlets × 7 periods × Tier 1 + Tier 2 combos)
     // ============================================================
     const GDELT_COMBOS = [...TIER_1_COMBOS, ...TIER_2_COMBOS];
     const gdeltTotalQueries = ALL_PERIODS.length * GDELT_COMBOS.length;

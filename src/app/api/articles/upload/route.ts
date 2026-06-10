@@ -52,7 +52,7 @@ export async function POST(request: Request) {
       const periodCheck = isWithinResearchPeriod(publishDate);
       if (!periodCheck.valid) {
         return NextResponse.json(
-          { error: `发布日期不在研究范围内 (2022-10-01 ~ 2024-12-31)` },
+          { error: `发布日期不在研究范围内 (2022-10-01 ~ 2025-12-31)` },
           { status: 400 },
         );
       }

@@ -9,7 +9,7 @@ type SplitMode = "year" | "quarter" | "halfyear";
 
 export function PeriodSplitter() {
   const [start, setStart] = useState("2022-10-01");
-  const [end, setEnd] = useState("2024-12-31");
+  const [end, setEnd] = useState("2025-12-31");
   const [mode, setMode] = useState<SplitMode>("quarter");
   const [results, setResults] = useState<string[]>([]);
 

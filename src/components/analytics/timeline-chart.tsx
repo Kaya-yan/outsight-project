@@ -4,17 +4,19 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend,
 } from "recharts";
+import { RESEARCH_PERIODS } from "@/lib/constants";
 
 interface TimelineChartProps {
   data: Record<string, Record<string, number>>; // media -> period -> count
 }
 
 export function TimelineChart({ data }: TimelineChartProps) {
-  const periods = ["2022.10-2023.03", "2023.04-2023.09", "2023.10-2024.03", "2024.04-2024.09", "2024.10-2024.12"];
+  const periods = RESEARCH_PERIODS.map((p) => p.value);
   const medias = Object.keys(data);
 
   const chartData = periods.map((period) => {
-    const row: Record<string, string | number> = { period: period.replace("202", "").slice(0, 5) };
+    // Compact label: "2022.10-2023.03" → "22.10", "2025.01-2025.06" → "25.01"
+    const row: Record<string, string | number> = { period: period.slice(2, 7) };
     for (const media of medias) {
       row[media] = data[media]?.[period] ?? 0;
     }
