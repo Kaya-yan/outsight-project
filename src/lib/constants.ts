@@ -39,6 +39,8 @@ export const RESEARCH_PERIODS = [
   { value: "2023.10-2024.03", label: "2023.10 - 2024.03" },
   { value: "2024.04-2024.09", label: "2024.04 - 2024.09" },
   { value: "2024.10-2024.12", label: "2024.10 - 2024.12" },
+  { value: "2025.01-2025.06", label: "2025.01 - 2025.06" },
+  { value: "2025.07-2025.12", label: "2025.07 - 2025.12" },
 ] as const;
 
 export const ARTICLE_STATUS_LABELS: Record<string, string> = {

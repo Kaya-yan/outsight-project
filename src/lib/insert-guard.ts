@@ -5,8 +5,9 @@ import { isWithinResearchPeriod } from "./time-filter";
 export type FilterReason =
   | "passed"
   | "duplicate_url"
-  | "out_of_date_range_before"
-  | "out_of_date_range_after"
+  | "date_too_old"
+  | "date_too_new"
+  | "date_in_future"
   | "missing_publish_date"
   | "unparseable_date"
   | "hash_error";
@@ -36,8 +37,9 @@ function emptyStats(): GuardStats {
     filtered: {
       passed: 0,
       duplicate_url: 0,
-      out_of_date_range_before: 0,
-      out_of_date_range_after: 0,
+      date_too_old: 0,
+      date_too_new: 0,
+      date_in_future: 0,
       missing_publish_date: 0,
       unparseable_date: 0,
       hash_error: 0,
@@ -92,9 +94,11 @@ export async function checkArticleBeforeInsert(
   }
 
   if (!periodCheck.valid) {
-    const isAfter = periodCheck.reason?.includes("after_research_period");
-    const reason: FilterReason = isAfter ? "out_of_date_range_after" : "out_of_date_range_before";
-    console.log(`[Guard] ${reason.toUpperCase()}: ${article.url.slice(0, 100)} — ${periodCheck.reason}`);
+    let reason: FilterReason;
+    if (periodCheck.reason?.startsWith("date_in_future")) reason = "date_in_future";
+    else if (periodCheck.reason?.startsWith("date_too_new")) reason = "date_too_new";
+    else reason = "date_too_old";
+    console.log(`[Guard] ${reason}: ${article.url.slice(0, 100)} — ${periodCheck.reason}`);
     return { passed: false, reason, detail: periodCheck.reason ?? "out of research period" };
   }
 
@@ -175,8 +179,10 @@ export async function batchGuardCheck(
     }
 
     if (!periodCheck.valid) {
-      const isAfter = periodCheck.reason?.includes("after_research_period");
-      const reason: FilterReason = isAfter ? "out_of_date_range_after" : "out_of_date_range_before";
+      let reason: FilterReason;
+      if (periodCheck.reason?.startsWith("date_in_future")) reason = "date_in_future";
+      else if (periodCheck.reason?.startsWith("date_too_new")) reason = "date_too_new";
+      else reason = "date_too_old";
       stats.filtered[reason]++;
       stats.details.push({ url: article.url, title: article.title, reason, detail: periodCheck.reason ?? "out of research period" });
       continue;

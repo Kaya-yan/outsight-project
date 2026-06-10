@@ -29,6 +29,8 @@ const ALL_PERIODS = [
   { value: "2023.10-2024.03", timespan: "20231001000000-20240331235959" },
   { value: "2024.04-2024.09", timespan: "20240401000000-20240930235959" },
   { value: "2024.10-2024.12", timespan: "20241001000000-20241231235959" },
+  { value: "2025.01-2025.06", timespan: "20250101000000-20250630235959" },
+  { value: "2025.07-2025.12", timespan: "20250701000000-20251231235959" },
 ];
 
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
 
   console.log(`[Crawl] ========================================`);
   console.log(`[Crawl] 后台采集开始: ${jobId}`);
-  console.log(`[Crawl] 范围: 全部6媒体 / 5时段(2022-2024) / 仅元数据`);
+  console.log(`[Crawl] 范围: 全部6媒体 / 7时段(2022-2025) / 仅元数据`);
   console.log(`[Crawl] ========================================`);
 
   // Mark job as running
@@ -349,7 +351,7 @@ export async function POST(request: Request) {
     console.log(`[Crawl] 任务完成: ${jobId}`);
     console.log(`[Crawl] 拉取 ${allArticles.length} 篇 (RSS/NewsAPI/GDELT/Search)`);
     console.log(`[Crawl] 新增入库 ${insertedCount} 篇 (转化率 ${conversionRate}%)`);
-    console.log(`[Crawl] 过滤详情: 重复${f.duplicate_url ?? 0} | 日期早${f.out_of_date_range_before ?? 0} | 日期晚${f.out_of_date_range_after ?? 0} | 日期缺失${f.missing_publish_date ?? 0} | 无法解析${f.unparseable_date ?? 0} | 哈希错误${f.hash_error ?? 0}`);
+    console.log(`[Crawl] 过滤详情: 重复${f.duplicate_url ?? 0} | 过旧${f.date_too_old ?? 0} | 过新${f.date_too_new ?? 0} | 未来日期${f.date_in_future ?? 0} | 日期缺失${f.missing_publish_date ?? 0} | 无法解析${f.unparseable_date ?? 0} | 哈希错误${f.hash_error ?? 0}`);
 
     // RSS feed health report (rss-aggregator pattern)
     const feedHealth = getFeedHealth();
@@ -399,8 +401,9 @@ export async function POST(request: Request) {
       },
       filterBreakdown: {
         duplicate_url: totalGuardStats.filtered.duplicate_url ?? 0,
-        out_of_date_range_before: totalGuardStats.filtered.out_of_date_range_before ?? 0,
-        out_of_date_range_after: totalGuardStats.filtered.out_of_date_range_after ?? 0,
+        date_too_old: totalGuardStats.filtered.date_too_old ?? 0,
+        date_too_new: totalGuardStats.filtered.date_too_new ?? 0,
+        date_in_future: totalGuardStats.filtered.date_in_future ?? 0,
         missing_publish_date: totalGuardStats.filtered.missing_publish_date ?? 0,
         unparseable_date: totalGuardStats.filtered.unparseable_date ?? 0,
         hash_error: totalGuardStats.filtered.hash_error ?? 0,

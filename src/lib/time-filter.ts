@@ -1,8 +1,11 @@
 import { RESEARCH_PERIODS } from "@/lib/constants";
 
-// Derived from RESEARCH_PERIODS: min start = 2022-10-01, max end = 2024-12-31
+// Research period boundaries — single source of truth
 export const RESEARCH_START_DATE = "2022-10-01";
-export const RESEARCH_END_DATE = "2024-12-31";
+export const RESEARCH_END_DATE = "2025-12-31";
+
+// Future date guard: reject articles dated more than 7 days in the future
+const FUTURE_DATE_BUFFER_MS = 7 * 24 * 60 * 60 * 1000;
 
 /**
  * Parse a period value like "2022.10-2023.03" into its date boundaries.
@@ -41,7 +44,8 @@ export function autoPeriod(publishDate: string | null | undefined): string | nul
 }
 
 /**
- * Check whether a publish_date falls within the research period [2022-10-01, 2024-12-31].
+ * Check whether a publish_date falls within the research period [2022-10-01, 2025-12-31].
+ * Also rejects dates more than 7 days in the future (data quality guard).
  *
  * Null/undefined/unparseable dates pass the check but return a warning reason
  * so callers can log the anomaly.
@@ -60,13 +64,19 @@ export function isWithinResearchPeriod(publishDate: string | null | undefined): 
   }
 
   const dateStr = d.toISOString().split("T")[0];
+  const now = new Date();
+  const futureLimit = new Date(now.getTime() + FUTURE_DATE_BUFFER_MS);
 
   if (dateStr < RESEARCH_START_DATE) {
-    return { valid: false, reason: `before_research_period: ${dateStr} < ${RESEARCH_START_DATE}` };
+    return { valid: false, reason: `date_too_old: ${dateStr} < ${RESEARCH_START_DATE}` };
   }
 
   if (dateStr > RESEARCH_END_DATE) {
-    return { valid: false, reason: `after_research_period: ${dateStr} > ${RESEARCH_END_DATE}` };
+    return { valid: false, reason: `date_too_new: ${dateStr} > ${RESEARCH_END_DATE}` };
+  }
+
+  if (d > futureLimit) {
+    return { valid: false, reason: `date_in_future: ${dateStr} is >7 days from now` };
   }
 
   return { valid: true };

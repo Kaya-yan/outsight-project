@@ -47,8 +47,8 @@ async function searchGoogle(
     cx: engineId,
     q,
     num: String(Math.min(maxResults, 10)),
-    // dateRestrict: d730 = last 2 years (covers 2024-2025; older results also returned without strict cutoff)
-    dateRestrict: "d730",
+    // dateRestrict: d1825 = last 5 years (covers full 2022-2025 research period)
+    dateRestrict: "d1825",
   });
 
   try {
@@ -135,7 +135,7 @@ async function searchBing(
     q,
     count: String(Math.min(maxResults, 50)),
     mkt: "en-US",
-    freshness: "Month", // Bing-specific: last month; for historical we accept broader results
+    // No freshness filter — allow full 2022-2025 range
   });
 
   try {
