@@ -12,6 +12,44 @@ interface RssFeed {
   url: string;
 }
 
+/** Per-feed health tracking (data-pipeline monitoring pattern) */
+interface FeedHealth {
+  url: string;
+  name: string;
+  lastSuccess: string | null;
+  lastFailure: string | null;
+  consecutiveFailures: number;
+  lastArticleDate: string | null;
+  totalArticles: number;
+}
+
+// In-memory feed health state (persists within a process lifetime)
+const feedHealthMap = new Map<string, FeedHealth>();
+
+export function getFeedHealth(): FeedHealth[] {
+  return Array.from(feedHealthMap.values());
+}
+
+function updateFeedHealth(url: string, name: string, success: boolean, articleDate?: string | null) {
+  let health = feedHealthMap.get(url);
+  if (!health) {
+    health = { url, name, lastSuccess: null, lastFailure: null, consecutiveFailures: 0, lastArticleDate: null, totalArticles: 0 };
+    feedHealthMap.set(url, health);
+  }
+
+  const now = new Date().toISOString();
+  if (success) {
+    health.lastSuccess = now;
+    health.consecutiveFailures = 0;
+    if (articleDate && (!health.lastArticleDate || articleDate > health.lastArticleDate)) {
+      health.lastArticleDate = articleDate;
+    }
+  } else {
+    health.lastFailure = now;
+    health.consecutiveFailures++;
+  }
+}
+
 // RSS feeds — BBC/Guardian free feeds + NYT/WSJ/Economist/Reuters topic feeds
 const FEEDS: RssFeed[] = [
   // BBC
@@ -155,23 +193,62 @@ export async function fetchRssArticles(): Promise<RssArticle[]> {
   const results: RssArticle[] = [];
 
   for (const feed of FEEDS) {
-    try {
-      const res = await fetch(feed.url, {
-        headers: { "User-Agent": "OutSight/1.0 (Academic Research Tool)" },
-        signal: AbortSignal.timeout(15000),
-      });
+    // Skip feeds with 5+ consecutive failures (circuit breaker pattern)
+    const health = feedHealthMap.get(feed.url);
+    if (health && health.consecutiveFailures >= 5) {
+      console.log(`[RSS] 跳过失效源 ${feed.name} (${feed.url}): 连续失败 ${health.consecutiveFailures} 次`);
+      continue;
+    }
 
-      if (!res.ok) continue;
+    let success = false;
+    let newestDate: string | null = null;
 
-      const xml = await res.text();
-      const items = parseRssXml(xml);
+    // Retry up to 2 times on transient failures
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(feed.url, {
+          headers: { "User-Agent": "OutSight/2.0 (Academic Research Tool)" },
+          signal: AbortSignal.timeout(15000),
+        });
 
-      for (const item of items) {
-        item.source = feed.name;
-        results.push(item);
+        if (!res.ok) {
+          console.log(`[RSS] ${feed.name} HTTP ${res.status} (attempt ${attempt + 1})`);
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
+          continue;
+        }
+
+        const xml = await res.text();
+        const items = parseRssXml(xml);
+
+        for (const item of items) {
+          item.source = feed.name;
+          results.push(item);
+          if (item.publish_date && (!newestDate || item.publish_date > newestDate)) {
+            newestDate = item.publish_date;
+          }
+        }
+
+        success = true;
+        console.log(`[RSS] ${feed.name}: ${items.length} 篇文章`);
+        break;
+      } catch (err) {
+        console.log(`[RSS] ${feed.name} 请求失败 (attempt ${attempt + 1}): ${err instanceof Error ? err.message : err}`);
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
       }
-    } catch {
-      // Skip failed feeds
+    }
+
+    updateFeedHealth(feed.url, feed.name, success, newestDate);
+    if (!success) {
+      console.log(`[RSS] ${feed.name} (${feed.url}): 采集失败`);
+    }
+  }
+
+  // Log unhealthy feeds
+  const unhealthy = Array.from(feedHealthMap.values()).filter((h) => h.consecutiveFailures >= 3);
+  if (unhealthy.length > 0) {
+    console.log(`[RSS] ⚠ 失效源 (${unhealthy.length}):`);
+    for (const h of unhealthy) {
+      console.log(`  - ${h.name} (${h.url}): 连续失败 ${h.consecutiveFailures} 次`);
     }
   }
 

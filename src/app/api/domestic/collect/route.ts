@@ -4,6 +4,7 @@ import { JSDOM } from "jsdom";
 import { cleanHtml, htmlToPlainText, cleanText, stripHtmlTags } from "@/lib/text-cleaner";
 import { getAdapter } from "@/lib/domestic/media-adapters";
 import { hashUrl } from "@/lib/dedup";
+import { discoverLinks, isFirecrawlAvailable } from "@/lib/firecrawl-client";
 
 /**
  * POST /api/domestic/collect
@@ -391,7 +392,18 @@ export async function POST(request: Request) {
 
           for (const pageUrl of adapter.listPages) {
             send({ log: `  请求: ${pageUrl}` });
-            const links = await fetchArticleLinks(pageUrl, dateFrom, dateTo, adapter.articlePattern);
+            let links = await fetchArticleLinks(pageUrl, dateFrom, dateTo, adapter.articlePattern);
+
+            // Fallback: if regex finds nothing and Firecrawl is available, try map endpoint
+            if (links.length === 0 && isFirecrawlAvailable()) {
+              send({ log: `  正则提取为空，尝试 Firecrawl 链接发现...` });
+              const fcLinks = await discoverLinks(pageUrl, adapter.articlePattern);
+              links = fcLinks.map((l) => ({ url: l.url, title: l.title || "" }));
+              if (links.length > 0) {
+                send({ log: `  Firecrawl 发现 ${links.length} 个链接` });
+              }
+            }
+
             for (const link of links) {
               if (keywords && !link.title.includes(keywords) && !link.url.includes(keywords)) continue;
               allLinks.push({
@@ -433,7 +445,7 @@ export async function POST(request: Request) {
           .eq("source", "domestic_media")
           .limit(2000);
         if (existing) {
-          for (const e of existing) {
+          for (const e of existing as Array<{ url: string; title: string; url_hash: string | null }>) {
             existingUrls.add(e.url);
             existingTitles.push(e.title);
             if (e.url_hash) existingHashes.add(e.url_hash);

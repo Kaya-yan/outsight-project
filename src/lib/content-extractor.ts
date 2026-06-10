@@ -19,6 +19,9 @@ export interface ExtractionResult {
   error?: string;
 }
 
+/** Firecrawl API base — requires FIRECRAWL_API_KEY env var */
+const FIRECRAWL_API = "https://api.firecrawl.dev/v1";
+
 function extractMeta(doc: Document): { author: string | null; date: string | null } {
   let author: string | null = null;
   let date: string | null = null;
@@ -140,13 +143,19 @@ export async function extractContent(url: string, options?: {
       return jsonLdResult;
     }
 
-    // ── Strategy 3: Jina AI Reader (external service) ──
+    // ── Strategy 3: Firecrawl API (requires FIRECRAWL_API_KEY) ──
+    const firecrawlResult = await tryFirecrawl(url);
+    if (firecrawlResult) {
+      return firecrawlResult;
+    }
+
+    // ── Strategy 4: Jina AI Reader (external service) ──
     const jinaResult = await tryJinaReader(url);
     if (jinaResult) {
       return jinaResult;
     }
 
-    // ── Strategy 4: Archive.today fallback ──
+    // ── Strategy 5: Archive.today fallback ──
     const archiveResult = await tryArchiveToday(url);
     if (archiveResult) {
       return archiveResult;
@@ -231,8 +240,80 @@ function tryJsonLdArticleBody(doc: Document, url: string): ExtractionResult | nu
   return FAILED_RESULT;
 }
 
-async function tryJinaReader(url: string): Promise<ExtractionResult | null> {
+async function tryFirecrawl(url: string): Promise<ExtractionResult | null> {
+  const apiKey = process.env.FIRECRAWL_API_KEY;
+  if (!apiKey) return FAILED_RESULT;
+
   try {
+    const res = await fetch(`${FIRECRAWL_API}/scrape`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        url,
+        params: {
+          onlyMainContent: true,
+          formats: ["markdown"],
+        },
+      }),
+      signal: AbortSignal.timeout(25000),
+    });
+
+    if (!res.ok) return FAILED_RESULT;
+
+    const json = await res.json() as Record<string, unknown>;
+    const data = json.data as Record<string, unknown> | undefined;
+    if (!data?.markdown) return FAILED_RESULT;
+
+    const markdown = data.markdown as string;
+    if (markdown.length < 100) return FAILED_RESULT;
+
+    const fullText = cleanText(stripHtmlTags(markdown));
+    if (fullText.length < 50) return FAILED_RESULT;
+
+    // Extract metadata if available
+    const metadata = data.metadata as Record<string, unknown> | undefined;
+    const author = (metadata?.author as string) ?? null;
+    const publishDate = metadata?.publishedTime
+      ? formatDate(metadata.publishedTime as string)
+      : null;
+    const wordCount = fullText.split(/\s+/).filter(Boolean).length;
+
+    return {
+      content: null,
+      fullText,
+      author,
+      publishDate,
+      wordCount,
+      extractionStrategy: "firecrawl",
+    };
+  } catch {
+    return FAILED_RESULT;
+  }
+}
+
+/** Retry wrapper with exponential backoff (data-pipeline pattern) */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxAttempts = 2,
+  baseDelayMs = 1000,
+): Promise<T | null> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch {
+      if (attempt < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
+      }
+    }
+  }
+  return null;
+}
+
+async function tryJinaReader(url: string): Promise<ExtractionResult | null> {
+  const result = await withRetry(async () => {
     const jinaUrl = `https://r.jina.ai/${url}`;
     const res = await fetch(jinaUrl, {
       headers: {
@@ -243,14 +324,13 @@ async function tryJinaReader(url: string): Promise<ExtractionResult | null> {
       redirect: "follow",
     });
 
-    if (!res.ok) return FAILED_RESULT;
+    if (!res.ok) return null;
 
     const text = await res.text();
-    if (!text || text.length < 100) return FAILED_RESULT;
+    if (!text || text.length < 100) return null;
 
-    // Jina returns plain text/markdown; clean it
     const fullText = cleanText(stripHtmlTags(text));
-    if (fullText.length < 50) return FAILED_RESULT;
+    if (fullText.length < 50) return null;
 
     const wordCount = fullText.split(/\s+/).filter(Boolean).length;
 
@@ -261,14 +341,14 @@ async function tryJinaReader(url: string): Promise<ExtractionResult | null> {
       publishDate: null,
       wordCount,
       extractionStrategy: "jina",
-    };
-  } catch {
-    return FAILED_RESULT;
-  }
+    } as ExtractionResult;
+  });
+
+  return result ?? FAILED_RESULT;
 }
 
 async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
-  try {
+  const result = await withRetry(async () => {
     const archiveUrl = `https://archive.ph/newest/${url}`;
     const res = await fetch(archiveUrl, {
       headers: {
@@ -279,15 +359,14 @@ async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
       redirect: "follow",
     });
 
-    if (!res.ok) return FAILED_RESULT;
+    if (!res.ok) return null;
 
     const html = await res.text();
-    if (!html || html.length < 500) return FAILED_RESULT;
+    if (!html || html.length < 500) return null;
 
     const dom = new JSDOM(html, { url: archiveUrl });
     const doc = dom.window.document;
 
-    // Try Readability on the archived page
     for (const tag of ["script", "style", "noscript", "iframe", "nav", "footer"]) {
       doc.querySelectorAll(tag).forEach((el) => el.remove());
     }
@@ -295,12 +374,12 @@ async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
     const readability = new Readability(doc);
     const parsed = readability.parse();
 
-    if (!parsed) return FAILED_RESULT;
+    if (!parsed) return null;
 
     let content = cleanHtml(parsed.content ?? "");
     let fullText = htmlToPlainText(content);
 
-    if (!fullText || fullText.length < 100) return FAILED_RESULT;
+    if (!fullText || fullText.length < 100) return null;
 
     fullText = cleanText(stripHtmlTags(fullText));
 
@@ -314,8 +393,8 @@ async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
       publishDate: date ? formatDate(date) : null,
       wordCount,
       extractionStrategy: "archive",
-    };
-  } catch {
-    return FAILED_RESULT;
-  }
+    } as ExtractionResult;
+  });
+
+  return result ?? FAILED_RESULT;
 }

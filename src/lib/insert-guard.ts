@@ -124,7 +124,7 @@ export async function checkArticleBeforeInsert(
 }
 
 // ============================================================
-// Batch guard with statistics
+// Batch guard with statistics (optimized — single DB query)
 // ============================================================
 
 export interface BatchGuardResult {
@@ -134,6 +134,10 @@ export interface BatchGuardResult {
 
 /**
  * Run insert guard across a batch of articles, collecting detailed statistics.
+ *
+ * Optimization (supabase-database pattern): batch the dedup check into a single
+ * `in` query instead of N individual queries. Local filters (time, hash) run first
+ * to minimize the hash set sent to the DB.
  */
 export async function batchGuardCheck(
   client: Client,
@@ -142,23 +146,84 @@ export async function batchGuardCheck(
   const stats = emptyStats();
   stats.total = articles.length;
 
-  const results = await Promise.all(
-    articles.map(async (article) => {
-      const guard = await checkArticleBeforeInsert(client, article);
-      stats.filtered[guard.reason]++;
-      if (guard.passed) {
-        stats.passed++;
-      } else {
-        stats.details.push({
-          url: article.url,
-          title: article.title,
-          reason: guard.reason,
-          detail: guard.detail ?? "unknown",
-        });
-      }
-      return { article, guard };
-    }),
+  // Phase 1: Local pre-filtering (time check + hash computation)
+  const candidates: Array<{
+    article: { title?: string; publish_date?: string | null; url: string };
+    urlHash: string;
+  }> = [];
+
+  for (const article of articles) {
+    // Time filter
+    if (!article.publish_date) {
+      stats.filtered.missing_publish_date++;
+      stats.details.push({ url: article.url, title: article.title, reason: "missing_publish_date", detail: "publish_date is null or undefined" });
+      continue;
+    }
+
+    const periodCheck = isWithinResearchPeriod(article.publish_date);
+
+    if (periodCheck.reason === "null_date_allowed_with_warning") {
+      stats.filtered.missing_publish_date++;
+      stats.details.push({ url: article.url, title: article.title, reason: "missing_publish_date", detail: "publish_date is null" });
+      continue;
+    }
+
+    if (periodCheck.reason === "unparseable_date_allowed_with_warning") {
+      stats.filtered.unparseable_date++;
+      stats.details.push({ url: article.url, title: article.title, reason: "unparseable_date", detail: `Cannot parse date: "${article.publish_date}"` });
+      continue;
+    }
+
+    if (!periodCheck.valid) {
+      const isAfter = periodCheck.reason?.includes("after_research_period");
+      const reason: FilterReason = isAfter ? "out_of_date_range_after" : "out_of_date_range_before";
+      stats.filtered[reason]++;
+      stats.details.push({ url: article.url, title: article.title, reason, detail: periodCheck.reason ?? "out of research period" });
+      continue;
+    }
+
+    // Hash computation
+    const normalized = normalizeUrl(article.url);
+    let urlHash: string;
+    try {
+      urlHash = hashUrl(normalized);
+    } catch (err) {
+      stats.filtered.hash_error++;
+      stats.details.push({ url: article.url, title: article.title, reason: "hash_error", detail: String(err) });
+      continue;
+    }
+
+    candidates.push({ article, urlHash });
+  }
+
+  if (candidates.length === 0) {
+    return { passed: [], stats };
+  }
+
+  // Phase 2: Single batch dedup query (supabase-database optimization)
+  const hashes = candidates.map((c) => c.urlHash);
+  const { data: existing } = await client
+    .from("articles")
+    .select("url_hash")
+    .in("url_hash", hashes)
+    .limit(hashes.length);
+
+  const existingHashes = new Set(
+    ((existing ?? []) as Array<{ url_hash: string }>).map((r) => r.url_hash),
   );
 
-  return { passed: results.filter((r) => r.guard.passed), stats };
+  // Phase 3: Filter out duplicates
+  const passed: BatchGuardResult["passed"] = [];
+
+  for (const { article, urlHash } of candidates) {
+    if (existingHashes.has(urlHash)) {
+      stats.filtered.duplicate_url++;
+      stats.details.push({ url: article.url, title: article.title, reason: "duplicate_url", detail: "URL already exists in database" });
+    } else {
+      stats.passed++;
+      passed.push({ article, guard: { passed: true, reason: "passed", urlHash } });
+    }
+  }
+
+  return { passed, stats };
 }
