@@ -22,19 +22,47 @@ export interface DashboardStats {
   }>;
 }
 
+/**
+ * Paginated fetch — bypasses PostgREST max-rows (default 1000).
+ * Takes a factory that returns a fresh Supabase query builder each call.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchAll<T>(factory: () => any): Promise<T[]> {
+  const PAGE = 1000;
+  let offset = 0;
+  const all: T[] = [];
+  while (true) {
+    const { data, error } = await factory().range(offset, offset + PAGE - 1);
+    if (error || !data || data.length === 0) break;
+    all.push(...(data as T[]));
+    if (data.length < PAGE) break;
+    offset += PAGE;
+  }
+  return all;
+}
+
 export async function getDashboardStats(client: Client): Promise<DashboardStats> {
-  const [
-    totalRes,
-    byStatusRes,
-    byMediaRes,
-    byPeriodRes,
-    recentArticlesRes,
-    recentActivityRes,
-  ] = await Promise.all([
-    client.from("articles").select("*", { count: "exact", head: true }).eq("is_archived", false),
-    client.from("articles").select("status").eq("is_archived", false).limit(50000),
-    client.from("articles").select("media").eq("is_archived", false).limit(50000),
-    client.from("articles").select("period").eq("is_archived", false).not("period", "is", null).limit(50000),
+  // Total count uses count:"exact" (server-side, no row limit)
+  const { count } = await client
+    .from("articles")
+    .select("*", { count: "exact", head: true })
+    .eq("is_archived", false);
+
+  // Paginated fetches for aggregation (bypasses PostgREST max-rows)
+  const [allStatus, allMedia, allPeriod] = await Promise.all([
+    fetchAll<{ status: string | null }>(() =>
+      client.from("articles").select("status").eq("is_archived", false),
+    ),
+    fetchAll<{ media: string | null }>(() =>
+      client.from("articles").select("media").eq("is_archived", false),
+    ),
+    fetchAll<{ period: string | null }>(() =>
+      client.from("articles").select("period").eq("is_archived", false).not("period", "is", null),
+    ),
+  ]);
+
+  // Recent articles & activity (small fixed limit, no pagination needed)
+  const [recentArticlesRes, recentActivityRes] = await Promise.all([
     client.from("articles")
       .select("id, title, media, status, publish_date, created_at")
       .eq("is_archived", false)
@@ -47,31 +75,25 @@ export async function getDashboardStats(client: Client): Promise<DashboardStats>
   ]);
 
   const byStatus: Record<string, number> = {};
-  if (byStatusRes.data) {
-    for (const row of byStatusRes.data) {
-      const s = row.status as string;
-      byStatus[s] = (byStatus[s] ?? 0) + 1;
-    }
+  for (const row of allStatus) {
+    const s = row.status ?? "unknown";
+    byStatus[s] = (byStatus[s] ?? 0) + 1;
   }
 
   const byMedia: Record<string, number> = {};
-  if (byMediaRes.data) {
-    for (const row of byMediaRes.data) {
-      const m = row.media as string;
-      byMedia[m] = (byMedia[m] ?? 0) + 1;
-    }
+  for (const row of allMedia) {
+    const m = row.media ?? "unknown";
+    byMedia[m] = (byMedia[m] ?? 0) + 1;
   }
 
   const byPeriod: Record<string, number> = {};
-  if (byPeriodRes.data) {
-    for (const row of byPeriodRes.data) {
-      const p = row.period as string;
-      byPeriod[p] = (byPeriod[p] ?? 0) + 1;
-    }
+  for (const row of allPeriod) {
+    const p = row.period ?? "unknown";
+    byPeriod[p] = (byPeriod[p] ?? 0) + 1;
   }
 
   return {
-    totalArticles: totalRes.count ?? 0,
+    totalArticles: count ?? 0,
     byStatus,
     byMedia,
     byPeriod,
