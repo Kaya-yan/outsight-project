@@ -18,8 +18,8 @@ export const parsePdf: ParserFn = async (buffer) => {
     const wordCount = plainText.split(/\s+/).filter(Boolean).length;
 
     const metadata: Record<string, string | undefined> = {};
-    if (data.info?.Title) metadata.title = data.info.Title;
-    if (data.info?.Author) metadata.author = data.info.Author;
+    if (data.info?.Title) metadata.title = String(data.info.Title);
+    if (data.info?.Author) metadata.author = String(data.info.Author);
 
     if (wordCount < 10) {
       warnings.push("Very little text extracted from PDF (may be scanned/image-based)");

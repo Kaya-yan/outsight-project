@@ -156,7 +156,7 @@ export const TerminalPanel = memo(function TerminalPanel({ orbState, onClose }: 
           return next;
         });
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => {
         const next = [...prev];
         next[assistantIdx] = {

@@ -144,7 +144,7 @@ export default function DashboardPage() {
             </div>
             <MediaMatrix
               mini
-              data={stats.byMedia ? buildMatrixData(stats.byMedia, stats.byPeriod) : {}}
+              data={stats.mediaPeriod}
               onCellClick={(media, period) => {
                 router.push(`/projects?media=${media}&period=${period}`);
               }}
@@ -189,23 +189,4 @@ export default function DashboardPage() {
       )}
     </div>
   );
-}
-
-// Build matrix data from flat byMedia/byPeriod objects
-function buildMatrixData(
-  byMedia: Record<string, number>,
-  byPeriod: Record<string, number>,
-): Record<string, Record<string, number>> {
-  // For mini view, the data structure needs to be: data[media][period] = count
-  // We only have separate counts, so we create a simple structure
-  // In practice this needs a proper cross-tab query — for Sprint 1 this is a placeholder
-  // The real matrix would need a GROUP BY media, period query
-  const result: Record<string, Record<string, number>> = {};
-  for (const media of Object.keys(byMedia)) {
-    result[media] = {};
-    for (const period of Object.keys(byPeriod)) {
-      result[media][period] = 0;
-    }
-  }
-  return result;
 }

@@ -6,16 +6,25 @@ import { createClient } from "@/lib/supabase/server";
  *
  * Returns full-text completion statistics grouped by status and media.
  */
+type CompletionStatArticle = {
+  id: string;
+  media: string | null;
+  full_text_status: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled" | null;
+  url: string | null;
+};
+
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   // Get all articles with relevant fields
-  const { data: articles, error } = await supabase
+  const { data: rawArticles, error } = await supabase
     .from("articles")
     .select("id, media, full_text_status, url")
     .neq("status", "已封存");
+
+  const articles = (rawArticles ?? []) as CompletionStatArticle[];
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -1,6 +1,11 @@
 import type { Client, QueryResult, PaginationParams } from "./base";
 import { normalizePagination, typedInsert, typedUpdate } from "./base";
-import type { LiteratureNote, LiteratureComment } from "@/types/database";
+import type { Database, LiteratureNote, LiteratureComment } from "@/types/database";
+
+type LiteratureReaction = Database["public"]["Tables"]["literature_reactions"]["Row"];
+type LiteratureCommentWithProfile = LiteratureComment & {
+  profiles?: { username: string; display_name: string | null; avatar_url: string | null } | null;
+};
 
 // ── Literature Notes ──
 
@@ -86,13 +91,13 @@ export async function deleteLit(client: Client, id: string): Promise<QueryResult
 
 // ── Comments ──
 
-export async function listComments(client: Client, noteId: string) {
+export async function listComments(client: Client, noteId: string): Promise<QueryResult<LiteratureCommentWithProfile[]>> {
   const { data, error } = await client
     .from("literature_comments")
     .select("*, profiles(username, display_name, avatar_url)")
     .eq("note_id", noteId)
     .order("created_at", { ascending: true });
-  return { data, error };
+  return { data: (data ?? []) as LiteratureCommentWithProfile[], error };
 }
 
 export async function createComment(
@@ -110,13 +115,13 @@ export async function deleteComment(client: Client, id: string): Promise<QueryRe
 
 // ── Reactions ──
 
-export async function listReactions(client: Client, noteId: string, userId: string) {
+export async function listReactions(client: Client, noteId: string, userId: string): Promise<QueryResult<LiteratureReaction[]>> {
   const { data, error } = await client
     .from("literature_reactions")
     .select("*")
     .eq("note_id", noteId)
     .eq("user_id", userId);
-  return { data, error };
+  return { data: (data ?? []) as LiteratureReaction[], error };
 }
 
 export async function toggleReaction(
@@ -126,13 +131,14 @@ export async function toggleReaction(
   reactionType: "read" | "like",
 ): Promise<{ added: boolean }> {
   // Check if already exists
-  const { data: existing } = await client
+  const { data: rawExisting } = await client
     .from("literature_reactions")
     .select("id")
     .eq("note_id", noteId)
     .eq("user_id", userId)
     .eq("reaction_type", reactionType)
     .single();
+  const existing = rawExisting as { id: string } | null;
 
   if (existing) {
     // Remove reaction
@@ -177,7 +183,7 @@ export interface LitStats {
 export async function getLitStats(client: Client): Promise<LitStats> {
   const { data: all } = await client.from("literature_notes").select("tags, rating, for_review, created_by");
 
-  const notes = all ?? [];
+  const notes = ((all ?? []) as Array<Pick<LiteratureNote, "tags" | "rating" | "for_review" | "created_by">>);
   const stats: LitStats = {
     total: notes.length,
     forReview: notes.filter((n) => n.for_review).length,
@@ -211,13 +217,14 @@ export async function getLitStats(client: Client): Promise<LitStats> {
   // Resolve contributor IDs to usernames
   const cids = Object.keys(stats.byContributor);
   if (cids.length > 0) {
-    const { data: profiles } = await client
+    const { data: rawProfiles } = await client
       .from("profiles")
       .select("id, username, display_name")
       .in("id", cids);
+    const profiles = (rawProfiles ?? []) as Array<{ id: string; username: string; display_name: string | null }>;
     const resolved: Record<string, number> = {};
     for (const cid of cids) {
-      const p = (profiles ?? []).find((pr) => pr.id === cid);
+      const p = profiles.find((pr) => pr.id === cid);
       const label = p?.display_name || p?.username || cid.slice(0, 8);
       resolved[label] = stats.byContributor[cid];
     }
@@ -229,11 +236,11 @@ export async function getLitStats(client: Client): Promise<LitStats> {
 
 // ── Export ──
 
-export async function listForReview(client: Client) {
+export async function listForReview(client: Client): Promise<QueryResult<LiteratureNote[]>> {
   const { data, error } = await client
     .from("literature_notes")
     .select("*")
     .eq("for_review", true)
     .order("rating", { ascending: false });
-  return { data, error };
+  return { data: (data ?? []) as LiteratureNote[], error };
 }

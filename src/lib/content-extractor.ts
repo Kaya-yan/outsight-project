@@ -132,13 +132,13 @@ export async function extractContent(url: string, options?: {
     const doc = dom.window.document;
 
     // ── Strategy 1: Readability ──
-    const readabilityResult = tryReadability(doc, url);
+    const readabilityResult = tryReadability(doc);
     if (readabilityResult) {
       return readabilityResult;
     }
 
     // ── Strategy 2: JSON-LD articleBody ──
-    const jsonLdResult = tryJsonLdArticleBody(doc, url);
+    const jsonLdResult = tryJsonLdArticleBody(doc);
     if (jsonLdResult) {
       return jsonLdResult;
     }
@@ -173,7 +173,7 @@ export async function extractContent(url: string, options?: {
 
 const FAILED_RESULT = null; // sentinel for "try next strategy"
 
-function tryReadability(doc: Document, url: string): ExtractionResult | null {
+function tryReadability(doc: Document): ExtractionResult | null {
   // Clone doc to avoid mutation issues with subsequent strategies
   const clone = doc.cloneNode(true) as Document;
   for (const tag of ["script", "style", "noscript", "iframe", "nav", "footer"]) {
@@ -185,7 +185,7 @@ function tryReadability(doc: Document, url: string): ExtractionResult | null {
 
   if (!parsed) return FAILED_RESULT;
 
-  let content = cleanHtml(parsed.content ?? "");
+  const content = cleanHtml(parsed.content ?? "");
   let fullText = htmlToPlainText(content);
 
   if (!fullText || fullText.length < 100) return FAILED_RESULT;
@@ -205,7 +205,7 @@ function tryReadability(doc: Document, url: string): ExtractionResult | null {
   };
 }
 
-function tryJsonLdArticleBody(doc: Document, url: string): ExtractionResult | null {
+function tryJsonLdArticleBody(doc: Document): ExtractionResult | null {
   try {
     const scripts = doc.querySelectorAll('script[type="application/ld+json"]');
     for (const s of Array.from(scripts)) {
@@ -376,7 +376,7 @@ async function tryArchiveToday(url: string): Promise<ExtractionResult | null> {
 
     if (!parsed) return null;
 
-    let content = cleanHtml(parsed.content ?? "");
+    const content = cleanHtml(parsed.content ?? "");
     let fullText = htmlToPlainText(content);
 
     if (!fullText || fullText.length < 100) return null;

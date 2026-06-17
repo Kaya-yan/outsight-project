@@ -1,4 +1,5 @@
-import { updateArticle } from "@/lib/data-access/articles";
+import { getArticleById, updateArticle } from "@/lib/data-access/articles";
+import { mergeMetadata } from "@/lib/metadata-utils";
 import type { createClient } from "@/lib/supabase/server";
 import {
   summarize,
@@ -51,7 +52,11 @@ export async function runPreReadPipeline(
   if (narrative) meta.ai_narrative = narrative;
   if (sources) meta.ai_sources = sources;
   if (tone) meta.ai_tone = tone;
-  if (Object.keys(meta).length > 0) updates.metadata = meta;
+
+  if (Object.keys(meta).length > 0) {
+    const { data: existingArticle } = await getArticleById(supabase, articleId);
+    updates.metadata = mergeMetadata(existingArticle?.metadata as Record<string, unknown> | null | undefined, meta);
+  }
 
   const { error } = await updateArticle(supabase, articleId, updates);
   if (error) {

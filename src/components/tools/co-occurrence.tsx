@@ -40,7 +40,7 @@ export function CoOccurrence() {
       }
     }
 
-    const sorted = [...pairCounts.entries()]
+    const sorted = Array.from(pairCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 20)
       .map(([key, c]) => {

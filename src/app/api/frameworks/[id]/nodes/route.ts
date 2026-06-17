@@ -25,14 +25,15 @@ export async function POST(
   const parentId = body.parent_id ?? null;
   let sortOrder = body.sort_order ?? 0;
   if (!body.sort_order) {
-    const { data: siblings } = await supabase
+    const { data: rawSiblings } = await supabase
       .from("coding_nodes")
       .select("sort_order")
       .eq("framework_id", params.id)
       .eq("parent_id", parentId ?? "")
       .order("sort_order", { ascending: false })
       .limit(1);
-    if (siblings && siblings.length > 0) {
+    const siblings = (rawSiblings ?? []) as Array<{ sort_order: number | null }>;
+    if (siblings.length > 0) {
       sortOrder = (siblings[0].sort_order ?? 0) + 1;
     }
   }

@@ -63,7 +63,7 @@ async function queryGdeltAllOutlets(query: string, timespan: string) {
 
 /** Insert a batch of articles with guard checks. Returns number inserted. */
 async function insertArticles(
-  supabase: ReturnType<typeof createClient> extends Promise<infer T> ? T : never,
+  supabase: Awaited<ReturnType<typeof createClient>>,
   articles: Array<{ title: string; url: string; publish_date: string | null; source: string; description: string | null; keyword_combo?: string }>,
 ): Promise<number> {
   if (articles.length === 0) return 0;
@@ -122,12 +122,11 @@ export async function POST(request: Request) {
   if (!job) return NextResponse.json({ error: "任务不存在" }, { status: 404 });
 
   // Load or generate batch plan
-  let batches: Batch[] = (job.query_params as Record<string, unknown>)?.batches as Batch[] | undefined;
-  if (!batches || !Array.isArray(batches)) {
-    batches = generateBatchPlan();
-    // Persist plan
+  const storedBatches = (job.query_params as { batches?: unknown } | null)?.batches;
+  const batches: Batch[] = Array.isArray(storedBatches) ? storedBatches as Batch[] : generateBatchPlan();
+  if (!Array.isArray(storedBatches)) {
     await updateCrawlJob(supabase, jobId, {
-      query_params: { ...(job.query_params as Record<string, unknown>), batches } as Record<string, unknown>,
+      query_params: { ...(job.query_params as Record<string, unknown>), batches },
       batch_total: batches.length,
       status: "running",
     });

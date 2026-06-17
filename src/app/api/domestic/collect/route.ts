@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createArticle } from "@/lib/data-access/articles";
 import { JSDOM } from "jsdom";
 import { cleanHtml, htmlToPlainText, cleanText, stripHtmlTags } from "@/lib/text-cleaner";
 import { getAdapter } from "@/lib/domestic/media-adapters";
@@ -516,7 +517,7 @@ export async function POST(request: Request) {
           // Auto-detect language: check Chinese character ratio in content
           const chineseChars = (extracted.fullText.match(/[一-鿿]/g) ?? []).length;
           const totalChars = extracted.fullText.replace(/\s/g, "").length;
-          const detectedLang = totalChars > 0 && chineseChars / totalChars > 0.5 ? "zh" : "en";
+          const detectedLang: "zh" | "en" = totalChars > 0 && chineseChars / totalChars > 0.5 ? "zh" : "en";
 
           const insertData = {
             title: extracted.title || article.title,
@@ -531,7 +532,7 @@ export async function POST(request: Request) {
             full_text_status: "complete" as const,
             word_count: extracted.charCount,
             status: "已入库" as const,
-            author: extracted.author,
+            author: extracted.author ?? undefined,
             metadata: {
               char_count: extracted.charCount,
               collected_at: new Date().toISOString(),
@@ -540,14 +541,11 @@ export async function POST(request: Request) {
             },
           };
 
-          const { data: inserted, error: insertErr } = await supabase
-            .from("articles")
-            .insert(insertData)
-            .select("id")
-            .single();
+          const { error: insertErr } = await createArticle(supabase, insertData);
 
           if (insertErr) {
-            send({ log: `  入库失败: ${insertErr.message}`, errorEntry: { title: article.title.slice(0, 40), reason: `入库错误: ${insertErr.message}` } });
+            const insertErrMsg = insertErr instanceof Error ? insertErr.message : String(insertErr);
+            send({ log: `  入库失败: ${insertErrMsg}`, errorEntry: { title: article.title.slice(0, 40), reason: `入库错误: ${insertErrMsg}` } });
             failed++;
             continue;
           }

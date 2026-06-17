@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { typedUpdate } from "@/lib/data-access/base";
 import { cleanHtml, cleanText, htmlToPlainText, stripHtmlTags } from "@/lib/text-cleaner";
+
+type BatchCleanArticle = {
+  id: string;
+  title: string;
+  media: string;
+  full_text: string | null;
+  content: string | null;
+  word_count: number | null;
+  metadata: Record<string, unknown> | null;
+};
 
 /**
  * GET /api/articles/batch-clean
@@ -42,7 +53,8 @@ export async function GET(request: Request) {
     query = query.eq("media", source);
   }
 
-  const { data: articles, error } = await query;
+  const { data: rawArticles, error } = await query;
+  const articles = (rawArticles ?? []) as BatchCleanArticle[];
 
   if (error) {
     console.error(`[BatchClean] Query error (mode=${mode}):`, error.message);
@@ -71,10 +83,9 @@ export async function GET(request: Request) {
     if (!hasHtml && !force) {
       // No HTML detected — mark as cleaned so it won't be re-fetched
       const existingMeta = (article.metadata as Record<string, unknown>) ?? {};
-      await supabase
-        .from("articles")
-        .update({ metadata: { ...existingMeta, html_cleaned: true, cleaned_at: now, skip_reason: "no_html" } })
-        .eq("id", article.id);
+      await typedUpdate(supabase, "articles", {
+        metadata: { ...existingMeta, html_cleaned: true, cleaned_at: now, skip_reason: "no_html" },
+      }).eq("id", article.id);
       skipped++;
       console.log(`[BatchClean] SKIP ${article.id} "${article.title?.slice(0, 30)}" (no HTML)`);
       continue;
@@ -109,10 +120,7 @@ export async function GET(request: Request) {
       metaUpdate.cleaned_word_count = newWordCount;
       metaUpdate.review_reason = "word_count_drop_exceeds_80pct";
 
-      await supabase
-        .from("articles")
-        .update({ metadata: metaUpdate })
-        .eq("id", article.id);
+      await typedUpdate(supabase, "articles", { metadata: metaUpdate }).eq("id", article.id);
 
       console.log(`[BatchClean] REVIEW ${article.id} "${article.title?.slice(0, 30)}" words ${oldWordCount}→${newWordCount} (drop ${(dropRatio * 100).toFixed(0)}%)`);
       skipped++;
@@ -127,10 +135,7 @@ export async function GET(request: Request) {
         updateData.content = newContent;
       }
 
-      await supabase
-        .from("articles")
-        .update(updateData)
-        .eq("id", article.id);
+      await typedUpdate(supabase, "articles", updateData).eq("id", article.id);
 
       console.log(`[BatchClean] DONE ${article.id} "${article.title?.slice(0, 30)}" words ${oldWordCount}→${newWordCount}`);
       cleaned++;

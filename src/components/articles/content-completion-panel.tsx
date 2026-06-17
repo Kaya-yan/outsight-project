@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { getMediaStrategy, MEDIA_STRATEGY_LABEL, type MediaStrategy } from "@/lib/media-strategy";
+import { getMediaStrategy, MEDIA_STRATEGY_LABEL } from "@/lib/media-strategy";
 import { MEDIA_OUTLETS } from "@/lib/constants";
 import type { FullTextStatus } from "@/types/database";
 
@@ -77,7 +77,7 @@ export function ContentCompletionPanel({ onComplete }: ContentCompletionPanelPro
       // Fetch articles that need full text
       const res = await fetch("/api/articles/completion-stats");
       if (!res.ok) return;
-      const data = await res.json();
+      await res.json();
 
       // Get fetchable article IDs
       const articlesRes = await fetch("/api/articles?pageSize=1000&fullTextStatus=missing,partial");

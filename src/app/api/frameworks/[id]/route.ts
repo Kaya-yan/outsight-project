@@ -67,7 +67,7 @@ export async function DELETE(
   }
 
   // Soft-delete: set is_active = false
-  const { data, error } = await updateFramework(supabase, params.id, {
+  const { error } = await updateFramework(supabase, params.id, {
     is_active: false,
   } as Partial<{ is_active: boolean }>);
   if (error) return NextResponse.json({ error: "删除失败" }, { status: 500 });

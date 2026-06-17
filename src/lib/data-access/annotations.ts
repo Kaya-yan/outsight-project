@@ -7,20 +7,20 @@ export async function getAnnotationById(client: Client, id: string): Promise<Que
   return { data, error };
 }
 
-export async function listAnnotationsByArticle(client: Client, articleId: string) {
+export async function listAnnotationsByArticle(client: Client, articleId: string): Promise<QueryResult<Annotation[]>> {
   const { data, error } = await client
     .from("annotations")
     .select("*")
     .eq("article_id", articleId)
     .order("created_at", { ascending: true });
-  return { data, error };
+  return { data: (data ?? []) as Annotation[], error };
 }
 
-export async function listAnnotationsByCoder(client: Client, coderId: string, resolved?: boolean) {
+export async function listAnnotationsByCoder(client: Client, coderId: string, resolved?: boolean): Promise<QueryResult<Annotation[]>> {
   let query = client.from("annotations").select("*").eq("coder_id", coderId);
   if (resolved !== undefined) query = query.eq("is_resolved", resolved);
   const { data, error } = await query;
-  return { data, error };
+  return { data: (data ?? []) as Annotation[], error };
 }
 
 export async function createAnnotation(
@@ -69,6 +69,6 @@ export async function batchCreateAnnotations(
     confidence?: number;
   }>,
 ): Promise<QueryResult<Annotation[]>> {
-  const { data, error } = await typedInsert(client, "annotations", annotations as never[]).select();
-  return { data, error };
+  const { data, error } = await typedInsert(client, "annotations", annotations).select();
+  return { data: (data ?? []) as Annotation[], error };
 }

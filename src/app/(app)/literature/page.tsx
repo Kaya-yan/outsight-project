@@ -105,7 +105,7 @@ export default function LiteraturePage() {
         <div className="py-12 text-center">
           <BookOpen className="h-10 w-10 text-[#95A5A6] mx-auto mb-3" />
           <p className="text-sm text-[#7F8A93]">暂无文献笔记</p>
-          <p className="text-xs text-[#95A5A6] mt-1">点击"新建文献"开始沉淀阅读成果</p>
+          <p className="text-xs text-[#95A5A6] mt-1">点击&ldquo;新建文献&rdquo;开始沉淀阅读成果</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

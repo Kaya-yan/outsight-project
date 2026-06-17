@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,7 +32,7 @@ interface NoteDetail {
 export default function LiteratureDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { user, profile } = useAuthStore();
+  const { user } = useAuthStore();
   const [detail, setDetail] = useState<NoteDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -60,7 +60,7 @@ export default function LiteratureDetailPage() {
         });
 
       if (uploadErr) {
-        const hint = (uploadErr as Record<string, unknown>).message === "Bucket not found"
+        const hint = uploadErr.message === "Bucket not found"
           ? " 请先在 Supabase Dashboard → Storage 中创建公开 bucket 'literature-attachments'"
           : "";
         setUploadError(`上传失败: ${uploadErr.message}${hint}`);
@@ -90,7 +90,7 @@ export default function LiteratureDetailPage() {
     setUploading(false);
   }
 
-  async function load() {
+  const load = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/literature/${id}`);
@@ -101,9 +101,9 @@ export default function LiteratureDetailPage() {
       }
     } catch { /* silent */ }
     setIsLoading(false);
-  }
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   async function handleReact(type: "read" | "like") {
     try {
@@ -178,7 +178,7 @@ export default function LiteratureDetailPage() {
         <Card className="border-[#4A90A4]/30">
           <CardContent className="p-4">
             <h3 className="text-sm font-medium text-[#2D3436] mb-3">编辑文献笔记</h3>
-            <LiteratureForm initial={note as unknown as Record<string, unknown>} onSubmit={handleUpdate} onCancel={() => setEditing(false)} isSubmitting={isSubmitting} />
+            <LiteratureForm initial={note} onSubmit={handleUpdate} onCancel={() => setEditing(false)} isSubmitting={isSubmitting} />
           </CardContent>
         </Card>
       ) : (

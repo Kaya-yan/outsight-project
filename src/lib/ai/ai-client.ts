@@ -1,4 +1,42 @@
+import { z } from "zod";
 import { callMimoStream } from "@/lib/ai/mimo-client";
+
+const sentimentSchema = z.object({
+  sentiment: z.enum(["positive", "negative", "neutral"]),
+  confidence: z.coerce.number().min(0).max(1),
+});
+
+const frameworkSchema = z.object({
+  framework: z.enum(["threat", "opportunity", "problem", "neutral"]),
+  confidence: z.coerce.number().min(0).max(1),
+  evidence: z.array(z.string()).default([]),
+});
+
+const termsSchema = z.array(z.string());
+
+const linguisticSchema = z.object({
+  passive_voice: z.array(z.string()).default([]),
+  comparative_rhetoric: z.array(z.string()).default([]),
+  citation_types: z.array(z.string()).default([]),
+});
+
+const narrativeSchema = z.object({
+  style: z.string(),
+  explanation: z.string(),
+  framing_devices: z.array(z.string()).default([]),
+});
+
+const sourcesSchema = z.object({
+  source_types: z.record(z.string(), z.coerce.number()).default({}),
+  named_sources: z.array(z.string()).default([]),
+  anonymous_count: z.coerce.number().default(0),
+});
+
+const toneSchema = z.object({
+  tone: z.enum(["critical", "constructive", "descriptive", "alarming", "celebratory"]),
+  confidence: z.coerce.number().min(0).max(1),
+  keywords: z.array(z.string()).default([]),
+});
 
 async function callLLM(
   systemPrompt: string,
@@ -9,9 +47,24 @@ async function callLLM(
   return result.text;
 }
 
-/**
- * Generate a 150-character summary of the article.
- */
+async function callJson<T>(
+  systemPrompt: string,
+  userPrompt: string,
+  schema: z.ZodType<T>,
+  maxTokens = 256,
+): Promise<T | null> {
+  const result = await callLLM(systemPrompt, userPrompt, maxTokens);
+  if (!result) return null;
+
+  try {
+    const parsed = JSON.parse(result);
+    const validated = schema.safeParse(parsed);
+    return validated.success ? validated.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function summarize(text: string): Promise<string | null> {
   const truncated = text.slice(0, 4000);
   return callLLM(
@@ -21,34 +74,23 @@ export async function summarize(text: string): Promise<string | null> {
   );
 }
 
-/**
- * Analyze sentiment: positive / negative / neutral with confidence.
- */
 export async function analyzeSentiment(
   text: string,
 ): Promise<{ sentiment: string; confidence: number } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `You are a sentiment analyst. Output ONLY valid JSON: {"sentiment":"positive"|"negative"|"neutral","confidence":0.0-1.0}`,
     truncated,
+    sentimentSchema,
     128,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Suggest framework classification: threat / opportunity / problem / neutral
- */
 export async function suggestFramework(
   text: string,
 ): Promise<{ framework: string; confidence: number; evidence: string[] } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `You analyze news discourse about China. Output ONLY valid JSON:
 {
   "framework": "threat"|"opportunity"|"problem"|"neutral",
@@ -56,43 +98,27 @@ export async function suggestFramework(
   "evidence": ["quote1", "quote2"]
 }`,
     truncated,
+    frameworkSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Extract key terminology related to Chinese modernization discourse.
- */
 export async function extractTerms(text: string): Promise<string[] | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `Extract key terms related to Chinese modernization, common prosperity, Belt and Road, foreign policy, and development discourse.
 Output ONLY a JSON array of strings. Example: ["modernization", "common prosperity"]`,
     truncated,
+    termsSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Linguistic observations: passive voice, comparative rhetoric, citation types.
- */
 export async function linguisticCheck(
   text: string,
 ): Promise<{ passive_voice: string[]; comparative_rhetoric: string[]; citation_types: string[] } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `Analyze linguistic features of this news article. Output ONLY valid JSON:
 {
   "passive_voice": ["example1", "example2"],
@@ -100,19 +126,11 @@ export async function linguisticCheck(
   "citation_types": ["official source", "anonymous source"]
 }`,
     truncated,
+    linguisticSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Generate a Chinese summary (~150 characters) of the article.
- */
 export async function summarizeZh(text: string): Promise<string | null> {
   const truncated = text.slice(0, 4000);
   return callLLM(
@@ -122,14 +140,11 @@ export async function summarizeZh(text: string): Promise<string | null> {
   );
 }
 
-/**
- * Analyze narrative style of the news article.
- */
 export async function analyzeNarrative(
   text: string,
 ): Promise<{ style: string; explanation: string; framing_devices: string[] } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `Analyze the narrative style of this news article. Consider these dimensions:
 - Narrative mode: conflict-driven / hero-villain / victimhood / problem-solution / data-driven / human-interest / episodic / thematic
 - Framing devices: metaphors, exemplars, catchphrases, depictions, visual imagery
@@ -142,24 +157,16 @@ Output ONLY valid JSON:
   "framing_devices": ["metaphor example", "catchphrase example"]
 }`,
     truncated,
+    narrativeSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Analyze source attribution patterns in the article.
- */
 export async function analyzeSources(
   text: string,
 ): Promise<{ source_types: Record<string, number>; named_sources: string[]; anonymous_count: number } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `Analyze the sources cited in this news article. Categorize each source:
 - official: government officials, institutional spokespersons
 - expert: academics, analysts, think-tank researchers
@@ -175,24 +182,16 @@ Output ONLY valid JSON:
   "anonymous_count": 1
 }`,
     truncated,
+    sourcesSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }
 
-/**
- * Analyze the tone and rhetorical stance of the article.
- */
 export async function analyzeTone(
   text: string,
 ): Promise<{ tone: string; confidence: number; keywords: string[] } | null> {
   const truncated = text.slice(0, 4000);
-  const result = await callLLM(
+  return callJson(
     `Analyze the tone of this news article. Classify as one of:
 - critical: questioning, skeptical, challenging
 - constructive: solution-oriented, forward-looking, pragmatic
@@ -207,12 +206,7 @@ Output ONLY valid JSON:
   "keywords": ["controversial", "concerns raised", "critics argue"]
 }`,
     truncated,
+    toneSchema,
     256,
   );
-  if (!result) return null;
-  try {
-    return JSON.parse(result);
-  } catch {
-    return null;
-  }
 }

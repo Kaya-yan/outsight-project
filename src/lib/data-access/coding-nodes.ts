@@ -7,13 +7,13 @@ export async function getNodeById(client: Client, id: string): Promise<QueryResu
   return { data, error };
 }
 
-export async function listNodesByFramework(client: Client, frameworkId: string) {
+export async function listNodesByFramework(client: Client, frameworkId: string): Promise<QueryResult<CodingNode[]>> {
   const { data, error } = await client
     .from("coding_nodes")
     .select("*")
     .eq("framework_id", frameworkId)
     .order("lft", { ascending: true });
-  return { data, error };
+  return { data: (data ?? []) as CodingNode[], error };
 }
 
 export async function createNode(

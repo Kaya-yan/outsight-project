@@ -169,7 +169,7 @@ export interface Database {
           author?: string | null;
           abstract?: string | null;
           full_text?: string | null;
-          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
           url_hash?: string | null;
           content?: string | null;
           word_count?: number | null;
@@ -200,7 +200,7 @@ export interface Database {
           author?: string | null;
           abstract?: string | null;
           full_text?: string | null;
-          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded";
+          full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
           url_hash?: string | null;
           content?: string | null;
           word_count?: number | null;
@@ -470,7 +470,9 @@ export interface Database {
           batch_index?: number;
           batch_total?: number;
           error_message?: string | null;
+          query_params?: Record<string, unknown>;
           finished_at?: string | null;
+          triggered_by?: string | null;
         };
       };
       dual_coding_rounds: {

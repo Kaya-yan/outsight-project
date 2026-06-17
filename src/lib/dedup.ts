@@ -43,10 +43,9 @@ export async function findExistingUrls(
       .select("url")
       .in("url", batch);
 
-    if (data) {
-      for (const row of data) {
-        existing.add(normalizeUrl(row.url));
-      }
+    const rows = (data ?? []) as Array<{ url: string }>;
+    for (const row of rows) {
+      existing.add(normalizeUrl(row.url));
     }
   }
 

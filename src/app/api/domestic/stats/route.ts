@@ -3,6 +3,21 @@ import { createClient } from "@/lib/supabase/server";
 import { segmentChinese, countCharFrequency } from "@/lib/domestic/chinese-segmenter";
 import { STOPWORDS_ZH } from "@/lib/stopwords-zh";
 
+type DomesticStatsArticle = {
+  id: string;
+  media: string;
+  publish_date: string | null;
+  word_count: number | null;
+  metadata: Record<string, unknown> | null;
+  language: string | null;
+  title: string | null;
+};
+
+type DomesticTextSample = {
+  full_text: string | null;
+  language: string | null;
+};
+
 // ── Module-level constants (avoid per-request allocation) ──
 
 const CONNECTIVES = new Set([
@@ -48,12 +63,13 @@ export async function GET(request: Request) {
   if (dateTo) baseQuery = baseQuery.lte("publish_date", dateTo);
 
   const { data: rawArticles, error } = await baseQuery.limit(500);
+  const baseArticles = (rawArticles ?? []) as DomesticStatsArticle[];
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // Language filter: exclude non-Chinese articles
   // Primary: filter by language field; Fallback: detect English by title character ratio
-  const articles = (rawArticles ?? []).filter((a) => {
+  const articles = baseArticles.filter((a) => {
     if (a.language && a.language !== "zh") return false;
     // Fallback: if title has no Chinese chars and is mostly ASCII, likely English
     const t = a.title ?? "";
@@ -115,8 +131,10 @@ export async function GET(request: Request) {
     .select("full_text, language")
     .in("id", sampleIds);
 
+  const textRows = (rawTextSamples ?? []) as DomesticTextSample[];
+
   // Content-level filter: exclude articles where <50% chars are Chinese
-  const textSamples = (rawTextSamples ?? []).filter((a) => {
+  const textSamples = textRows.filter((a) => {
     if (!a.full_text) return false;
     if (a.language && a.language !== "zh") return false;
     const chineseCount = (a.full_text.match(CHINESE_CHAR_RE) ?? []).length;
@@ -139,20 +157,21 @@ export async function GET(request: Request) {
   let totalTokens = 0;
 
   for (const a of textSamples) {
-    totalTokens += a.full_text.length;
+    const text = a.full_text ?? "";
+    totalTokens += text.length;
 
     // Character frequency
-    const cf = countCharFrequency(a.full_text);
+    const cf = countCharFrequency(text);
     for (const [ch, cnt] of cf) charFreq.set(ch, (charFreq.get(ch) || 0) + cnt);
 
     // Sentence splitting
-    const sentences = a.full_text.split(SENTENCE_END).filter((s) => s.trim().length > 0);
+    const sentences = text.split(SENTENCE_END).filter((s) => s.trim().length > 0);
     for (const s of sentences) {
       sentenceLengths.push(s.replace(/\s/g, "").length);
     }
 
     // Word segmentation
-    const words = segmentChinese(a.full_text);
+    const words = segmentChinese(text);
     const filtered: string[] = [];
     for (const w of words) {
       if (w.length < 2 || STOPWORDS_ZH.has(w)) continue;

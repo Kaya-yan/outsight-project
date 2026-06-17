@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { batchCreateAnnotations } from "@/lib/data-access/annotations";
 
+type BatchAnnotationInput = Parameters<typeof batchCreateAnnotations>[1][number];
+
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -13,15 +15,15 @@ export async function POST(request: Request) {
   }
 
   // Attach coder_id to each annotation
-  const withCoder = annotations.map((a: Record<string, unknown>) => ({
-    article_id: a.article_id,
-    node_id: a.node_id,
+  const withCoder: BatchAnnotationInput[] = annotations.map((a: Record<string, unknown>) => ({
+    article_id: String(a.article_id ?? ""),
+    node_id: String(a.node_id ?? ""),
     coder_id: user.id,
-    quote_text: a.quote_text,
-    start_offset: a.start_offset,
-    end_offset: a.end_offset,
-    note: a.note,
-    confidence: a.confidence ?? 3,
+    quote_text: typeof a.quote_text === "string" ? a.quote_text : undefined,
+    start_offset: typeof a.start_offset === "number" ? a.start_offset : undefined,
+    end_offset: typeof a.end_offset === "number" ? a.end_offset : undefined,
+    note: typeof a.note === "string" ? a.note : undefined,
+    confidence: typeof a.confidence === "number" ? a.confidence : 3,
   }));
 
   const { data, error } = await batchCreateAnnotations(supabase, withCoder);

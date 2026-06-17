@@ -28,7 +28,6 @@ export async function POST(
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } },
 ) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

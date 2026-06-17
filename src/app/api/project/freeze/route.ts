@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { typedInsert } from "@/lib/data-access/base";
 import { createClient } from "@/lib/supabase/server";
 import { getProfileById } from "@/lib/data-access/profiles";
 import { bulkUpdateStatus } from "@/lib/data-access/articles";
@@ -14,11 +15,12 @@ export async function POST() {
   }
 
   // Get all non-archived, non-frozen articles
-  const { data: articles, error: fetchError } = await supabase
+  const { data: rawArticles, error: fetchError } = await supabase
     .from("articles")
     .select("id, status")
     .neq("status", "已封存")
     .eq("is_archived", false);
+  const articles = (rawArticles ?? []) as Array<{ id: string; status: string }>;
 
   if (fetchError) {
     return NextResponse.json({ error: "查询失败" }, { status: 500 });
@@ -36,7 +38,7 @@ export async function POST() {
   }
 
   // Log the activity
-  await supabase.from("activity_logs").insert({
+  await typedInsert(supabase, "activity_logs", {
     user_id: user.id,
     action: "project_freeze",
     entity_type: "articles",

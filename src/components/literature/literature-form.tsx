@@ -4,11 +4,12 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MemberSelector } from "@/components/shared/member-selector";
+import type { LiteratureNote } from "@/types/database";
 import { Upload, FileText, Wand2 } from "lucide-react";
 
 interface LitFormProps {
-  initial?: Record<string, unknown>;
-  onSubmit: (data: Record<string, unknown>) => Promise<string | null>;
+  initial?: Partial<LiteratureNote>;
+  onSubmit: (data: Record<string, unknown>) => Promise<string | null | void>;
   onCancel: () => void;
   isSubmitting: boolean;
 }
@@ -117,8 +118,7 @@ export function LiteratureForm({ initial, onSubmit, onCancel, isSubmitting }: Li
       rating: rating || null,
       tags: tagsInput.split(",").map((t) => t.trim()).filter(Boolean),
     });
-    // If note was created and we have a file, upload it
-    if (resultNoteId && selectedFile) {
+    if (typeof resultNoteId === "string" && selectedFile) {
       await uploadAttachment(resultNoteId);
     }
   }

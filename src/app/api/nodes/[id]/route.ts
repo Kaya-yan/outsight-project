@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { updateNode, deleteNode, getNodeById } from "@/lib/data-access/coding-nodes";
+import { updateNode, deleteNode } from "@/lib/data-access/coding-nodes";
 import { getProfileById } from "@/lib/data-access/profiles";
 
 export async function PATCH(
@@ -37,14 +37,13 @@ export async function DELETE(
   }
 
   // Delete child nodes first
-  const { data: children } = await supabase
+  const { data: rawChildren } = await supabase
     .from("coding_nodes")
     .select("id")
     .eq("parent_id", params.id);
-  if (children) {
-    for (const child of children) {
-      await deleteNode(supabase, child.id);
-    }
+  const children = (rawChildren ?? []) as Array<{ id: string }>;
+  for (const child of children) {
+    await deleteNode(supabase, child.id);
   }
 
   const { error } = await deleteNode(supabase, params.id);

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createArticle, updateArticle } from "@/lib/data-access/articles";
 import { isWithinResearchPeriod, autoPeriod } from "@/lib/time-filter";
 import { normalizeUrl, hashUrl } from "@/lib/dedup";
-import { parseFile, getSupportedLabel } from "@/lib/parsers/adapter";
+import { parseFile } from "@/lib/parsers/adapter";
 import { runPreReadPipeline } from "@/lib/ai/pre-read-pipeline";
 import type { CreateArticleInput } from "@/lib/data-access/articles";
 

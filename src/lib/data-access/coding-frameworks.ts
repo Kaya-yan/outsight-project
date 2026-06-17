@@ -7,21 +7,21 @@ export async function getFrameworkById(client: Client, id: string): Promise<Quer
   return { data, error };
 }
 
-export async function listFrameworks(client: Client, opts?: { isActive?: boolean } & PaginationParams) {
+export async function listFrameworks(client: Client, opts?: { isActive?: boolean } & PaginationParams): Promise<QueryResult<CodingFramework[]>> {
   const { from, to } = normalizePagination(opts);
   let query = client.from("coding_frameworks").select("*").order("created_at", { ascending: false });
   if (opts?.isActive !== undefined) query = query.eq("is_active", opts.isActive);
   const { data, error } = await query.range(from, to);
-  return { data, error };
+  return { data: (data ?? []) as CodingFramework[], error };
 }
 
-export async function listActiveFrameworks(client: Client) {
+export async function listActiveFrameworks(client: Client): Promise<QueryResult<CodingFramework[]>> {
   const { data, error } = await client
     .from("coding_frameworks")
     .select("*")
     .eq("is_active", true)
     .order("created_at", { ascending: false });
-  return { data, error };
+  return { data: (data ?? []) as CodingFramework[], error };
 }
 
 export async function createFramework(

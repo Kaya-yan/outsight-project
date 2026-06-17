@@ -335,7 +335,6 @@ export default function ProjectsPage() {
                 onSelectAll={selectAll}
                 onEdit={(a) => setEditingArticle(a)}
                 onDelete={(a) => setDeleteConfirm(a)}
-                onStatusChange={(a, s) => handleStatusChange(a, s)}
               />
 
               {/* Pagination */}

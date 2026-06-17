@@ -76,7 +76,7 @@ export function LiteratureDashboard({ stats }: { stats: LitStats }) {
         ) : (
           <ResponsiveContainer width="100%" height={160}>
             <PieChart>
-              <Pie data={reviewData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+              <Pie data={reviewData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={50} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`}>
                 <Cell fill="#E67E22" />
                 <Cell fill="#F0F2F5" />
               </Pie>

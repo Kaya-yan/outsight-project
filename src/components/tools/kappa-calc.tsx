@@ -23,7 +23,7 @@ function calcKappa(
     allNodes.add(p.nodeB);
   }
 
-  const nodeList = [...allNodes];
+  const nodeList = Array.from(allNodes);
   const n = pairs.length;
   if (n === 0) return { kappa: 0, agreement: 0, total: 0, interpretation: "无数据" };
 

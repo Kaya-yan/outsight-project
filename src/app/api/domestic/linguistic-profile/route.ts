@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { segmentChinese, countCharFrequency } from "@/lib/domestic/chinese-segmenter";
+
+type LinguisticArticleRow = {
+  id: string;
+  full_text: string | null;
+  title: string;
+};
+
+type LinguisticCorpusRow = {
+  full_text: string | null;
+};
 import { STOPWORDS_ZH } from "@/lib/stopwords-zh";
 
 /**
@@ -79,11 +89,13 @@ export async function GET(request: Request) {
   }
 
   // Fetch target article
-  const { data: article, error: fetchErr } = await supabase
+  const { data: rawArticle, error: fetchErr } = await supabase
     .from("articles")
     .select("id, full_text, title")
     .eq("id", articleId)
     .single();
+
+  const article = rawArticle as LinguisticArticleRow | null;
 
   if (fetchErr || !article) {
     return NextResponse.json({ error: "文章不存在" }, { status: 404 });
@@ -234,14 +246,16 @@ export async function GET(request: Request) {
   let tfidfTop: { word: string; tfidf: number }[] = [];
 
   try {
-    const { data: corpus } = await supabase
+    const { data: rawCorpus } = await supabase
       .from("articles")
       .select("full_text")
       .eq("source", "domestic_media")
       .not("full_text", "is", null)
       .limit(500);
 
-    if (corpus && corpus.length > 1) {
+    const corpus = (rawCorpus ?? []) as LinguisticCorpusRow[];
+
+    if (corpus.length > 1) {
       const docCount = corpus.length;
 
       // Compute document frequency for each word in the target article

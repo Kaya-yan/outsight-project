@@ -25,8 +25,9 @@ export async function GET() {
     if (n.tags && n.tags.length > 0) md += `**Tags**: ${n.tags.join(", ")}\n\n`;
     if (n.summary) md += `**Summary**: ${n.summary}\n\n`;
     if (n.abstract) md += `**Abstract**: ${n.abstract}\n\n`;
-    if (n.key_points && n.key_points.length > 0) {
-      md += `**Key Points**:\n${n.key_points.map((kp: string) => `- ${kp}`).join("\n")}\n\n`;
+    const keyPoints = (n.key_points ?? []) as string[];
+    if (keyPoints.length > 0) {
+      md += `**Key Points**:\n${keyPoints.map((kp) => `- ${kp}`).join("\n")}\n\n`;
     }
     if (n.inspiration) md += `**Inspiration**: ${n.inspiration}\n\n`;
     if (n.notes) md += `**Notes**: ${n.notes}\n\n`;

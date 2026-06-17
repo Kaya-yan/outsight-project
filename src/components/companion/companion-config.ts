@@ -13,6 +13,10 @@ export const TIMING = {
   cursorBlink: 1500,
   fadeIn: 300,
   expand: 400,
+  tiltMin: 4000,
+  tiltMax: 9000,
+  tiltAngle: 5,
+  tiltDuration: 1500,
 } as const;
 
 /** Terminal sizing */

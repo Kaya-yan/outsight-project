@@ -8,6 +8,7 @@
 
 import { TIER_1_COMBOS } from "./gdelt-keywords";
 import { expandSearchQueries, type KeywordTier } from "./keyword-expander";
+import { GDELT_RESEARCH_PERIODS } from "./research-periods";
 
 // ============================================================
 // Batch types
@@ -36,15 +37,7 @@ export interface Batch {
 // Media outlets and periods (matching crawl scope)
 // ============================================================
 
-const ALL_PERIODS = [
-  { value: "2022.10-2023.03", timespan: "20221001000000-20230331235959" },
-  { value: "2023.04-2023.09", timespan: "20230401000000-20230930235959" },
-  { value: "2023.10-2024.03", timespan: "20231001000000-20240331235959" },
-  { value: "2024.04-2024.09", timespan: "20240401000000-20240930235959" },
-  { value: "2024.10-2024.12", timespan: "20241001000000-20241231235959" },
-  { value: "2025.01-2025.06", timespan: "20250101000000-20250630235959" },
-  { value: "2025.07-2025.12", timespan: "20250701000000-20251231235959" },
-];
+const ALL_PERIODS = GDELT_RESEARCH_PERIODS;
 
 const ALL_MEDIA_NAMES = ["NYT", "WP", "WSJ", "Guardian", "Economist", "BBC"];
 

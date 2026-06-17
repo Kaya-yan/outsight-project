@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getProfileById } from "@/lib/data-access/profiles";
 import { listLiterature, createLit } from "@/lib/data-access/literature";
 
 export async function GET(request: Request) {
@@ -36,8 +37,8 @@ export async function POST(request: Request) {
   // Resolve reader_id to reader_name
   let readerName: string | null = null;
   if (body.reader_id) {
-    const { data: rp } = await supabase.from("profiles").select("display_name, username").eq("id", body.reader_id).single();
-    readerName = rp?.display_name || rp?.username || null;
+    const { data: readerProfile } = await getProfileById(supabase, body.reader_id);
+    readerName = readerProfile?.display_name || readerProfile?.username || null;
   }
 
   const { data, error } = await createLit(supabase, {

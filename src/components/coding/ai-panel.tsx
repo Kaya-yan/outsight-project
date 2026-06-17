@@ -22,6 +22,29 @@ interface AiPanelProps {
   onPreReadComplete?: () => void;
 }
 
+type NarrativeData = {
+  style?: string;
+  explanation?: string;
+  framing_devices?: string[];
+};
+
+type ToneData = {
+  tone?: string;
+  confidence?: number;
+  keywords?: string[];
+};
+
+type SourcesData = {
+  source_types?: Record<string, number>;
+  named_sources?: string[];
+  anonymous_count?: number;
+};
+
+type LinguisticData = {
+  passive_voice?: string[];
+  citation_types?: string[];
+};
+
 const PANEL_PREF_KEY = "outsight-ai-panel-open";
 
 export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanelProps) {
@@ -93,10 +116,10 @@ export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanel
   const canPreRead = ["已清洗", "已入库", "已下载全文", "待编码", "已预读"].includes(articleStatus);
   const hasAiData = !!(aiData?.summary || aiData?.sentiment || aiData?.framework_hint);
 
-  const narrative = aiData?.metadata?.ai_narrative as Record<string, unknown> | undefined;
-  const sources = aiData?.metadata?.ai_sources as Record<string, unknown> | undefined;
-  const tone = aiData?.metadata?.ai_tone as Record<string, unknown> | undefined;
-  const linguistic = aiData?.metadata?.ai_linguistic as Record<string, unknown> | undefined;
+  const narrative = aiData?.metadata?.ai_narrative as NarrativeData | undefined;
+  const sources = aiData?.metadata?.ai_sources as SourcesData | undefined;
+  const tone = aiData?.metadata?.ai_tone as ToneData | undefined;
+  const linguistic = aiData?.metadata?.ai_linguistic as LinguisticData | undefined;
 
   return (
     <Card className="border-[#E2E5E9] shadow-card">
@@ -199,20 +222,20 @@ export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanel
               {narrative && (
                 <Section title="叙事风格">
                   <Badge className="text-[10px] bg-[#5DAD93]/10 text-[#5DAD93] mb-1">
-                    {(narrative.style as string) ?? "未知"}
+                    {narrative.style ?? "未知"}
                   </Badge>
                   {narrative.explanation && (
                     <p className="text-xs text-[#4A5568] mt-1">
-                      {narrative.explanation as string}
+                      {narrative.explanation}
                     </p>
                   )}
-                  {narrative.framing_devices && (narrative.framing_devices as string[]).length > 0 && (
+                  {narrative.framing_devices?.length ? (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {(narrative.framing_devices as string[]).map((d, i) => (
+                      {narrative.framing_devices.map((d, i) => (
                         <Badge key={i} className="text-[10px] bg-[#F0F2F5] text-[#2D3436]">{d}</Badge>
                       ))}
                     </div>
-                  )}
+                  ) : null}
                 </Section>
               )}
 
@@ -221,40 +244,40 @@ export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanel
                 <Section title="语气调性">
                   <div className="flex items-center gap-2">
                     <Badge className={
-                      (tone.tone as string) === "critical" ? "bg-[#E67E22]/10 text-[#E67E22]" :
-                      (tone.tone as string) === "constructive" ? "bg-[#5DAD93]/10 text-[#5DAD93]" :
-                      (tone.tone as string) === "alarming" ? "bg-[#E67E22]/10 text-[#E67E22]" :
+                      tone.tone === "critical" ? "bg-[#E67E22]/10 text-[#E67E22]" :
+                      tone.tone === "constructive" ? "bg-[#5DAD93]/10 text-[#5DAD93]" :
+                      tone.tone === "alarming" ? "bg-[#E67E22]/10 text-[#E67E22]" :
                       "bg-[#4A90A4]/10 text-[#4A90A4]"
                     }>
-                      {(tone.tone as string) === "critical" ? "批判性" :
-                       (tone.tone as string) === "constructive" ? "建设性" :
-                       (tone.tone as string) === "descriptive" ? "描述性" :
-                       (tone.tone as string) === "alarming" ? "警示性" :
-                       (tone.tone as string) === "celebratory" ? "赞扬性" :
-                       (tone.tone as string) ?? "未知"}
+                      {tone.tone === "critical" ? "批判性" :
+                       tone.tone === "constructive" ? "建设性" :
+                       tone.tone === "descriptive" ? "描述性" :
+                       tone.tone === "alarming" ? "警示性" :
+                       tone.tone === "celebratory" ? "赞扬性" :
+                       tone.tone ?? "未知"}
                     </Badge>
                     {tone.confidence != null && (
                       <span className="text-xs text-[#7F8A93]">
-                        置信度 {Math.round((tone.confidence as number) * 100)}%
+                        置信度 {Math.round(tone.confidence * 100)}%
                       </span>
                     )}
                   </div>
-                  {tone.keywords && (tone.keywords as string[]).length > 0 && (
+                  {tone.keywords?.length ? (
                     <div className="flex flex-wrap gap-1 mt-1">
-                      {(tone.keywords as string[]).map((k, i) => (
+                      {tone.keywords.map((k, i) => (
                         <Badge key={i} className="text-[10px] bg-[#F0F2F5] text-[#7F8A93]">{k}</Badge>
                       ))}
                     </div>
-                  )}
+                  ) : null}
                 </Section>
               )}
 
               {/* Source Analysis */}
               {sources && (
                 <Section title="消息源分析">
-                  {sources.source_types && (
+                  {sources.source_types ? (
                     <div className="flex flex-wrap gap-1 mb-1">
-                      {Object.entries(sources.source_types as Record<string, number>).map(([k, v]) => (
+                      {Object.entries(sources.source_types).map(([k, v]) => (
                         <Badge key={k} className="text-[10px] bg-[#4A90A4]/5 text-[#4A90A4]">
                           {k === "official" ? "官方" :
                            k === "expert" ? "专家" :
@@ -265,15 +288,15 @@ export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanel
                         </Badge>
                       ))}
                     </div>
-                  )}
-                  {sources.named_sources && (sources.named_sources as string[]).length > 0 && (
+                  ) : null}
+                  {sources.named_sources?.length ? (
                     <p className="text-xs text-[#4A5568]">
-                      具名来源：{(sources.named_sources as string[]).join("、")}
+                      具名来源：{sources.named_sources.join("、")}
                     </p>
-                  )}
-                  {sources.anonymous_count != null && (sources.anonymous_count as number) > 0 && (
+                  ) : null}
+                  {sources.anonymous_count != null && sources.anonymous_count > 0 && (
                     <p className="text-xs text-[#E67E22] mt-0.5">
-                      匿名来源 {(sources.anonymous_count as number)} 处
+                      匿名来源 {sources.anonymous_count} 处
                     </p>
                   )}
                 </Section>
@@ -306,24 +329,24 @@ export function AiPanel({ articleId, articleStatus, onPreReadComplete }: AiPanel
               {/* Linguistic */}
               {linguistic && (
                 <Section title="语言观察">
-                  {linguistic.passive_voice && (linguistic.passive_voice as string[]).length > 0 && (
+                  {linguistic.passive_voice?.length ? (
                     <div className="mb-1">
                       <span className="text-[10px] text-[#7F8A93]">被动句式：</span>
-                      {(linguistic.passive_voice as string[]).slice(0, 3).map((p, i) => (
+                      {linguistic.passive_voice.slice(0, 3).map((p, i) => (
                         <span key={i} className="text-xs text-[#4A5568] italic">
-                          &ldquo;{p}&rdquo;{i < Math.min((linguistic.passive_voice as string[]).length, 3) - 1 ? "、" : ""}
+                          &ldquo;{p}&rdquo;{i < Math.min(linguistic.passive_voice?.length ?? 0, 3) - 1 ? "、" : ""}
                         </span>
                       ))}
                     </div>
-                  )}
-                  {linguistic.citation_types && (linguistic.citation_types as string[]).length > 0 && (
+                  ) : null}
+                  {linguistic.citation_types?.length ? (
                     <div>
                       <span className="text-[10px] text-[#7F8A93]">引用类型：</span>
                       <span className="text-xs text-[#4A5568]">
-                        {(linguistic.citation_types as string[]).join("、")}
+                        {linguistic.citation_types.join("、")}
                       </span>
                     </div>
-                  )}
+                  ) : null}
                 </Section>
               )}
             </>

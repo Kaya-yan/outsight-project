@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { typedUpdate } from "@/lib/data-access/base";
 import { createClient } from "@/lib/supabase/server";
 import {
   analyzeFrame, analyzeDiscourseActors, analyzePolicyTools,
@@ -17,6 +18,12 @@ interface DimDef {
   key: keyof Omit<DomesticAiAnalysis, "analyzed_at" | "errors">;
   fn: (text: string) => Promise<{ data: unknown; error: string | null; truncated?: boolean }>;
 }
+
+type DomesticArticleRow = {
+  id: string;
+  full_text: string | null;
+  metadata: Record<string, unknown> | null;
+};
 
 const DIMENSIONS: DimDef[] = [
   { key: "frame", fn: analyzeFrame },
@@ -51,12 +58,14 @@ export async function POST(request: Request) {
   }
 
   // Fetch article
-  const { data: article, error: fetchErr } = await supabase
+  const { data: rawArticle, error: fetchErr } = await supabase
     .from("articles")
     .select("id, full_text, metadata")
     .eq("id", articleId)
     .eq("source", "domestic_media")
     .single();
+
+  const article = rawArticle as DomesticArticleRow | null;
 
   if (fetchErr || !article) {
     return NextResponse.json({ error: "文章不存在" }, { status: 404 });
@@ -65,8 +74,9 @@ export async function POST(request: Request) {
   if (!article.full_text || article.full_text.length < 50) {
     return NextResponse.json({ error: "文章正文过短，无法分析" }, { status: 400 });
   }
+  const articleText = article.full_text;
 
-  console.log(`[Analyze] Start: articleId=${articleId}, textLen=${article.full_text.length}, title="${article.full_text.slice(0, 30)}..."`);
+  console.log(`[Analyze] Start: articleId=${articleId}, textLen=${articleText.length}, title="${articleText.slice(0, 30)}..."`);
 
   const encoder = new TextEncoder();
   let clientDisconnected = false;
@@ -97,7 +107,7 @@ export async function POST(request: Request) {
         const dimStart = Date.now();
 
         try {
-          const result = await dim.fn(article.full_text);
+          const result = await dim.fn(articleText);
           const dimMs = Date.now() - dimStart;
           console.log(`[Analyze] ${dim.key}: status=${result.data ? "ok" : "failed"}, error=${result.error ?? "none"}, truncated=${result.truncated ?? false}, latency=${dimMs}ms`);
 
@@ -166,17 +176,16 @@ export async function POST(request: Request) {
       };
 
       // Save to database — re-fetch metadata to avoid race condition
-      const { data: freshArticle } = await supabase
+      const { data: freshRawArticle } = await supabase
         .from("articles")
         .select("metadata")
         .eq("id", articleId)
         .single();
+      const freshArticle = freshRawArticle as { metadata: Record<string, unknown> | null } | null;
       const existingMeta = ((freshArticle?.metadata ?? article.metadata) as Record<string, unknown>) ?? {};
       const updatedMeta = { ...existingMeta, domestic_ai_analysis: analysis };
 
-      const { error: updateErr } = await supabase
-        .from("articles")
-        .update({ metadata: updatedMeta })
+      const { error: updateErr } = await typedUpdate(supabase, "articles", { metadata: updatedMeta })
         .eq("id", articleId);
 
       if (updateErr) {

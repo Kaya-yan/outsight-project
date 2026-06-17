@@ -12,7 +12,7 @@ interface LitStoreState {
 
   loadNotes: (params?: { search?: string; tag?: string; forReview?: boolean; sort?: string }) => Promise<void>;
   loadStats: () => Promise<void>;
-  createNote: (data: Record<string, unknown>) => Promise<LiteratureNote | null>;
+  createNote: (data: Record<string, unknown>) => Promise<string | null>;
   updateNote: (id: string, data: Record<string, unknown>) => Promise<boolean>;
   deleteNote: (id: string) => Promise<boolean>;
 }

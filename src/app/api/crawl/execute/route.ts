@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createArticle } from "@/lib/data-access/articles";
 import { updateCrawlJob } from "@/lib/data-access/crawl-jobs";
+import { GDELT_RESEARCH_PERIODS } from "@/lib/research-periods";
 import { fetchRssArticles, getFeedHealth } from "@/lib/rss-parser";
 import { fetchNewsApiArticles } from "@/lib/newsapi-client";
 import { batchGuardCheck } from "@/lib/insert-guard";
 import { discoverArticles } from "@/lib/search-engine-client";
-import { expandSearchQueries, type KeywordTier, MEDIA_SEARCH_DOMAINS } from "@/lib/keyword-expander";
+import { expandSearchQueries, type KeywordTier } from "@/lib/keyword-expander";
 import { TIER_1_COMBOS, TIER_2_COMBOS } from "@/lib/gdelt-keywords";
 import { autoPeriod } from "@/lib/time-filter";
-import { isFirecrawlAvailable, discoverLinks } from "@/lib/firecrawl-client";
+import { isFirecrawlAvailable } from "@/lib/firecrawl-client";
 
 // ============================================================
 // All 6 media outlets × 7 research periods (2022-2025)
@@ -23,15 +24,7 @@ const ALL_MEDIA = [
   { name: "BBC", domains: "bbc.com OR bbc.co.uk" },
 ];
 
-const ALL_PERIODS = [
-  { value: "2022.10-2023.03", timespan: "20221001000000-20230331235959" },
-  { value: "2023.04-2023.09", timespan: "20230401000000-20230930235959" },
-  { value: "2023.10-2024.03", timespan: "20231001000000-20240331235959" },
-  { value: "2024.04-2024.09", timespan: "20240401000000-20240930235959" },
-  { value: "2024.10-2024.12", timespan: "20241001000000-20241231235959" },
-  { value: "2025.01-2025.06", timespan: "20250101000000-20250630235959" },
-  { value: "2025.07-2025.12", timespan: "20250701000000-20251231235959" },
-];
+const ALL_PERIODS = GDELT_RESEARCH_PERIODS;
 
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
@@ -111,13 +104,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "缺少 job_id" }, { status: 400 });
   }
 
+  if (!jobId) {
+    return NextResponse.json({ error: "缺少 job_id" }, { status: 400 });
+  }
+  const currentJobId = jobId;
+
   console.log(`[Crawl] ========================================`);
   console.log(`[Crawl] 后台采集开始: ${jobId}`);
   console.log(`[Crawl] 范围: 全部6媒体 / 7时段(2022-2025) / 仅元数据`);
   console.log(`[Crawl] ========================================`);
 
   // Mark job as running
-  await updateCrawlJob(supabase, jobId, {
+  await updateCrawlJob(supabase, currentJobId, {
     status: "running",
     progress: 0,
   });
@@ -135,13 +133,12 @@ export async function POST(request: Request) {
   // return statement can always reference them safely.
   let insertedCount = 0;
   let sourceStats = { rss: 0, newsapi: 0, gdelt: 0, search: 0 };
-  let totalGuardStats = {
+  const totalGuardStats = {
     total: 0,
     passed: 0,
     filtered: {} as Record<string, number>,
     details: [] as Array<{ url: string; title?: string; reason: string; detail: string }>,
   };
-  let searchEngineStats: Record<string, unknown> | null = null;
   let searchResultCount = 0;
 
   try {
@@ -195,7 +192,7 @@ export async function POST(request: Request) {
 
         // Update progress: 0-5% RSS+NewsAPI, 5-95% GDELT
         const progress = 5 + Math.round((gdeltQueryCount / gdeltTotalQueries) * 90);
-        await updateCrawlJob(supabase, jobId, {
+        await updateCrawlJob(supabase, currentJobId, {
           progress,
           total_fetched: allArticles.length,
         });
@@ -226,12 +223,6 @@ export async function POST(request: Request) {
       });
 
       searchResultCount = results.length;
-      searchEngineStats = {
-        enginesUsed: engineStats.enginesUsed,
-        engineResults: engineStats.engineResults,
-        totalQueries: engineStats.totalQueries,
-        productiveQueries: engineStats.productiveQueries,
-      };
 
       console.log(`[Crawl] 搜索引擎: ${searchResultCount} 篇发现 (引擎: ${engineStats.enginesUsed.join(", ") || "无"})`);
 
@@ -254,7 +245,7 @@ export async function POST(request: Request) {
     const rssCount = allArticles.filter((a) => rssArticles.some((r) => r.url === a.url)).length;
     const newsapiCount = allArticles.filter((a) => newsApiArticles.some((n) => n.url === a.url)).length;
     const gdeltCount = allArticles.length - rssCount - newsapiCount - searchResultCount;
-    const sourceStats = { rss: rssCount, newsapi: newsapiCount, gdelt: gdeltCount, search: searchResultCount };
+    sourceStats = { rss: rssCount, newsapi: newsapiCount, gdelt: gdeltCount, search: searchResultCount };
 
     console.log(`[Crawl] 四源合计拉取 ${allArticles.length} 篇 (RSS:${sourceStats.rss} NewsAPI:${sourceStats.newsapi} GDELT:估算 search:${sourceStats.search})`);
 
@@ -334,7 +325,7 @@ export async function POST(request: Request) {
     }
 
     // Mark completed
-    await updateCrawlJob(supabase, jobId, {
+    await updateCrawlJob(supabase, currentJobId, {
       status: "completed",
       progress: 100,
       total_fetched: allArticles.length,
@@ -373,7 +364,7 @@ export async function POST(request: Request) {
     const errMsg = err instanceof Error ? err.message : String(err);
     console.log(`[Crawl] 任务失败: ${errMsg}`);
 
-    await updateCrawlJob(supabase, jobId, {
+    await updateCrawlJob(supabase, currentJobId, {
       status: "failed",
       error_message: errMsg,
       finished_at: new Date().toISOString(),

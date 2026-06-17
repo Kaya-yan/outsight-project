@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getProfileById } from "@/lib/data-access/profiles";
 import { getLitById, updateLit, deleteLit, listComments, listReactions } from "@/lib/data-access/literature";
 
 export async function GET(
@@ -41,8 +42,8 @@ export async function PATCH(
   // Resolve reader_id → reader_name
   const updates: Record<string, unknown> = { ...body, updated_by: user.id };
   if (body.reader_id) {
-    const { data: rp } = await supabase.from("profiles").select("display_name, username").eq("id", body.reader_id).single();
-    updates.reader_name = rp?.display_name || rp?.username || null;
+    const { data: readerProfile } = await getProfileById(supabase, body.reader_id);
+    updates.reader_name = readerProfile?.display_name || readerProfile?.username || null;
   }
   delete updates.reader_id;
 

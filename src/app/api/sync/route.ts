@@ -128,7 +128,7 @@ export async function POST(request: Request) {
     const toInsert = guardedBatch.filter((g) => g.guard.passed);
 
     for (const g of guardedBatch) {
-      if (!g.guard.passed && g.guard.reason === "out_of_period") timeFilteredCount++;
+      if (!g.guard.passed && ["date_too_old", "date_too_new", "date_in_future"].includes(g.guard.reason)) timeFilteredCount++;
       if (!g.guard.passed && g.guard.reason === "duplicate_url") dupeCount++;
     }
 

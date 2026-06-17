@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { analyzeText, tokenize, wordFrequency, collocations, kwic } from "@/lib/linguistics/english-analyzer";
+import { analyzeText, tokenize, collocations, kwic } from "@/lib/linguistics/english-analyzer";
 
 /**
  * POST /api/linguistics/analyze
@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
   // If article IDs provided, concatenate their full_text
   if (body.articleIds?.length) {
-    const { data: articles, error } = await supabase
+    const { data: rawArticles, error } = await supabase
       .from("articles")
       .select("full_text, title")
       .in("id", body.articleIds)
@@ -38,7 +38,9 @@ export async function POST(request: Request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    if (articles?.length) {
+    const articles = (rawArticles ?? []) as Array<{ full_text: string | null; title: string | null }>;
+
+    if (articles.length) {
       text = articles.map((a) => a.full_text || "").filter(Boolean).join("\n\n");
     }
 

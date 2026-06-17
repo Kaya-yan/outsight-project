@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit --pretty false",
+    "test:smoke": "node --no-warnings --experimental-strip-types --test smoke-logic.test.ts",
+    "check": "npm run typecheck && npm run lint && npm run test:smoke"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

@@ -1,6 +1,6 @@
 import type { Client, QueryResult, PaginationParams } from "./base";
 import { normalizePagination, typedInsert, typedUpdate } from "./base";
-import type { Article, ArticleStatus } from "@/types/database";
+import type { Article, ArticleStatus, Database } from "@/types/database";
 
 export async function getArticleById(client: Client, id: string): Promise<QueryResult<Article>> {
   const { data, error } = await client.from("articles").select("*").eq("id", id).single();
@@ -58,29 +58,7 @@ export async function listArticles(
   return { data, error, count };
 }
 
-export interface CreateArticleInput {
-  title: string;
-  url: string;
-  source?: string;
-  media?: string;
-  source_type?: "mainstream_media" | "social_media" | "academic_journal" | "government" | "other";
-  publish_date?: string;
-  period?: string;
-  language?: "en" | "zh" | "bilingual";
-  author?: string;
-  abstract?: string;
-  full_text?: string;
-  full_text_status?: "missing" | "partial" | "complete" | "manual_uploaded" | "paywalled";
-  url_hash?: string;
-  content?: string;
-  word_count?: number;
-  keywords?: string[];
-  keyword_combo?: string[];
-  region?: string;
-  status?: string;
-  metadata?: Record<string, unknown>;
-  created_by?: string;
-}
+export type CreateArticleInput = Database["public"]["Tables"]["articles"]["Insert"];
 
 export async function createArticle(
   client: Client,
@@ -93,7 +71,7 @@ export async function createArticle(
 export async function updateArticle(
   client: Client,
   id: string,
-  input: Partial<Article>,
+  input: Database["public"]["Tables"]["articles"]["Update"],
 ): Promise<QueryResult<Article>> {
   const { data, error } = await typedUpdate(client, "articles", input).eq("id", id).select().single();
   return { data, error };
@@ -106,10 +84,10 @@ export async function deleteArticle(client: Client, id: string): Promise<QueryRe
 
   if (error) {
     console.error(`[DataAccess] deleteArticle FAILED: id=${id}`, {
-      code: (error as Record<string, unknown>)?.code,
-      message: (error as Record<string, unknown>)?.message,
-      details: (error as Record<string, unknown>)?.details,
-      hint: (error as Record<string, unknown>)?.hint,
+      code: (error as unknown as Record<string, unknown>)?.code,
+      message: (error as unknown as Record<string, unknown>)?.message,
+      details: (error as unknown as Record<string, unknown>)?.details,
+      hint: (error as unknown as Record<string, unknown>)?.hint,
       full: JSON.stringify(error),
     });
   } else {
@@ -123,7 +101,7 @@ export async function bulkArchiveArticles(client: Client, ids: string[]): Promis
   const { data, error } = await typedUpdate(client, "articles", {
     is_archived: true,
     archived_at: new Date().toISOString(),
-  } as Partial<Article>).in("id", ids);
+  }).in("id", ids);
   return { data, error };
 }
 
@@ -134,6 +112,6 @@ export async function bulkUpdateStatus(
 ): Promise<QueryResult<null>> {
   const { data, error } = await typedUpdate(client, "articles", {
     status,
-  } as Partial<Article>).in("id", ids);
+  }).in("id", ids);
   return { data, error };
 }

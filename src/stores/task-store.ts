@@ -18,7 +18,7 @@ interface TaskStoreState {
   createTask: (input: {
     article_id: string;
     task_type: "solo" | "dual";
-    coder_a_id: string;
+    coder_a_id?: string;
     coder_b_id?: string;
     framework_id?: string;
     reviewer_id?: string;

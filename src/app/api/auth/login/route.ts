@@ -50,7 +50,12 @@ export async function POST(request: Request) {
     });
   }
 
-  // 2. If login fails, try to auto-register
+  const canAutoRegister = signInError.status === 400 || signInError.message === "Invalid login credentials";
+  if (!canAutoRegister) {
+    return NextResponse.json({ error: signInError.message }, { status: 400 });
+  }
+
+  // 2. If login fails with credential error, try to auto-register
   const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email,
     password,

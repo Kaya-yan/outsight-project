@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createArticle } from "@/lib/data-access/articles";
 import { stripHtmlTags, cleanText } from "@/lib/text-cleaner";
 
 /**
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
     full_text_status: "complete" as const,
     word_count: charCount,
     status: "已入库" as const,
-    author: author?.trim() || null,
+    author: author?.trim() || undefined,
     metadata: {
       char_count: charCount,
       collected_at: new Date().toISOString(),
@@ -77,14 +78,11 @@ export async function POST(request: Request) {
     },
   };
 
-  const { data: inserted, error: insertErr } = await supabase
-    .from("articles")
-    .insert(insertData)
-    .select("id, title")
-    .single();
+  const { data: inserted, error: insertErr } = await createArticle(supabase, insertData);
 
   if (insertErr) {
-    return NextResponse.json({ error: `入库失败: ${insertErr.message}` }, { status: 500 });
+    const insertErrMsg = insertErr instanceof Error ? insertErr.message : String(insertErr);
+    return NextResponse.json({ error: `入库失败: ${insertErrMsg}` }, { status: 500 });
   }
 
   return NextResponse.json({ data: inserted, charCount });

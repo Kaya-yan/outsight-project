@@ -20,7 +20,7 @@ export default function ComparePage() {
   const canReview = useAuthStore(selectCanReview);
 
   const { nodes, loadFrameworkNodes, frameworks, loadFrameworks } = useCodingStore();
-  const { loadTaskDetail, reviewTask } = useTaskStore();
+  const { reviewTask } = useTaskStore();
 
   const [task, setTask] = useState<CodingTask | null>(null);
   const [annotationsA, setAnnotationsA] = useState<Annotation[]>([]);
@@ -98,18 +98,18 @@ export default function ComparePage() {
     setIsCalcLoading(false);
   }
 
-  async function handleArbitrate(_id: string, _resolvedIds: string[], note: string) {
+  async function handleArbitrate(_id: string, _resolvedIds: string[], note: string): Promise<boolean> {
     setIsSubmitting(true);
     const ok = await reviewTask(taskId, note);
     setIsSubmitting(false);
     if (ok) {
-      // Reload
       const detail = await fetch(`/api/tasks/${taskId}`);
       if (detail.ok) {
         const json = await detail.json();
         setTask(json.data.task);
       }
     }
+    return ok;
   }
 
   if (isLoading) {

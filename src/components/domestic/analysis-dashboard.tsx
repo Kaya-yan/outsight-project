@@ -110,7 +110,6 @@ function WordCloud({ words }: { words: { word: string; count: number }[] }) {
         </defs>
         <g transform={`translate(${dims.w / 2},${dims.h / 2})`}>
           {placed.map((w) => {
-            const pct = totalCount > 0 ? ((w.count / totalCount) * 100).toFixed(1) : "0";
             const isHovered = hovered === w.text;
             return (
               <text
@@ -262,6 +261,7 @@ function DonutChart({ data }: { data: { polarity: string; count: number }[] }) {
 // ── Area Line Chart ──
 
 function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   if (data.length === 0) return <span className="text-xs text-[#95A5A6]">暂无数据</span>;
   const max = Math.max(...data.map((d) => d.count), 1);
   const w = 500, h = 140, pad = 30;
@@ -275,8 +275,6 @@ function DateLineChart({ data }: { data: { date: string; count: number }[] }) {
 
   const linePath = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
   const areaPath = `${linePath} L ${points[points.length - 1].x} ${h - pad} L ${points[0].x} ${h - pad} Z`;
-
-  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   return (
     <div className="relative">

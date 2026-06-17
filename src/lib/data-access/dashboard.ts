@@ -5,6 +5,7 @@ export interface DashboardStats {
   byStatus: Record<string, number>;
   byMedia: Record<string, number>;
   byPeriod: Record<string, number>;
+  mediaPeriod: Record<string, Record<string, number>>;
   recentArticles: Array<{
     id: string;
     title: string;
@@ -49,7 +50,7 @@ export async function getDashboardStats(client: Client): Promise<DashboardStats>
     .eq("is_archived", false);
 
   // Paginated fetches for aggregation (bypasses PostgREST max-rows)
-  const [allStatus, allMedia, allPeriod] = await Promise.all([
+  const [allStatus, allMedia, allPeriod, allMediaPeriod] = await Promise.all([
     fetchAll<{ status: string | null }>(() =>
       client.from("articles").select("status").eq("is_archived", false),
     ),
@@ -58,6 +59,9 @@ export async function getDashboardStats(client: Client): Promise<DashboardStats>
     ),
     fetchAll<{ period: string | null }>(() =>
       client.from("articles").select("period").eq("is_archived", false).not("period", "is", null),
+    ),
+    fetchAll<{ media: string | null; period: string | null }>(() =>
+      client.from("articles").select("media, period").eq("is_archived", false).not("period", "is", null),
     ),
   ]);
 
@@ -92,11 +96,20 @@ export async function getDashboardStats(client: Client): Promise<DashboardStats>
     byPeriod[p] = (byPeriod[p] ?? 0) + 1;
   }
 
+  const mediaPeriod: Record<string, Record<string, number>> = {};
+  for (const row of allMediaPeriod) {
+    const media = row.media ?? "unknown";
+    const period = row.period ?? "unknown";
+    if (!mediaPeriod[media]) mediaPeriod[media] = {};
+    mediaPeriod[media][period] = (mediaPeriod[media][period] ?? 0) + 1;
+  }
+
   return {
     totalArticles: count ?? 0,
     byStatus,
     byMedia,
     byPeriod,
+    mediaPeriod,
     recentArticles: (recentArticlesRes.data ?? []) as DashboardStats["recentArticles"],
     recentActivity: (recentActivityRes.data ?? []) as DashboardStats["recentActivity"],
   };

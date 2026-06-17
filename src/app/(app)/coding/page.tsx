@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/articles/status-badge";
 import { MyTasksList } from "@/components/coding/my-tasks-list";
 import { ArticleSelector } from "@/components/shared/article-selector";
 import { MemberSelector } from "@/components/shared/member-selector";
-import { useAuthStore, selectIsTeamLead, selectCanReview } from "@/stores/auth-store";
+import { useAuthStore, selectIsTeamLead } from "@/stores/auth-store";
 import { useTaskStore } from "@/stores/task-store";
 import { MEDIA_OUTLETS, RESEARCH_PERIODS } from "@/lib/constants";
 import { Code2, Search, ArrowRight, Users, UserPlus, Inbox } from "lucide-react";

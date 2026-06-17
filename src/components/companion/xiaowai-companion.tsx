@@ -181,8 +181,6 @@ export function XiaoWaiCompanion() {
   if (mobile) return <XiaoWaiMobile />;
 
   // Build style: use saved position if available, otherwise default dock
-  const w = expanded ? TERMINAL.panel.w : TERMINAL.mini.w;
-  const h = expanded ? 420 : TERMINAL.mini.h;
   const baseStyle = expanded ? panelStyle(false) : miniBarStyle(false);
   const dynamicStyle: React.CSSProperties = position
     ? { ...baseStyle, left: position.x, top: position.y, right: "auto", bottom: "auto" }

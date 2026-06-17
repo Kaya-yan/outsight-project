@@ -6,6 +6,7 @@ import { listNodesByFramework } from "@/lib/data-access/coding-nodes";
 import { listActiveFrameworks } from "@/lib/data-access/coding-frameworks";
 import { calcAgreement } from "@/lib/stats/agreement";
 import { getProfileById } from "@/lib/data-access/profiles";
+import type { CodingNode } from "@/types/database";
 
 export async function POST(
   _request: Request,
@@ -38,7 +39,7 @@ export async function POST(
 
   // Get all framework nodes
   const { data: frameworks } = await listActiveFrameworks(supabase);
-  const allNodes = [];
+  const allNodes: CodingNode[] = [];
   if (frameworks) {
     for (const fw of frameworks) {
       const { data: nodes } = await listNodesByFramework(supabase, fw.id);

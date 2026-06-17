@@ -4,7 +4,7 @@ import { useDomesticStore } from "@/stores/domestic-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Brain, BarChart3, Loader2 } from "lucide-react";
-import { useState, Component, type ComponentType } from "react";
+import { useState, type ComponentType } from "react";
 import { LinguisticProfile } from "./linguistic-profile";
 
 // ── Safe wrapper for dimension displays ──

@@ -1,5 +1,6 @@
 import type { RssArticle } from "./rss-parser";
 import { TIER_1_COMBOS, type KeywordCombo } from "./gdelt-keywords";
+import { GDELT_PERIOD_MAP } from "./research-periods";
 
 const GDELT_BASE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
@@ -13,16 +14,6 @@ const MEDIA_OUTLETS = [
   { name: "BBC", domains: "bbc.com OR bbc.co.uk" },
 ];
 
-// Map UI research periods to GDELT timespan strings
-const PERIOD_MAP: Record<string, string> = {
-  "2022.10-2023.03": "20221001000000-20230331235959",
-  "2023.04-2023.09": "20230401000000-20230930235959",
-  "2023.10-2024.03": "20231001000000-20240331235959",
-  "2024.04-2024.09": "20240401000000-20240930235959",
-  "2024.10-2024.12": "20241001000000-20241231235959",
-  "2025.01-2025.06": "20250101000000-20250630235959",
-  "2025.07-2025.12": "20250701000000-20251231235959",
-};
 
 async function queryGdelt(
   query: string,
@@ -100,13 +91,13 @@ async function queryComboForOutlet(
 export async function fetchGdeltArticles(period?: string): Promise<{
   source: string;
   articles: RssArticle[];
-  debug?: Record<string, number>;
+  debug?: Record<string, number | string>;
 }> {
   const allArticles: RssArticle[] = [];
   const debugCounts: Record<string, number> = {};
 
   // Resolve period to a single GDELT timespan
-  const timespan = period ? PERIOD_MAP[period] : undefined;
+  const timespan = period ? GDELT_PERIOD_MAP[period as keyof typeof GDELT_PERIOD_MAP] : undefined;
   if (!timespan) {
     // No valid period — return empty to avoid querying all periods at once
     return { source: "gdelt", articles: [], debug: { error: "no_period_selected" } };

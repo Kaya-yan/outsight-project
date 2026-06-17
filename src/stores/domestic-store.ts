@@ -100,6 +100,7 @@ interface DomesticStoreState {
   // Stats
   stats: DomesticStats | null;
   isLoadingStats: boolean;
+  _articlesAbort: AbortController | null;
 
   // Actions — list
   setFilter: (key: keyof DomesticFilters, value: string | undefined) => void;

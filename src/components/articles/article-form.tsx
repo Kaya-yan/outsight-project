@@ -162,7 +162,7 @@ export function ArticleForm({ article, onSubmit, onCancel, isSubmitting }: Artic
           <select
             id="af-lang"
             value={language}
-            onChange={(e) => setLanguage(e.target.value)}
+            onChange={(e) => setLanguage(e.target.value as "en" | "zh" | "bilingual")}
             className="flex h-10 w-full rounded-md border border-[#E2E5E9] bg-white px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4A90A4]"
           >
             <option value="en">English</option>

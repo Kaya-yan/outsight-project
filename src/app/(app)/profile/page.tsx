@@ -1,15 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useCallback } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { useDashboardStore } from "@/stores/dashboard-store";
 import { createClient } from "@/lib/supabase/client";
+import { typedUpdate } from "@/lib/data-access/base";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { User, Mail, Shield, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X, Zap, Info, ExternalLink } from "lucide-react";
+import { User, Mail, Key, Eye, EyeOff, BookOpen, Globe, AlertTriangle, Trash2, X, Zap, Info, ExternalLink } from "lucide-react";
 import { ConfettiBurst } from "@/components/shared/confetti-burst";
 
 // Earth image import
@@ -85,14 +87,14 @@ function EarthImage() {
   }
 
   return (
-    <img
-      src={earthPng.src}
+    <Image
+      src={earthPng}
       alt="Earth"
+      width={160}
+      height={160}
       onLoad={() => setLoaded(true)}
       onError={() => setFailed(true)}
       style={{
-        width: 160,
-        height: 160,
         borderRadius: "50%",
         objectFit: "cover",
         opacity: loaded ? 1 : 0,
@@ -151,7 +153,7 @@ export default function ProfilePage() {
     setSavingMotto(true);
     try {
       const meta = { ...((profile.metadata as Record<string, unknown>) ?? {}), motto };
-      await supabase.from("profiles").update({ metadata: meta }).eq("id", profile.id);
+      await typedUpdate(supabase, "profiles", { metadata: meta }).eq("id", profile.id);
       await refreshProfile();
     } catch { /* silent */ }
     finally { setSavingMotto(false); setEditingMotto(false); }

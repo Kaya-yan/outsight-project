@@ -118,6 +118,43 @@ function extractPlanSummary(): string {
 }
 
 // ── Supabase context builder ──
+type TerminalLitNote = {
+  id: string;
+  title: string;
+  author: string | null;
+  publish_date: string | null;
+  journal: string | null;
+  url: string | null;
+  summary: string | null;
+  abstract: string | null;
+  key_points: string[];
+  research_method: string | null;
+  reader_name: string | null;
+  inspiration: string | null;
+  notes: string | null;
+  for_review: boolean;
+  rating: number | null;
+  tags: string[];
+  read_count: number;
+  like_count: number;
+  created_by: string;
+  created_at: string;
+};
+
+type TerminalProfile = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  role: string;
+  institution: string | null;
+};
+
+type TerminalCurrentProfile = {
+  username: string;
+  display_name: string | null;
+  role: string;
+};
+
 async function buildProjectContext(supabase: Awaited<ReturnType<typeof createClient>>): Promise<string> {
   const parts: string[] = [];
 
@@ -128,12 +165,14 @@ async function buildProjectContext(supabase: Awaited<ReturnType<typeof createCli
   parts.push(`语料库：共 ${articleCount ?? 0} 篇文章`);
 
   // 2. Full literature_notes (excluding attachment fields)
-  const { data: litNotes } = await supabase
+  const { data: rawLitNotes } = await supabase
     .from("literature_notes")
     .select("id, title, author, publish_date, journal, url, summary, abstract, key_points, research_method, reader_name, inspiration, notes, for_review, rating, tags, read_count, like_count, created_by, created_at")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(50);
+  const litNotes = (rawLitNotes ?? []) as TerminalLitNote[];
 
-  if (litNotes && litNotes.length > 0) {
+  if (litNotes.length > 0) {
     const litSummary = litNotes.map((n, i) => {
       const parts = [`${i + 1}.《${n.title}》`];
       if (n.author) parts.push(`作者: ${n.author}`);
@@ -155,12 +194,14 @@ async function buildProjectContext(supabase: Awaited<ReturnType<typeof createCli
   }
 
   // 3. Profiles
-  const { data: profiles } = await supabase
+  const { data: rawProfiles } = await supabase
     .from("profiles")
     .select("id, username, display_name, role, institution")
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .limit(50);
+  const profiles = (rawProfiles ?? []) as TerminalProfile[];
 
-  if (profiles && profiles.length > 0) {
+  if (profiles.length > 0) {
     const memberList = profiles.map((p) =>
       `${p.display_name || p.username}（${p.role}）`
     ).join("、");
@@ -206,11 +247,12 @@ export async function POST(request: Request) {
   ]);
 
   // Get current user info
-  const { data: currentProfile } = await supabase
+  const { data: rawCurrentProfile } = await supabase
     .from("profiles")
     .select("username, display_name, role")
     .eq("id", user.id)
     .single();
+  const currentProfile = rawCurrentProfile as TerminalCurrentProfile | null;
 
   const currentUserLabel = currentProfile
     ? `${currentProfile.display_name || currentProfile.username}（${currentProfile.role}）`

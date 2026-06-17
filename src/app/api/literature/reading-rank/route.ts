@@ -1,6 +1,19 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+type ReadingRankNote = {
+  reader_name: string | null;
+  created_by: string;
+  created_at: string;
+};
+
+type ReadingRankProfile = {
+  id: string;
+  username: string;
+  display_name: string | null;
+  avatar_url: string | null;
+};
+
 export async function GET(request: Request) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -38,7 +51,8 @@ export async function GET(request: Request) {
     query = query.gte("created_at", startDate);
   }
 
-  const { data: notes, error } = await query;
+  const { data: rawNotes, error } = await query;
+  const notes = (rawNotes ?? []) as ReadingRankNote[];
 
   if (error) {
     return NextResponse.json({ error: "查询失败" }, { status: 500 });
@@ -54,13 +68,14 @@ export async function GET(request: Request) {
   }
 
   // Get all profiles to match reader_name to user info
-  const { data: profiles } = await supabase
+  const { data: rawProfiles } = await supabase
     .from("profiles")
     .select("id, username, display_name, avatar_url");
+  const profiles = (rawProfiles ?? []) as ReadingRankProfile[];
 
   // Build lookup maps: display_name -> profile, username -> profile
-  const profileByName = new Map<string, typeof profiles extends (infer U)[] | null ? U : never>();
-  for (const p of profiles ?? []) {
+  const profileByName = new Map<string, ReadingRankProfile>();
+  for (const p of profiles) {
     if (p.display_name) profileByName.set(p.display_name, p);
     if (p.username) profileByName.set(p.username, p);
   }

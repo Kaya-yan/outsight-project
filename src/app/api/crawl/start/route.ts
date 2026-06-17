@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCrawlJob, updateCrawlJob } from "@/lib/data-access/crawl-jobs";
-import { generateBatchPlan, getTotalBatchCount } from "@/lib/batch-planner";
+import { generateBatchPlan } from "@/lib/batch-planner";
 
 /**
  * POST /api/crawl/start
@@ -10,7 +10,7 @@ import { generateBatchPlan, getTotalBatchCount } from "@/lib/batch-planner";
  * The actual work is done by /api/crawl/execute-batch, driven by the frontend
  * in a sequential chain to avoid Vercel timeouts.
  */
-export async function POST(request: Request) {
+export async function POST() {
   console.log("STEP 1: crawl/start — request received");
 
   try {

@@ -2,7 +2,7 @@
 
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "./status-badge";
-import type { Article, ArticleStatus } from "@/types/database";
+import type { Article } from "@/types/database";
 import { Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,6 @@ interface ArticleTableProps {
   onSelectAll: () => void;
   onEdit: (article: Article) => void;
   onDelete: (article: Article) => void;
-  onStatusChange: (article: Article, newStatus: ArticleStatus) => void;
 }
 
 export function ArticleTable({
@@ -25,7 +24,6 @@ export function ArticleTable({
   onSelectAll,
   onEdit,
   onDelete,
-  onStatusChange,
 }: ArticleTableProps) {
   if (isLoading) {
     return (
