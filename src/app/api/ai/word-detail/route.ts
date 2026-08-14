@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callMimoStream } from "@/lib/ai/mimo-client";
+import { callLLMStream } from "@/lib/ai/mimo-client";
 
 const DICT_URL = "https://api.dictionaryapi.dev/api/v2/entries/en";
 
@@ -94,7 +94,7 @@ Output format:
 }`;
 
   try {
-    const result = await callMimoStream(
+    const result = await callLLMStream(
       "You are a professional English-Chinese dictionary translator. Output only valid JSON, no explanation.",
       prompt,
       { maxTokens: 2048, timeoutMs: 20000 },
@@ -163,7 +163,7 @@ export async function POST(request: Request) {
     }
 
     // 4. Translate definitions & examples to Chinese via MiMo
-    const apiKey = process.env.MIMO_API_KEY;
+    const apiKey = process.env.DEEPSEEK_API_KEY;
     let definitionsZh: Record<string, string[]> = {};
     let examplesZh: string[] = [];
 

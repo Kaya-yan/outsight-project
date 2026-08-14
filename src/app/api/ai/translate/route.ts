@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callMimoStream } from "@/lib/ai/mimo-client";
+import { callLLMStream } from "@/lib/ai/mimo-client";
 
 const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specializing in discourse analysis and media studies. Translate the given English news text into Chinese with the following requirements:
 
@@ -10,7 +10,7 @@ const TRANSLATION_SYSTEM_PROMPT = `You are an academic translation expert specia
 5. Output ONLY the Chinese translation, no explanations, no notes, no prefixes.`;
 
 async function callTranslate(text: string): Promise<string | null> {
-  const result = await callMimoStream(TRANSLATION_SYSTEM_PROMPT, text, {
+  const result = await callLLMStream(TRANSLATION_SYSTEM_PROMPT, text, {
     maxTokens: Math.min(Math.ceil(text.length * 1.5), 2048),
     timeoutMs: 25000,
   });

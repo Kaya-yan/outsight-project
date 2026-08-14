@@ -3,12 +3,10 @@
  * Each dimension has a specific theoretical grounding and operational definition.
  */
 
-import { callMimoStream, type MimoResult } from "@/lib/ai/mimo-client";
-
-type LLMResult = MimoResult;
+import { callLLMStream, type LLMResult } from "@/lib/ai/mimo-client";
 
 async function callLLM(systemPrompt: string, userPrompt: string, maxTokens = 512): Promise<LLMResult> {
-  return callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 45000 });
+  return callLLMStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 45000 });
 }
 
 function parseJSON<T>(text: string | null): T | null {

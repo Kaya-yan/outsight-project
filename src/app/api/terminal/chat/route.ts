@@ -4,9 +4,9 @@ import { EASTER_EGGS } from "@/components/companion/companion-config";
 import fs from "fs";
 import path from "path";
 
-const MIMO_API_KEY = process.env.MIMO_API_KEY;
-const MIMO_BASE_URL = process.env.MIMO_BASE_URL ?? "https://token-plan-cn.xiaomimimo.com/anthropic";
-const MIMO_MODEL = "mimo-v2.5-pro";
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const DEEPSEEK_BASE_URL = process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com";
+const LLM_MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
 
 // ── Precompiled easter egg matchers ──
 interface EasterEggMatcher { isChinese: boolean; keyword: string; pattern?: RegExp; response: string }
@@ -232,10 +232,10 @@ export async function POST(request: Request) {
     }
   }
 
-  // ── Step 2: Check if Mimo API is configured ──
-  if (!MIMO_API_KEY) {
+  // ── Step 2: Check if DeepSeek API is configured ──
+  if (!DEEPSEEK_API_KEY) {
     return NextResponse.json({
-      response: "AI 服务未配置。请在环境变量中设置 MIMO_API_KEY。",
+      response: "AI 服务未配置。请在环境变量中设置 DEEPSEEK_API_KEY。",
       type: "error",
     });
   }
@@ -281,25 +281,23 @@ ${currentUserLabel}
 - 如果用户问的是平台操作问题，给出具体步骤
 - 如果用户问的是研究方法问题，结合项目实际给出建议`;
 
-  // ── Step 5: Call Mimo API (Anthropic Messages API format) ──
-  const endpoint = `${MIMO_BASE_URL}/v1/messages`;
-  console.log("[Terminal] Calling Mimo API:", endpoint);
-  console.log("[Terminal] Model:", MIMO_MODEL);
+  // ── Step 5: Call DeepSeek API (OpenAI-compatible format) ──
+  const endpoint = `${DEEPSEEK_BASE_URL}/v1/chat/completions`;
+  console.log("[Terminal] Calling DeepSeek API:", endpoint);
+  console.log("[Terminal] Model:", LLM_MODEL);
 
   try {
-    // Anthropic Messages API format
     const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": MIMO_API_KEY!,
-        "anthropic-version": "2023-06-01",
+        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
       },
       body: JSON.stringify({
-        model: MIMO_MODEL,
+        model: LLM_MODEL,
         max_tokens: 1024,
-        system: systemPrompt,
         messages: [
+          { role: "system", content: systemPrompt },
           { role: "user", content: input },
         ],
         stream: true,
@@ -309,7 +307,7 @@ ${currentUserLabel}
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "unknown");
-      console.error("[Terminal] Mimo API error:", res.status);
+      console.error("[Terminal] DeepSeek API error:", res.status);
       console.error("[Terminal] Response body (first 200 chars):", errText.slice(0, 200));
       console.error("[Terminal] Request endpoint:", endpoint);
       const hint = res.status === 404
@@ -321,7 +319,7 @@ ${currentUserLabel}
       });
     }
 
-    // Stream response — Anthropic SSE format
+    // Stream response — OpenAI SSE format
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
       async start(controller) {
@@ -348,16 +346,14 @@ ${currentUserLabel}
               if (!trimmed || !trimmed.startsWith("data: ")) continue;
 
               const data = trimmed.slice(6);
+              if (data === "[DONE]") continue;
 
               try {
                 const parsed = JSON.parse(data);
-                // Anthropic format: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"..."}}
-                if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: parsed.delta.text })}\n\n`));
-                }
-                // Handle message_stop
-                if (parsed.type === "message_stop") {
-                  // Stream complete
+                // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
+                const delta = parsed.choices?.[0]?.delta?.content;
+                if (delta) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: delta })}\n\n`));
                 }
               } catch {
                 // Skip malformed chunks

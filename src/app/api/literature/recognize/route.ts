@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { callMimoStream } from "@/lib/ai/mimo-client";
+import { callLLMStream } from "@/lib/ai/mimo-client";
 
 const SYSTEM_PROMPT = `You are a research literature parser. Extract structured metadata from raw reading notes text.
 Return ONLY valid JSON with these fields (use null for missing, empty array for no items):
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await callMimoStream(SYSTEM_PROMPT, text.slice(0, 4000), {
+    const result = await callLLMStream(SYSTEM_PROMPT, text.slice(0, 4000), {
       maxTokens: 2048,
       timeoutMs: 25000,
     });

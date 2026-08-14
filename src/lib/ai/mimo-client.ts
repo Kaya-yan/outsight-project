@@ -1,31 +1,31 @@
 /**
- * Shared MIMO API client using Anthropic Messages API with streaming.
- * All MIMO calls should go through this module.
+ * Shared LLM client using DeepSeek OpenAI-compatible API with streaming.
+ * All LLM calls should go through this module.
  */
 
-const BASE_URL = process.env.MIMO_BASE_URL || "https://token-plan-cn.xiaomimimo.com/anthropic";
-const API_KEY = process.env.MIMO_API_KEY || "";
-const MODEL = "mimo-v2.5-pro";
+const BASE_URL = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
+const API_KEY = process.env.DEEPSEEK_API_KEY || "";
+const MODEL = process.env.DEEPSEEK_MODEL || "deepseek-v4-flash";
 
-const LOG_PREFIX = "[MIMO]";
+const LOG_PREFIX = "[LLM]";
 
-export interface MimoResult {
+export interface LLMResult {
   text: string | null;
   error: string | null;
 }
 
 /**
- * Call MIMO API with streaming (the only mode this provider supports reliably).
+ * Call DeepSeek API with streaming (OpenAI-compatible SSE format).
  * Collects all SSE chunks and returns the full text.
  */
-export async function callMimoStream(
+export async function callLLMStream(
   systemPrompt: string,
   userPrompt: string,
   opts?: { maxTokens?: number; timeoutMs?: number },
-): Promise<MimoResult> {
+): Promise<LLMResult> {
   if (!API_KEY) {
     console.error(`${LOG_PREFIX} API key not configured`);
-    return { text: null, error: "MIMO_API_KEY 未配置" };
+    return { text: null, error: "DEEPSEEK_API_KEY 未配置" };
   }
 
   const maxTokens = opts?.maxTokens ?? 512;
@@ -36,18 +36,19 @@ export async function callMimoStream(
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const reqStart = Date.now();
-      const res = await fetch(`${BASE_URL}/v1/messages`, {
+      const res = await fetch(`${BASE_URL}/v1/chat/completions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": API_KEY,
-          "anthropic-version": "2023-06-01",
+          "Authorization": `Bearer ${API_KEY}`,
         },
         body: JSON.stringify({
           model: MODEL,
           max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
           stream: true,
         }),
         signal: AbortSignal.timeout(timeoutMs),
@@ -59,11 +60,10 @@ export async function callMimoStream(
         const errBody = await res.text().catch(() => "");
         console.error(`${LOG_PREFIX} HTTP error ${res.status}: ${errBody.slice(0, 500)}`);
         if (attempt < 2) {
-          // Respect Retry-After header for 429, otherwise use longer backoff
           const retryAfter = res.headers.get("Retry-After");
           const waitMs = retryAfter
             ? parseInt(retryAfter, 10) * 1000
-            : (attempt + 1) * 5000; // 5s, 10s
+            : (attempt + 1) * 5000;
           console.warn(`${LOG_PREFIX} Retrying in ${waitMs}ms (attempt ${attempt + 2}/3)`);
           await new Promise((r) => setTimeout(r, waitMs));
           continue;
@@ -71,7 +71,7 @@ export async function callMimoStream(
         return { text: null, error: `API ${res.status}: ${errBody.slice(0, 100)}` };
       }
 
-      // Collect streamed text
+      // Collect streamed text — OpenAI SSE format
       const reader = res.body?.getReader();
       if (!reader) {
         console.error(`${LOG_PREFIX} No response body reader available`);
@@ -96,15 +96,19 @@ export async function callMimoStream(
           if (!trimmed || !trimmed.startsWith("data: ")) continue;
           const payload = trimmed.slice(6);
 
+          if (payload === "[DONE]") break;
+
           try {
             const parsed = JSON.parse(payload);
-            if (parsed.type === "content_block_delta" && parsed.delta?.text) {
-              fullText += parsed.delta.text;
+            // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              fullText += delta;
               hasContent = true;
             }
-            // Handle API error events (rate limit, content policy, etc.)
-            if (parsed.type === "error") {
-              const errMsg = parsed.error?.message ?? parsed.message ?? "API stream error";
+            // Handle API error in stream
+            if (parsed.error) {
+              const errMsg = parsed.error.message ?? "API stream error";
               console.error(`${LOG_PREFIX} SSE error event: ${errMsg}`);
               return { text: null, error: errMsg };
             }
@@ -117,7 +121,7 @@ export async function callMimoStream(
       if (!hasContent || !fullText.trim()) {
         console.warn(`${LOG_PREFIX} Empty content: hasContent=${hasContent}, fullTextLen=${fullText.length}, attempt=${attempt + 1}`);
         if (attempt < 2) {
-          await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 5000));
           continue;
         }
         console.error(`${LOG_PREFIX} All 3 attempts returned empty content`);
@@ -132,7 +136,7 @@ export async function callMimoStream(
       const errName = err instanceof Error ? err.name : "Unknown";
       console.error(`${LOG_PREFIX} Exception (attempt ${attempt + 1}): name=${errName}, message=${errMsg}`);
       if (attempt < 2) {
-        await new Promise((r) => setTimeout(r, (attempt + 1) * 5000)); // 5s, 10s
+        await new Promise((r) => setTimeout(r, (attempt + 1) * 5000));
         continue;
       }
       return { text: null, error: errMsg };

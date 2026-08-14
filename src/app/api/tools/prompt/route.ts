@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { callMimoStream } from "@/lib/ai/mimo-client";
+import { callLLMStream } from "@/lib/ai/mimo-client";
 
 export async function POST(request: Request) {
   const { systemPrompt, userInput } = await request.json();
@@ -7,7 +7,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "请提供 Prompt 和输入文本" }, { status: 400 });
   }
 
-  const result = await callMimoStream(systemPrompt, userInput, {
+  const result = await callLLMStream(systemPrompt, userInput, {
     maxTokens: 512,
     timeoutMs: 30000,
   });

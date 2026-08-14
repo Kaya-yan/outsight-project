@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { callMimoStream } from "@/lib/ai/mimo-client";
+import { callLLMStream } from "@/lib/ai/mimo-client";
 
 const sentimentSchema = z.object({
   sentiment: z.enum(["positive", "negative", "neutral"]),
@@ -43,7 +43,7 @@ async function callLLM(
   userPrompt: string,
   maxTokens = 512,
 ): Promise<string | null> {
-  const result = await callMimoStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 60000 });
+  const result = await callLLMStream(systemPrompt, userPrompt, { maxTokens, timeoutMs: 60000 });
   return result.text;
 }
 
