@@ -32,3 +32,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# 未发表研究材料（含语料数据集，不进公开仓库）
+/中期检查材料/
+/.uploads/
